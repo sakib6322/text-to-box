@@ -14,7 +14,77 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      concepts: {
+        Row: {
+          created_at: string
+          detected_language: string | null
+          id: string
+          raw_extraction: Json | null
+          source_image_path: string | null
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          detected_language?: string | null
+          id?: string
+          raw_extraction?: Json | null
+          source_image_path?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          detected_language?: string | null
+          id?: string
+          raw_extraction?: Json | null
+          source_image_path?: string | null
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      key_points: {
+        Row: {
+          concept_id: string
+          content: string
+          created_at: string
+          embedding: string | null
+          id: string
+          increment_count: number
+          language: string | null
+          position: number
+        }
+        Insert: {
+          concept_id: string
+          content: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          increment_count?: number
+          language?: string | null
+          position?: number
+        }
+        Update: {
+          concept_id?: string
+          content?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          increment_count?: number
+          language?: string | null
+          position?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "key_points_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "concepts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
