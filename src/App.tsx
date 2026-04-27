@@ -7,6 +7,8 @@ import Index from "./pages/Index.tsx";
 import Suggestions from "./pages/Suggestions.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
+
+
 const queryClient = new QueryClient();
 
 const App = () => (
