@@ -1,138 +1,168 @@
-// Multilingual key-point extraction from a book page image.
-// Auto-detects English / Bangla / mixed and preserves source language.
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `You are a medical exam content extractor.
+type ExtractResponse = {
+  concept_name: string;
+  high_yield_points: string[];
+};
 
-INPUT: A photo of one page/section from a medical textbook. The text may be in English, Bangla (Bengali script), or a mix of both — Bangla narrative is common with English medical/anatomical/drug terms.
+function parseGeminiJson(rawText: string): ExtractResponse {
+  const direct = rawText.trim();
 
-TASK:
-1. Read all visible text accurately. OCR Bangla characters carefully (যুক্তাক্ষর, কার, ফলা).
-2. First, organize the content into a brief essay-style structured summary in your head.
-3. Then convert that into the MAXIMUM number of simple, atomic, exam-oriented key points (one fact per point, no compound sentences).
-4. PRESERVE THE SOURCE LANGUAGE of each point:
-   - If a sentence is originally in Bangla → keep it in Bangla.
-   - If originally in English → keep it in English.
-   - If mixed (Bangla narrative with English medical terms) → keep it mixed exactly as a student would write it. NEVER translate medical/anatomical/drug/disease terms out of English when the source uses them in English.
-5. Each key point must be self-contained and directly answerable in an MCQ/SAQ.
-6. Detect the dominant language of the page: "en", "bn", or "mixed".
+  try {
+    return JSON.parse(direct) as ExtractResponse;
+  } catch {
+    // Gemini may occasionally wrap JSON with extra text or markdown fences.
+  }
 
-OUTPUT: Call the function "return_key_points" with the structured result. No prose outside the tool call.`;
+  const fenced = direct.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)?.[1];
+  if (fenced) {
+    try {
+      return JSON.parse(fenced.trim()) as ExtractResponse;
+    } catch {
+      // Try object-slice parsing next.
+    }
+  }
+
+  const objectStart = direct.indexOf("{");
+  const objectEnd = direct.lastIndexOf("}");
+  if (objectStart >= 0 && objectEnd > objectStart) {
+    const objectSlice = direct.slice(objectStart, objectEnd + 1);
+    return JSON.parse(objectSlice) as ExtractResponse;
+  }
+
+  throw new Error("Model returned non-JSON output");
+}
+
+async function resolveImagePayload(req: Request): Promise<{ imageBase64: string; mimeType: string }> {
+  const contentType = req.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await req.formData();
+    const image = formData.get("image");
+    if (!(image instanceof File)) {
+      throw new Error("Image file is required");
+    }
+    return {
+      imageBase64: await fileToBase64(image),
+      mimeType: image.type || "image/jpeg",
+    };
+  }
+
+  const body = await req.json();
+  if (typeof body?.imageBase64 === "string" && body.imageBase64.trim()) {
+    return {
+      imageBase64: body.imageBase64.trim(),
+      mimeType: typeof body?.mimeType === "string" && body.mimeType ? body.mimeType : "image/jpeg",
+    };
+  }
+
+  throw new Error("Image payload is required");
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { imageUrl, imageBase64 } = await req.json();
-    if (!imageUrl && !imageBase64) {
-      return new Response(JSON.stringify({ error: "imageUrl or imageBase64 required" }), {
-        status: 400,
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("LOVABLE_API_KEY");
+    if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured in Edge Function secrets");
+
+    const PRIMARY_AI_MODEL = Deno.env.get("PRIMARY_AI_MODEL") ?? "gemini-2.5-pro";
+    const { imageBase64, mimeType } = await resolveImagePayload(req);
+
+    const prompt = `You are an expert Medical Professor. Analyze the uploaded medical textbook image.
+Convert the essay-like text into the maximum possible number of easy, exam-friendly, high-yield points or stems.
+Return output STRICTLY matching the JSON schema. Do not add explanations, markdown, or extra keys.`;
+
+    const body = {
+      contents: [{
+        role: "user",
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              data: imageBase64,
+              mimeType,
+            },
+          },
+        ],
+      }],
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            concept_name: { type: "STRING" },
+            high_yield_points: {
+              type: "ARRAY",
+              description: "List of exam-friendly, high-yield points or stems extracted from the text.",
+              items: { type: "STRING" },
+            },
+          },
+          required: ["concept_name", "high_yield_points"],
+        },
+      },
+    };
+
+    const resp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${PRIMARY_AI_MODEL}:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
+
+    if (!resp.ok) {
+      const t = await resp.text();
+      console.error("Gemini error:", resp.status, t);
+      return new Response(JSON.stringify({ error: "Failed to extract concept. Please try again." }), {
+        status: resp.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY not configured");
-
-    const imageContent = imageBase64
-      ? { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
-      : { type: "image_url", image_url: { url: imageUrl } };
-
-    const body = {
-      model: "google/gemini-2.5-pro",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "Extract key points from this page. Auto-detect language and preserve it." },
-            imageContent,
-          ],
-        },
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "return_key_points",
-            description: "Return the extracted multilingual key points.",
-            parameters: {
-              type: "object",
-              properties: {
-                title: { type: "string", description: "Short title for this concept/page in the source language." },
-                detected_language: { type: "string", enum: ["en", "bn", "mixed"] },
-                summary: { type: "string", description: "Brief essay-style summary in source language." },
-                key_points: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      content: { type: "string", description: "One atomic exam-oriented fact in source language." },
-                      language: { type: "string", enum: ["en", "bn", "mixed"] },
-                    },
-                    required: ["content", "language"],
-                    additionalProperties: false,
-                  },
-                },
-              },
-              required: ["title", "detected_language", "summary", "key_points"],
-              additionalProperties: false,
-            },
-          },
-        },
-      ],
-      tool_choice: { type: "function", function: { name: "return_key_points" } },
-    };
-
-    const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!resp.ok) {
-      if (resp.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (resp.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Add credits in Settings → Workspace → Usage." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await resp.text();
-      console.error("AI gateway error:", resp.status, t);
-      return new Response(JSON.stringify({ error: "AI gateway error" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const data = await resp.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
-      console.error("No tool call returned", JSON.stringify(data));
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!rawText) {
+      console.error("No JSON text returned", JSON.stringify(data));
       return new Response(JSON.stringify({ error: "No structured output from AI" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const parsed = JSON.parse(toolCall.function.arguments);
-    return new Response(JSON.stringify(parsed), {
+    const parsed = parseGeminiJson(rawText);
+    const normalized = {
+      concept_name: parsed.concept_name ?? "",
+      high_yield_points: Array.isArray(parsed.high_yield_points)
+        ? parsed.high_yield_points.filter((item) => typeof item === "string")
+        : [],
+    };
+
+    return new Response(JSON.stringify(normalized), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("extract-points error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const message = e instanceof Error ? e.message : "Unknown error";
+    const status = message.includes("required") ? 400 : 500;
+    return new Response(JSON.stringify({ error: message }), {
+      status, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });

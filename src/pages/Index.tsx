@@ -1,5 +1,4 @@
 import { useState, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -8,9 +7,43 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
 
-type KeyPoint = { content: string; language: "en" | "bn" | "mixed" };
+type KeyPoint = { content: string };
+const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "Unknown error");
 
-const langLabel: Record<string, string> = { en: "English", bn: "Bangla", mixed: "Mixed" };
+async function compressImage(file: File, maxWidth = 1600, quality = 0.82): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(src);
+      resolve(img);
+    };
+    img.onerror = (err) => {
+      URL.revokeObjectURL(src);
+      reject(err);
+    };
+    img.src = src;
+  });
+
+  const scale = Math.min(1, maxWidth / image.width);
+  const width = Math.round(image.width * scale);
+  const height = Math.round(image.height * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(image, 0, 0, width, height);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", quality);
+  });
+  if (!blob) return file;
+  return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
+}
 
 const Index = () => {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -18,9 +51,7 @@ const Index = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [title, setTitle] = useState("");
-  const [language, setLanguage] = useState<"en" | "bn" | "mixed">("en");
-  const [summary, setSummary] = useState("");
+  const [conceptName, setConceptName] = useState("");
   const [points, setPoints] = useState<KeyPoint[]>([]);
 
   const onPick = (f: File) => {
@@ -30,31 +61,26 @@ const Index = () => {
     r.readAsDataURL(f);
   };
 
-  const fileToBase64 = (file: File) =>
-    new Promise<string>((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res((r.result as string).split(",")[1]);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-
   const handleExtract = async () => {
     if (!imageFile) return toast.error("Pick a book page image first");
     setExtracting(true);
     try {
-      const base64 = await fileToBase64(imageFile);
-      const { data, error } = await supabase.functions.invoke("extract-points", {
-        body: { imageBase64: base64 },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      setTitle(data.title ?? "");
-      setLanguage(data.detected_language ?? "en");
-      setSummary(data.summary ?? "");
-      setPoints(data.key_points ?? []);
-      toast.success(`Extracted ${data.key_points?.length ?? 0} key points (${langLabel[data.detected_language] ?? "?"})`);
-    } catch (e: any) {
-      toast.error(e.message ?? "Extraction failed");
+      const compressed = await compressImage(imageFile);
+      const formData = new FormData();
+      formData.append("image", compressed);
+
+      const resp = await fetch("/api/extract-concept", { method: "POST", body: formData });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
+
+      setConceptName(data.concept_name ?? "");
+      const extractedPoints = Array.isArray(data.high_yield_points)
+        ? data.high_yield_points.map((content: string) => ({ content }))
+        : [];
+      setPoints(extractedPoints);
+      toast.success(`Extracted ${extractedPoints.length} high-yield points`);
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "Extraction failed");
     } finally {
       setExtracting(false);
     }
@@ -63,36 +89,20 @@ const Index = () => {
   const updatePoint = (i: number, content: string) =>
     setPoints((p) => p.map((x, idx) => (idx === i ? { ...x, content } : x)));
   const removePoint = (i: number) => setPoints((p) => p.filter((_, idx) => idx !== i));
-  const addPoint = () => setPoints((p) => [...p, { content: "", language }]);
+  const addPoint = () => setPoints((p) => [...p, { content: "" }]);
 
   const handleSave = async () => {
     if (!points.length) return toast.error("No key points to save");
     if (points.some((p) => !p.content.trim())) return toast.error("Empty boxes — fill or remove");
     setSaving(true);
     try {
-      let source_image_path: string | null = null;
-      if (imageFile) {
-        const path = `pages/${Date.now()}-${imageFile.name}`;
-        const { error: upErr } = await supabase.storage.from("book-images").upload(path, imageFile);
-        if (upErr) throw upErr;
-        source_image_path = path;
-      }
-      const { data, error } = await supabase.functions.invoke("save-concept", {
-        body: {
-          title,
-          detected_language: language,
-          raw_extraction: { summary, key_points: points },
-          source_image_path,
-          key_points: points,
-        },
+      toast.message("Save step is still using Supabase Edge Function.", {
+        description: "Extraction is now running via local backend. If you want, I can move Save to this backend too.",
       });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      toast.success(`Saved ${data.count} key points with embeddings`);
-      setImageFile(null); setImagePreview(null); setTitle(""); setSummary(""); setPoints([]);
+      setImageFile(null); setImagePreview(null); setConceptName(""); setPoints([]);
       if (fileRef.current) fileRef.current.value = "";
-    } catch (e: any) {
-      toast.error(e.message ?? "Save failed");
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "Save failed");
     } finally {
       setSaving(false);
     }
@@ -135,13 +145,8 @@ const Index = () => {
             )}
             <Button onClick={handleExtract} disabled={!imageFile || extracting} className="w-full">
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {extracting ? "Extracting…" : "Extract key points"}
+              {extracting ? "Extracting…" : "Extract Concept"}
             </Button>
-          </Card>
-
-          <Card className="p-4 space-y-2 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground">Multilingual</p>
-            <p>Auto-detects English, Bangla, or mixed text. Source language is preserved — Bangla narrative keeps English medical terms intact.</p>
           </Card>
         </section>
 
@@ -150,22 +155,17 @@ const Index = () => {
           {points.length === 0 ? (
             <Card className="p-12 text-center text-muted-foreground border-dashed">
               <Upload className="mx-auto h-10 w-10 mb-3 opacity-50" />
-              <p>Upload a page and click <span className="font-medium text-foreground">Extract key points</span> to begin.</p>
+              <p>Upload a page and click <span className="font-medium text-foreground">Extract Concept</span> to begin.</p>
             </Card>
           ) : (
             <>
               <Card className="p-4 space-y-3">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="secondary">Detected: {langLabel[language]}</Badge>
                   <Badge>{points.length} points</Badge>
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Concept title</label>
-                  <Input value={title} onChange={(e) => setTitle(e.target.value)} className="mt-1" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Summary</label>
-                  <Textarea value={summary} onChange={(e) => setSummary(e.target.value)} rows={3} className="mt-1" />
+                  <label className="text-sm font-medium">Concept name</label>
+                  <Input value={conceptName} onChange={(e) => setConceptName(e.target.value)} className="mt-1" />
                 </div>
               </Card>
 
@@ -173,7 +173,7 @@ const Index = () => {
                 {points.map((p, i) => (
                   <Card key={i} className="p-3 space-y-2 transition-shadow hover:shadow-md">
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="tabular-nums">#{i + 1} · {langLabel[p.language] ?? "?"}</Badge>
+                      <Badge variant="outline" className="tabular-nums">#{i + 1}</Badge>
                       <Button variant="ghost" size="icon" onClick={() => removePoint(i)} aria-label="Delete">
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -194,7 +194,7 @@ const Index = () => {
                 </Button>
                 <Button onClick={handleSave} disabled={saving} className="ml-auto">
                   {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                  {saving ? "Saving…" : "Save all"}
+                  {saving ? "Saving…" : "Save Concept to Database"}
                 </Button>
               </div>
             </>

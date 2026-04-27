@@ -26,10 +26,39 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { title, detected_language, raw_extraction, source_image_path, key_points } = await req.json();
+    const {
+      concept_name,
+      high_yield_points,
+      source_image_path,
+      // Backward compatibility (older frontend payload)
+      title,
+      detected_language,
+      raw_extraction,
+      key_points,
+    } = await req.json();
 
-    if (!Array.isArray(key_points) || key_points.length === 0) {
-      return new Response(JSON.stringify({ error: "key_points required" }), {
+    const normalizedTitle = (concept_name ?? title ?? "").toString().trim();
+    const normalizedPoints = Array.isArray(high_yield_points)
+      ? high_yield_points
+          .filter((item: unknown): item is string => typeof item === "string")
+          .map((item) => item.trim())
+          .filter(Boolean)
+      : Array.isArray(key_points)
+        ? key_points
+            .map((kp: { content?: unknown }) =>
+              typeof kp?.content === "string" ? kp.content.trim() : "",
+            )
+            .filter(Boolean)
+        : [];
+
+    if (!normalizedTitle) {
+      return new Response(JSON.stringify({ error: "concept_name required" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!normalizedPoints.length) {
+      return new Response(JSON.stringify({ error: "high_yield_points required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -41,19 +70,27 @@ Deno.serve(async (req) => {
 
     const { data: concept, error: cErr } = await supabase
       .from("concepts")
-      .insert({ title, detected_language, raw_extraction, source_image_path })
+      .insert({
+        title: normalizedTitle,
+        detected_language: detected_language ?? "mixed",
+        raw_extraction: raw_extraction ?? {
+          concept_name: normalizedTitle,
+          high_yield_points: normalizedPoints,
+        },
+        source_image_path,
+      })
       .select()
       .single();
     if (cErr) throw cErr;
 
     const rows = [];
-    for (let i = 0; i < key_points.length; i++) {
-      const kp = key_points[i];
-      const emb = await embed(kp.content, LOVABLE_API_KEY);
+    for (let i = 0; i < normalizedPoints.length; i++) {
+      const content = normalizedPoints[i];
+      const emb = await embed(content, LOVABLE_API_KEY);
       rows.push({
         concept_id: concept.id,
-        content: kp.content,
-        language: kp.language ?? detected_language ?? null,
+        content,
+        language: detected_language ?? "mixed",
         position: i,
         embedding: emb,
       });
@@ -72,3 +109,7 @@ Deno.serve(async (req) => {
     });
   }
 });
+
+
+
+

@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import Index from "./pages/Index.tsx";
 import Suggestions from "./pages/Suggestions.tsx";
 import NotFound from "./pages/NotFound.tsx";
+import AdminLayout from "./layouts/AdminLayout.tsx";
+import CreateQuestionAI from "./pages/CreateQuestionAI.tsx";
 
 
 
@@ -20,6 +22,10 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/suggestions" element={<Suggestions />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<CreateQuestionAI />} />
+            <Route path="question-bank/create-ai" element={<CreateQuestionAI />} />
+          </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
