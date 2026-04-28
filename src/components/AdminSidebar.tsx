@@ -1,5 +1,16 @@
+import type { ComponentType } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { BookOpen, ClipboardList, GraduationCap, LayoutDashboard, School, Settings, Users } from "lucide-react";
+import {
+  Bell,
+  BookOpen,
+  ClipboardList,
+  GraduationCap,
+  LayoutDashboard,
+  School,
+  Settings,
+  Target,
+  Users,
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -18,7 +29,7 @@ import {
 type NavItem = {
   label: string;
   to?: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: ComponentType<{ className?: string }>;
   children?: { label: string; to: string }[];
 };
 
@@ -26,32 +37,33 @@ const items: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
   {
     label: "Academic",
-    icon: GraduationCap,
+    icon: Target,
     children: [
       { label: "Classes", to: "/admin/academic/classes" },
       { label: "Subjects", to: "/admin/academic/subjects" },
     ],
   },
   {
-    label: "Question Bank",
+    label: "Question bank",
     icon: BookOpen,
     children: [
-      { label: "Create Question (AI)", to: "/admin/question-bank/create-ai" },
-      { label: "All Questions", to: "/admin/question-bank/questions" },
+      { label: "Create question (AI)", to: "/admin/question-bank/create-ai" },
+      { label: "All questions", to: "/admin/question-bank/questions" },
     ],
   },
   {
     label: "Exam",
     icon: ClipboardList,
     children: [
-      { label: "Create Exam", to: "/admin/exam/create" },
+      { label: "Create exam", to: "/admin/exam/create" },
       { label: "Schedules", to: "/admin/exam/schedules" },
     ],
   },
-  { label: "Practice Sheet", to: "/admin/practice-sheets", icon: School },
-  { label: "Student", to: "/admin/students", icon: Users },
+  { label: "Practice sheet", to: "/admin/practice-sheets", icon: School },
+  { label: "Student", to: "/admin/students", icon: GraduationCap },
   { label: "Teacher", to: "/admin/teachers", icon: Users },
-  { label: "Organization", to: "/admin/organization", icon: Settings },
+  { label: "Organization", to: "/admin/organization", icon: Bell },
+  { label: "Settings", to: "/admin/settings", icon: Settings },
 ];
 
 export function AdminSidebar() {
@@ -107,4 +119,3 @@ export function AdminSidebar() {
     </Sidebar>
   );
 }
-

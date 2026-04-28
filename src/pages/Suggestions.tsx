@@ -1,11 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, Trash2, TrendingUp } from "lucide-react";
 
 type Row = {
   id: string;
@@ -22,6 +24,10 @@ const Suggestions = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [bumping, setBumping] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [languageFilter, setLanguageFilter] = useState("all");
+  const [conceptFilter, setConceptFilter] = useState("all");
 
   const load = async () => {
     setLoading(true);
@@ -32,7 +38,7 @@ const Suggestions = () => {
       .order("created_at", { ascending: false })
       .limit(200);
     if (error) toast.error(error.message);
-    else setRows((data as any) ?? []);
+    else setRows((data as Row[]) ?? []);
     setLoading(false);
   };
 
@@ -57,6 +63,34 @@ const Suggestions = () => {
     setBumping(null);
   };
 
+  const remove = async (row: Row) => {
+    setDeleting(row.id);
+    const { error } = await supabase.from("key_points").delete().eq("id", row.id);
+    if (error) toast.error(error.message);
+    else {
+      setRows((prev) => prev.filter((r) => r.id !== row.id));
+      toast.success("Deleted");
+    }
+    setDeleting(null);
+  };
+
+  const concepts = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.concepts?.title?.trim()).filter(Boolean))) as string[],
+    [rows],
+  );
+
+  const filteredRows = useMemo(() => {
+    const q = search.toLowerCase().trim();
+    return rows.filter((r) => {
+      const byLang = languageFilter === "all" ? true : (r.language ?? "") === languageFilter;
+      const byConcept = conceptFilter === "all" ? true : (r.concepts?.title ?? "") === conceptFilter;
+      const bySearch = q
+        ? `${r.content} ${r.concepts?.title ?? ""} ${r.language ?? ""}`.toLowerCase().includes(q)
+        : true;
+      return byLang && byConcept && bySearch;
+    });
+  }, [rows, languageFilter, conceptFilter, search]);
+
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="border-b">
@@ -74,24 +108,45 @@ const Suggestions = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
+        <Card className="mb-4 p-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search suggestions..."
+            />
+            <Select value={languageFilter} onValueChange={setLanguageFilter}>
+              <SelectTrigger><SelectValue placeholder="Language" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All languages</SelectItem>
+                <SelectItem value="en">English</SelectItem>
+                <SelectItem value="bn">Bangla</SelectItem>
+                <SelectItem value="mixed">Mixed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={conceptFilter} onValueChange={setConceptFilter}>
+              <SelectTrigger><SelectValue placeholder="Concept" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All concepts</SelectItem>
+                {concepts.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </Card>
+
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
           </div>
-        ) : rows.length === 0 ? (
+        ) : filteredRows.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">
-            No saved key points yet. Save some on the home page first.
+            No matching suggestions found.
           </Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {rows.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => bump(r)}
-                disabled={bumping === r.id}
-                className="text-left"
-              >
-                <Card className="p-4 h-full space-y-2 transition-shadow hover:shadow-md cursor-pointer">
+            {filteredRows.map((r) => (
+              <Card key={r.id} className="p-4 h-full space-y-2 transition-shadow hover:shadow-md">
+                <button onClick={() => bump(r)} disabled={bumping === r.id} className="w-full text-left">
                   <div className="flex items-center justify-between gap-2">
                     <Badge variant="outline">{langLabel[r.language ?? ""] ?? "—"}</Badge>
                     <Badge className="tabular-nums gap-1">
@@ -103,8 +158,18 @@ const Suggestions = () => {
                   {r.concepts?.title && (
                     <p className="text-xs text-muted-foreground truncate">From: {r.concepts.title}</p>
                   )}
-                </Card>
-              </button>
+                </button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => remove(r)}
+                  disabled={deleting === r.id}
+                  className="w-full"
+                >
+                  {deleting === r.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                  Delete
+                </Button>
+              </Card>
             ))}
           </div>
         )}
