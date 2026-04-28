@@ -35,14 +35,14 @@ type NavItem = {
 
 const items: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
-  {
-    label: "Academic",
-    icon: Target,
-    children: [
-      { label: "Classes", to: "/admin/academic/classes" },
-      { label: "Subjects", to: "/admin/academic/subjects" },
-    ],
-  },
+  // {
+  //   label: "Academic",
+  //   icon: Target,
+  //   children: [
+  //     { label: "Classes", to: "/admin/academic/classes" },
+  //     { label: "Subjects", to: "/admin/academic/subjects" },
+  //   ],
+  // },
   {
     label: "Question bank",
     icon: BookOpen,
@@ -59,7 +59,7 @@ const items: NavItem[] = [
       { label: "Schedules", to: "/admin/exam/schedules" },
     ],
   },
-  { label: "Practice sheet", to: "/admin/practice-sheets", icon: School },
+  // { label: "Practice sheet", to: "/admin/practice-sheets", icon: School },
   { label: "Student", to: "/admin/students", icon: GraduationCap },
   { label: "Teacher", to: "/admin/teachers", icon: Users },
   { label: "Organization", to: "/admin/organization", icon: Bell },
@@ -69,6 +69,7 @@ const items: NavItem[] = [
 export function AdminSidebar() {
   const location = useLocation();
   const isActive = (to?: string) => (to ? location.pathname === to || location.pathname.startsWith(`${to}/`) : false);
+
 
   return (
     <Sidebar collapsible="icon" variant="sidebar">

@@ -52,6 +52,9 @@ const Index = () => {
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [conceptName, setConceptName] = useState("");
+  const [subject, setSubject] = useState("");
+  const [system, setSystem] = useState("");
+  const [topic, setTopic] = useState("");
   const [points, setPoints] = useState<KeyPoint[]>([]);
 
   const onPick = (f: File) => {
@@ -94,12 +97,27 @@ const Index = () => {
   const handleSave = async () => {
     if (!points.length) return toast.error("No key points to save");
     if (points.some((p) => !p.content.trim())) return toast.error("Empty boxes — fill or remove");
+    if (!conceptName.trim() || !subject.trim() || !system.trim() || !topic.trim()) {
+      return toast.error("Fill Concept, Subject, System and Topic");
+    }
     setSaving(true);
     try {
-      toast.message("Save step is still using Supabase Edge Function.", {
-        description: "Extraction is now running via local backend. If you want, I can move Save to this backend too.",
+      const resp = await fetch("/api/save-concept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept_name: conceptName,
+          subject,
+          system,
+          topic,
+          high_yield_points: points.map((p) => p.content),
+        }),
       });
-      setImageFile(null); setImagePreview(null); setConceptName(""); setPoints([]);
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
+
+      toast.success(`Saved ${data?.count ?? points.length} points to database`);
+      setImageFile(null); setImagePreview(null); setConceptName(""); setSubject(""); setSystem(""); setTopic(""); setPoints([]);
       if (fileRef.current) fileRef.current.value = "";
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Save failed");
@@ -108,6 +126,9 @@ const Index = () => {
     }
   };
 
+
+
+  
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="border-b">
@@ -122,6 +143,7 @@ const Index = () => {
             <a href="/suggestions">Suggestions →</a>
           </Button>
         </div>
+        
       </header>
 
       <main className="container mx-auto px-4 py-8 grid lg:grid-cols-[380px_1fr] gap-8">
@@ -164,8 +186,22 @@ const Index = () => {
                   <Badge>{points.length} points</Badge>
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Concept name</label>
+                  <label className="text-sm font-medium">Concept *</label>
                   <Input value={conceptName} onChange={(e) => setConceptName(e.target.value)} className="mt-1" />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="text-sm font-medium">Subject *</label>
+                    <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">System *</label>
+                    <Input value={system} onChange={(e) => setSystem(e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Topic *</label>
+                    <Input value={topic} onChange={(e) => setTopic(e.target.value)} className="mt-1" />
+                  </div>
                 </div>
               </Card>
 

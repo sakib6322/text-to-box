@@ -30,6 +30,15 @@ type ApprovedPoint = {
   text: string;
   approved: boolean;
   saving?: boolean;
+  approveError?: string | null;
+  match?: {
+    key_point_id: string;
+    similarity: number; // 0..1
+    concept_title: string | null;
+    ai_percentage?: number | null;
+    ai_reason?: string | null;
+    vector_percentage?: number;
+  } | null;
 };
 
 type TfItem = {
@@ -64,6 +73,48 @@ type DraftQuestion = {
 
 const mkId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+
+async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/")) return file;
+
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error("Failed to load image"));
+    image.src = dataUrl;
+  });
+
+  const MAX_SIDE = 1600;
+  const ratio = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+  const width = Math.max(1, Math.round(img.width * ratio));
+  const height = Math.max(1, Math.round(img.height * ratio));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(img, 0, 0, width, height);
+
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/jpeg", 0.78);
+  });
+  if (!blob) return file;
+
+  const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
+    type: "image/jpeg",
+    lastModified: Date.now(),
+  });
+
+  return compressed.size < file.size ? compressed : file;
+}
 
 export default function CreateQuestionAI() {
   const [conceptTitle, setConceptTitle] = useState("");
@@ -135,7 +186,10 @@ export default function CreateQuestionAI() {
     setExtracting(true);
     try {
       const formData = new FormData();
-      if (imageFile) formData.append("image", imageFile);
+      if (imageFile) {
+        const compressed = await compressImage(imageFile);
+        formData.append("image", compressed);
+      }
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
       const resp = await fetch("/api/extract-concept", { method: "POST", body: formData });
       const data = (await resp.json().catch(() => ({}))) as { error?: string; concept_name?: string; high_yield_points?: string[] };
@@ -152,9 +206,55 @@ export default function CreateQuestionAI() {
           point_id: mkId(),
           text,
           approved: false,
+          approveError: null,
+          match: null,
         })),
       );
       applyAutofillFromExtract(extracted);
+      // Fetch similarity matches against existing suggestions (key_points)
+      try {
+        const resp2 = await fetch("/api/match-key-points", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texts: extracted.high_yield_points.slice(0, 30), threshold: 0.55, count: 1 }),
+        });
+        type Match = {
+          id: string;
+          similarity: number;
+          concept_title: string | null;
+          ai_percentage?: number;
+          ai_reason?: string | null;
+          vector_percentage?: number;
+        };
+        type MatchResult = { text: string; matches: Match[] };
+        const j = (await resp2.json().catch(() => ({}))) as { results?: MatchResult[] };
+        if (resp2.ok && Array.isArray(j?.results)) {
+          const bestByText = new Map<string, Match | null>();
+          for (const r of j.results) {
+            const best = Array.isArray(r?.matches) && r.matches.length ? r.matches[0] : null;
+            if (typeof r?.text === "string") bestByText.set(r.text, best);
+          }
+          setPoints((prev) =>
+            prev.map((p) => {
+              const best = bestByText.get(p.text);
+              if (!best?.id || typeof best?.similarity !== "number") return p;
+              return {
+                ...p,
+                match: {
+                  key_point_id: best.id,
+                  similarity: best.similarity,
+                  concept_title: best.concept_title ?? null,
+                  ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
+                  ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
+                  vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
+                },
+              };
+            }),
+          );
+        }
+      } catch {
+        // non-blocking
+      }
       toast.success(`Extracted ${extracted.high_yield_points.length} points`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Extraction failed");
@@ -166,13 +266,13 @@ export default function CreateQuestionAI() {
   const approvePoint = async (idx: number) => {
     const p = points[idx];
     if (!p) return;
-    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true } : x)));
+    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, approveError: null } : x)));
     try {
       const resp = await fetch("/api/approve-point", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          point_id: p.point_id,
+          matched_key_point_id: p.match?.key_point_id ?? null,
           concept: conceptTitle,
           subject,
           system,
@@ -180,14 +280,27 @@ export default function CreateQuestionAI() {
           question_text: p.text,
         }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string };
+      const data = (await resp.json().catch(() => ({}))) as { error?: string; created_new_point?: boolean; point_id?: string };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Approval failed");
 
-      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, approved: true, saving: false } : x)));
-      toast.success("Approved and saved");
+      setPoints((ps) =>
+        ps.map((x, i) =>
+          i === idx
+            ? {
+                ...x,
+                approved: true,
+                saving: false,
+                approveError: null,
+                match: x.match ?? (data.point_id ? { key_point_id: data.point_id, similarity: 0, concept_title: conceptTitle || null } : x.match),
+              }
+            : x,
+        ),
+      );
+      toast.success(data.created_new_point ? "Approved and added as new suggestion point" : "Approved and saved");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Approval failed");
-      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: false } : x)));
+      const msg = e instanceof Error ? e.message : "Approval failed";
+      toast.error(msg);
+      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: false, approveError: msg } : x)));
     }
   };
 
@@ -437,7 +550,17 @@ export default function CreateQuestionAI() {
                           rows={2}
                           className="resize-none"
                         />
-                        <div className="mt-1 font-mono text-xs text-muted-foreground">{p.point_id.slice(0, 10)}…</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-mono">{p.point_id.slice(0, 10)}…</span>
+                          {p.match ? (
+                            <Badge variant="outline">
+                              AI score: {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%
+                              {p.match.concept_title ? ` · ${p.match.concept_title}` : ""}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary">AI score: —</Badge>
+                          )}
+                        </div>
                       </div>
                       <Button
                         type="button"
@@ -450,6 +573,34 @@ export default function CreateQuestionAI() {
                         {p.approved ? "Approved" : "Approve"}
                       </Button>
                     </div>
+                    <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+                      {p.match ? (
+                        <>
+                          <span className="font-medium text-foreground">AI score:</span>{" "}
+                          {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%{" "}
+                          {p.match.concept_title ? `with "${p.match.concept_title}"` : ""}
+                          {typeof p.match.vector_percentage === "number" ? (
+                            <>
+                              <br />
+                              <span className="font-medium text-foreground">Vector score:</span> {Math.round(p.match.vector_percentage)}%
+                            </>
+                          ) : null}
+                          <br />
+                          <span className="font-mono">Matched Point ID: {p.match.key_point_id}</span>
+                          {p.match.ai_reason ? (
+                            <>
+                              <br />
+                              <span className="font-medium text-foreground">AI analysis:</span> {p.match.ai_reason}
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span>No matched suggestion found yet.</span>
+                      )}
+                    </div>
+                    {p.approveError ? (
+                      <p className="text-xs text-destructive">{p.approveError}</p>
+                    ) : null}
                   </Card>
                 ))}
               </div>

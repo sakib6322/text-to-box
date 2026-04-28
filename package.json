@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"npm run dev:web\" \"npm run dev:api\"",
+    "dev": "node server/cleanup-port.mjs && concurrently -k \"npm run dev:web\" \"npm run dev:api\"",
     "dev:web": "vite",
     "dev:api": "node server/index.mjs",
     "build": "vite build",

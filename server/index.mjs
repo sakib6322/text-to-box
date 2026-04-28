@@ -14,7 +14,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
-const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "models/text-embedding-004";
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "models/gemini-embedding-001";
+const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
 const supabaseAdmin =
   SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
     ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
@@ -69,6 +70,7 @@ async function embedText(text, apiKey) {
       body: JSON.stringify({
         content: { parts: [{ text: t }] },
         taskType: "RETRIEVAL_DOCUMENT",
+        outputDimensionality: EMBEDDING_DIM,
       }),
     },
   );
@@ -78,6 +80,79 @@ async function embedText(text, apiKey) {
   }
   const data = await resp.json();
   return Array.isArray(data?.embedding?.values) ? data.embedding.values : null;
+}
+
+function toPgVector(values) {
+  if (!Array.isArray(values)) return null;
+  const nums = values.filter((v) => Number.isFinite(v)).map((v) => Number(v));
+  if (nums.length === 0) return null;
+  const dim = Number.isFinite(EMBEDDING_DIM) && EMBEDDING_DIM > 0 ? EMBEDDING_DIM : 768;
+  const normalized = nums.length >= dim ? nums.slice(0, dim) : nums.concat(Array(dim - nums.length).fill(0));
+  return `[${normalized.join(",")}]`;
+}
+
+async function scoreMatchesWithGemini(apiKey, sourceText, candidates) {
+  if (!Array.isArray(candidates) || candidates.length === 0) return {};
+  const modelName = process.env.MATCH_AI_MODEL || process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: modelName });
+
+  const responseSchema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      scores: {
+        type: SchemaType.ARRAY,
+        items: {
+          type: SchemaType.OBJECT,
+          properties: {
+            id: { type: SchemaType.STRING },
+            percentage: { type: SchemaType.NUMBER },
+            reason: { type: SchemaType.STRING },
+          },
+          required: ["id", "percentage", "reason"],
+        },
+      },
+    },
+    required: ["scores"],
+  };
+
+  const prompt = `You are matching semantic similarity between one extracted study point and candidate key-points.
+Return percentage similarity between 0 and 100 for each candidate.
+Higher means stronger conceptual match.`;
+
+  const candidatesText = candidates
+    .map((c, idx) => `${idx + 1}. id=${c.id} | concept=${c.concept_title ?? "N/A"} | text=${c.content}`)
+    .join("\n");
+
+  const result = await model.generateContent({
+    contents: [{
+      role: "user",
+      parts: [{
+        text: `${prompt}\n\nSOURCE:\n${sourceText}\n\nCANDIDATES:\n${candidatesText}\n\nReturn JSON only.`,
+      }],
+    }],
+    generationConfig: {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema,
+    },
+  });
+
+  const raw = result?.response?.text?.() ?? "";
+  const parsed = parseGeminiJson(raw);
+  const scores = Array.isArray(parsed?.scores) ? parsed.scores : [];
+  const map = {};
+  for (const s of scores) {
+    if (typeof s?.id !== "string") continue;
+    const pct = Number(s?.percentage);
+    if (!Number.isFinite(pct)) continue;
+    const bounded = Math.max(0, Math.min(100, pct));
+    map[s.id] = {
+      percentage: bounded,
+      reason: typeof s?.reason === "string" ? s.reason : "",
+    };
+  }
+  return map;
 }
 
 app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
@@ -154,21 +229,80 @@ app.post("/api/approve-point", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const { point_id, question_text } = req.body ?? {};
-    if (typeof point_id !== "string" || !point_id.trim()) return res.status(400).json({ error: "point_id required" });
+    const { matched_key_point_id, point_id, question_text, concept, subject, system, topic } = req.body ?? {};
     if (typeof question_text !== "string" || !question_text.trim()) return res.status(400).json({ error: "question_text required" });
+    let targetId = typeof matched_key_point_id === "string" && matched_key_point_id.trim()
+      ? matched_key_point_id.trim()
+      : typeof point_id === "string" && point_id.trim()
+        ? point_id.trim()
+      : null;
 
-    const { data: point, error: pointErr } = await db
-      .from("key_points")
-      .select("id, concept_id, increment_count")
-      .eq("id", point_id)
-      .single();
-    if (pointErr || !point) return res.status(404).json({ error: "point_id not found" });
+    let point = null;
+    let createdNewPoint = false;
 
-    const { data: concept } = await db.from("concepts").select("title").eq("id", point.concept_id).single();
+    if (targetId) {
+      const { data: existingPoint, error: pointErr } = await db
+        .from("key_points")
+        .select("id, concept_id, increment_count")
+        .eq("id", targetId)
+        .single();
+      if (!pointErr && existingPoint) {
+        point = existingPoint;
+      } else {
+        // id was provided but not found -> fallback to creating a new suggestion.
+        targetId = null;
+      }
+    } else {
+      // No matched suggestion: create a new concept + key_point so it appears in Suggestions.
+      targetId = null;
+    }
+
+    if (!targetId || !point) {
+      const conceptTitle = typeof concept === "string" && concept.trim() ? concept.trim() : "Auto-added from approval";
+      const { data: newConcept, error: conceptErr } = await db
+        .from("concepts")
+        .insert({
+          title: conceptTitle,
+          detected_language: "mixed",
+          subject: typeof subject === "string" ? subject.trim() || null : null,
+          system: typeof system === "string" ? system.trim() || null : null,
+          topic: typeof topic === "string" ? topic.trim() || null : null,
+          raw_extraction: {
+            source: "create-ai-approve-fallback",
+            text: question_text.trim(),
+          },
+        })
+        .select("id")
+        .single();
+      if (conceptErr || !newConcept) return res.status(500).json({ error: conceptErr?.message ?? "Failed to create concept fallback" });
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      const emb = apiKey ? await embedText(question_text, apiKey) : null;
+      const embedding = toPgVector(emb);
+
+      const { data: newPoint, error: kpErr } = await db
+        .from("key_points")
+        .insert({
+          concept_id: newConcept.id,
+          content: question_text.trim(),
+          language: "mixed",
+          position: 0,
+          increment_count: 1,
+          embedding,
+        })
+        .select("id, concept_id, increment_count")
+        .single();
+      if (kpErr || !newPoint) return res.status(500).json({ error: kpErr?.message ?? "Failed to create suggestion point fallback" });
+
+      point = newPoint;
+      targetId = newPoint.id;
+      createdNewPoint = true;
+    }
+
+    const { data: conceptRow } = await db.from("concepts").select("title").eq("id", point.concept_id).single();
     const apiKey = process.env.GEMINI_API_KEY;
     const emb = apiKey ? await embedText(question_text, apiKey) : null;
-    const embedding = emb ? `[${emb.join(",")}]` : null;
+    const embedding = toPgVector(emb);
 
     const { error: qErr } = await db.from("questions").insert({
       paper_id: null,
@@ -183,17 +317,163 @@ app.post("/api/approve-point", async (req, res) => {
       subject: null,
       system: null,
       topic: null,
-      concept: concept?.title ?? null,
+      concept: conceptRow?.title ?? null,
     });
     if (qErr) return res.status(500).json({ error: qErr.message });
 
-    const { error: incErr } = await db
-      .from("key_points")
-      .update({ increment_count: Number(point.increment_count || 0) + 1 })
-      .eq("id", point.id);
-    if (incErr) return res.status(500).json({ error: incErr.message });
+    if (!createdNewPoint) {
+      const { error: incErr } = await db
+        .from("key_points")
+        .update({ increment_count: Number(point.increment_count || 0) + 1 })
+        .eq("id", point.id);
+      if (incErr) return res.status(500).json({ error: incErr.message });
+    }
 
-    return res.json({ ok: true, point_id, incremented: true, saved_question: true });
+    return res.json({
+      ok: true,
+      point_id: targetId,
+      incremented: true,
+      saved_question: true,
+      created_new_point: createdNewPoint,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/match-key-points", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
+
+    const { texts, threshold, count } = req.body ?? {};
+    const list = Array.isArray(texts) ? texts.filter((t) => typeof t === "string") : [];
+    if (list.length === 0) return res.status(400).json({ error: "texts[] required" });
+    const matchThreshold = typeof threshold === "number" ? threshold : 0.6;
+    const matchCount = typeof count === "number" ? count : 3;
+
+    const results = [];
+    for (const text of list) {
+      const emb = await embedText(text, apiKey);
+      const embStr = toPgVector(emb);
+      if (!embStr) {
+        results.push({ text, matches: [] });
+        continue;
+      }
+      const { data: matches, error } = await db.rpc("match_key_points", {
+        query_embedding: embStr,
+        match_threshold: matchThreshold,
+        match_count: matchCount,
+      });
+      if (error) return res.status(500).json({ error: error.message });
+
+      const conceptIds = Array.from(new Set((matches ?? []).map((m) => m.concept_id).filter(Boolean)));
+      const { data: conceptRows } = await db
+        .from("concepts")
+        .select("id, title")
+        .in("id", conceptIds);
+      const conceptTitleById = new Map((conceptRows ?? []).map((c) => [c.id, c.title]));
+
+      const enrichedMatches = (matches ?? []).map((m) => ({
+        id: m.id,
+        content: m.content,
+        concept_id: m.concept_id,
+        concept_title: conceptTitleById.get(m.concept_id) ?? null,
+        increment_count: m.increment_count,
+        vector_similarity: m.similarity,
+      }));
+      let aiScoreById = {};
+      try {
+        aiScoreById = await scoreMatchesWithGemini(apiKey, text, enrichedMatches.slice(0, 5));
+      } catch (err) {
+        console.error("Gemini match scoring failed, using vector similarity fallback", err);
+      }
+
+      results.push({
+        text,
+        matches: enrichedMatches.map((m) => {
+          const aiScore = aiScoreById[m.id];
+          const vectorPct = Math.max(0, Math.min(100, Math.round((m.vector_similarity ?? 0) * 100)));
+          const finalPct = typeof aiScore?.percentage === "number" ? aiScore.percentage : vectorPct;
+          return {
+            id: m.id,
+            content: m.content,
+            concept_id: m.concept_id,
+            concept_title: m.concept_title,
+            increment_count: m.increment_count,
+            similarity: finalPct / 100,
+            percentage: finalPct,
+            ai_percentage: typeof aiScore?.percentage === "number" ? aiScore.percentage : null,
+            ai_reason: typeof aiScore?.reason === "string" ? aiScore.reason : null,
+            vector_percentage: vectorPct,
+          };
+        }),
+      });
+    }
+
+    return res.json({ results });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/save-concept", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const apiKey = process.env.GEMINI_API_KEY;
+    const body = req.body ?? {};
+
+    const conceptName = String(body?.concept_name ?? "").trim();
+    const subject = body?.subject ? String(body.subject).trim() : null;
+    const system = body?.system ? String(body.system).trim() : null;
+    const topic = body?.topic ? String(body.topic).trim() : null;
+    const rawPoints = Array.isArray(body?.high_yield_points) ? body.high_yield_points : [];
+    const points = rawPoints
+      .filter((p) => typeof p === "string")
+      .map((p) => p.trim())
+      .filter(Boolean);
+    if (!conceptName) return res.status(400).json({ error: "concept_name required" });
+    if (points.length === 0) return res.status(400).json({ error: "high_yield_points required" });
+
+    const { data: concept, error: cErr } = await db
+      .from("concepts")
+      .insert({
+        title: conceptName,
+        detected_language: "mixed",
+        subject,
+        system,
+        topic,
+        raw_extraction: {
+          concept_name: conceptName,
+          high_yield_points: points,
+        },
+        source_image_path: null,
+      })
+      .select("id")
+      .single();
+    if (cErr || !concept) return res.status(500).json({ error: cErr?.message ?? "Failed to create concept" });
+
+    const keyPointRows = await Promise.all(
+      points.map(async (content, idx) => {
+        const emb = apiKey ? await embedText(content, apiKey) : null;
+        return {
+          concept_id: concept.id,
+          content,
+          language: "mixed",
+          position: idx,
+          embedding: toPgVector(emb),
+        };
+      }),
+    );
+    const { data: insertedKp, error: kpErr } = await db.from("key_points").insert(keyPointRows).select("id");
+    if (kpErr) return res.status(500).json({ error: kpErr.message });
+
+    return res.json({ ok: true, concept_id: concept.id, count: insertedKp?.length ?? 0 });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -225,7 +505,7 @@ app.post("/api/save-question", async (req, res) => {
               mcq: q.mcq ?? null,
               sba: q.sba ?? null,
               sourcePointId: q.sourcePointId ?? null,
-              embedding: emb ? `[${emb.join(",")}]` : null,
+              embedding: toPgVector(emb),
             };
           }),
       )

@@ -23,7 +23,6 @@ const langLabel: Record<string, string> = { en: "English", bn: "Bangla", mixed: 
 const Suggestions = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bumping, setBumping] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [languageFilter, setLanguageFilter] = useState("all");
@@ -44,24 +43,7 @@ const Suggestions = () => {
 
   useEffect(() => { load(); }, []);
 
-  const bump = async (row: Row) => {
-    setBumping(row.id);
-    const next = row.increment_count + 1;
-    // optimistic
-    setRows((rs) =>
-      [...rs.map((r) => (r.id === row.id ? { ...r, increment_count: next } : r))]
-        .sort((a, b) => b.increment_count - a.increment_count),
-    );
-    const { error } = await supabase
-      .from("key_points")
-      .update({ increment_count: next })
-      .eq("id", row.id);
-    if (error) {
-      toast.error(error.message);
-      load();
-    }
-    setBumping(null);
-  };
+  // increment_count is increased from Create Question approval flow now.
 
   const remove = async (row: Row) => {
     setDeleting(row.id);
@@ -115,7 +97,7 @@ const Suggestions = () => {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search suggestions..."
             />
-            <Select value={languageFilter} onValueChange={setLanguageFilter}>
+            {/* <Select value={languageFilter} onValueChange={setLanguageFilter}>
               <SelectTrigger><SelectValue placeholder="Language" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All languages</SelectItem>
@@ -123,7 +105,7 @@ const Suggestions = () => {
                 <SelectItem value="bn">Bangla</SelectItem>
                 <SelectItem value="mixed">Mixed</SelectItem>
               </SelectContent>
-            </Select>
+            </Select> */}
             <Select value={conceptFilter} onValueChange={setConceptFilter}>
               <SelectTrigger><SelectValue placeholder="Concept" /></SelectTrigger>
               <SelectContent>
@@ -146,19 +128,22 @@ const Suggestions = () => {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredRows.map((r) => (
               <Card key={r.id} className="p-4 h-full space-y-2 transition-shadow hover:shadow-md">
-                <button onClick={() => bump(r)} disabled={bumping === r.id} className="w-full text-left">
+                <div className="w-full text-left">
                   <div className="flex items-center justify-between gap-2">
-                    <Badge variant="outline">{langLabel[r.language ?? ""] ?? "—"}</Badge>
+                    {/* <Badge variant="outline">{langLabel[r.language ?? ""] ?? "—"}</Badge> */}
                     <Badge className="tabular-nums gap-1">
                       <TrendingUp className="h-3 w-3" />
                       {r.increment_count}
                     </Badge>
                   </div>
+                  {/* <p className="mt-1 text-xs font-mono text-muted-foreground">
+                    Point ID: {r.id}
+                  </p> */}
                   <p className="text-sm leading-relaxed text-pretty">{r.content}</p>
                   {r.concepts?.title && (
                     <p className="text-xs text-muted-foreground truncate">From: {r.concepts.title}</p>
                   )}
-                </button>
+                </div>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -166,8 +151,8 @@ const Suggestions = () => {
                   disabled={deleting === r.id}
                   className="w-full"
                 >
-                  {deleting === r.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                  Delete
+                  {deleting === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+             
                 </Button>
               </Card>
             ))}
