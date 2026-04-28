@@ -134,7 +134,7 @@ const Index = () => {
       <header className="border-b">
         <div className="container mx-auto px-4 py-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-balance">Medical Question Bank 1 — Concept Builder</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-balance">Medical Question Bank— Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
               Upload a book page → AI extracts exam-oriented key points  → verify → save with vector embeddings.
             </p>
