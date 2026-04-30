@@ -59,6 +59,28 @@ function parseGeminiJson(rawText) {
   throw new Error("Model returned non-JSON output");
 }
 
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function sanitizeModelText(value) {
+  return decodeHtmlEntities(String(value ?? ""))
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isQuotaError(err) {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return msg.includes("429") || msg.includes("quota") || msg.includes("rate limit");
+}
+
 async function embedText(text, apiKey) {
   const t = String(text ?? "").trim();
   if (!t) return null;
@@ -161,25 +183,29 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
 
     const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
     const inputText = String(req.body?.input_text ?? "").trim();
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
     }
 
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: modelName });
 
     const responseSchema = {
       type: SchemaType.OBJECT,
       properties: {
         concept_name: { type: SchemaType.STRING },
+        verbatim_text: {
+          type: SchemaType.STRING,
+          description: "Exact/plain transcription of the source image/text without rewriting.",
+        },
         high_yield_points: {
           type: SchemaType.ARRAY,
           description: "List of exam-friendly, high-yield points or stems extracted from the text.",
           items: { type: SchemaType.STRING },
         },
       },
-      required: ["concept_name", "high_yield_points"],
+      required: ["concept_name", "verbatim_text", "high_yield_points"],
     };
 
     const generationConfig = {
@@ -190,27 +216,50 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
 
     const prompt =
       "You are an expert Medical Professor. Analyze the uploaded medical textbook image and/or given source text.\n" +
+      "First extract verbatim_text as close to the original wording as possible (plain text, no HTML).\n" +
       "Convert the essay-like text into the maximum possible number of easy, exam-friendly, high-yield points or stems.\n" +
       "Return the output STRICTLY matching the JSON schema. Do not include any extra text.";
 
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
 
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts }],
-      generationConfig,
-    });
+    let result;
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      result = await model.generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig,
+      });
+    } catch (err) {
+      if (!isQuotaError(err) || fallbackModelName === modelName) throw err;
+      const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName });
+      result = await fallbackModel.generateContent({
+        contents: [{ role: "user", parts }],
+        generationConfig,
+      });
+    }
 
     const text = result?.response?.text?.() ?? "";
     const parsed = parseGeminiJson(text);
-    const concept_name = typeof parsed?.concept_name === "string" ? parsed.concept_name : "";
+    const concept_name = typeof parsed?.concept_name === "string" ? sanitizeModelText(parsed.concept_name) : "";
+    const verbatim_text =
+      typeof parsed?.verbatim_text === "string" ? sanitizeModelText(parsed.verbatim_text) : "";
     const high_yield_points = Array.isArray(parsed?.high_yield_points)
-      ? parsed.high_yield_points.filter((x) => typeof x === "string")
+      ? parsed.high_yield_points
+          .filter((x) => typeof x === "string")
+          .map((x) => sanitizeModelText(x))
+          .filter(Boolean)
       : [];
 
-    return res.json({ concept_name, high_yield_points });
+    return res.json({ concept_name, verbatim_text, high_yield_points });
   } catch (e) {
     console.error(e);
+    if (isQuotaError(e)) {
+      return res.status(429).json({
+        error:
+          "AI quota exceeded. Please try again after a short wait, or switch to a lower-cost model (e.g. gemini-2.5-flash).",
+      });
+    }
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
 });
@@ -350,6 +399,7 @@ app.post("/api/match-key-points", async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
 
     const { texts, threshold, count } = req.body ?? {};
+    const useAiScoring = String(process.env.MATCH_USE_AI_SCORING || "false").toLowerCase() === "true";
     const list = Array.isArray(texts) ? texts.filter((t) => typeof t === "string") : [];
     if (list.length === 0) return res.status(400).json({ error: "texts[] required" });
     const matchThreshold = typeof threshold === "number" ? threshold : 0.6;
@@ -386,10 +436,12 @@ app.post("/api/match-key-points", async (req, res) => {
         vector_similarity: m.similarity,
       }));
       let aiScoreById = {};
-      try {
-        aiScoreById = await scoreMatchesWithGemini(apiKey, text, enrichedMatches.slice(0, 5));
-      } catch (err) {
-        console.error("Gemini match scoring failed, using vector similarity fallback", err);
+      if (useAiScoring) {
+        try {
+          aiScoreById = await scoreMatchesWithGemini(apiKey, text, enrichedMatches.slice(0, 5));
+        } catch (err) {
+          console.error("Gemini match scoring failed, using vector similarity fallback", err);
+        }
       }
 
       results.push({

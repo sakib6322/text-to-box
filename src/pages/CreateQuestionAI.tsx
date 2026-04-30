@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 type ExtractResult = {
   concept_name: string;
+  verbatim_text: string;
   high_yield_points: string[];
 };
 
@@ -160,9 +161,11 @@ export default function CreateQuestionAI() {
   const applyAutofillFromExtract = (extracted: ExtractResult) => {
     setConceptTitle(extracted.concept_name);
     const lines = extracted.high_yield_points;
+    const verbatim = extracted.verbatim_text.trim();
     if (lines.length > 0) {
-      setMcqStem(lines[0] ?? "");
-      setSbaStem(lines[0] ?? "");
+      const stemFromExtract = verbatim || lines[0] || "";
+      setMcqStem(stemFromExtract);
+      setSbaStem(stemFromExtract);
       const nextOpts: [string, string, string, string, string] = ["", "", "", "", ""];
       for (let i = 0; i < 5; i++) nextOpts[i] = lines[i + 1] ?? lines[i] ?? "";
       setSbaOptions(nextOpts);
@@ -192,11 +195,17 @@ export default function CreateQuestionAI() {
       }
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
       const resp = await fetch("/api/extract-concept", { method: "POST", body: formData });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string; concept_name?: string; high_yield_points?: string[] };
+      const data = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        concept_name?: string;
+        verbatim_text?: string;
+        high_yield_points?: string[];
+      };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
       const extracted: ExtractResult = {
         concept_name: typeof data?.concept_name === "string" ? data.concept_name : "",
+        verbatim_text: typeof data?.verbatim_text === "string" ? data.verbatim_text : "",
         high_yield_points: Array.isArray(data?.high_yield_points) ? data.high_yield_points.filter((x): x is string => typeof x === "string") : [],
       };
 
@@ -389,11 +398,11 @@ export default function CreateQuestionAI() {
     }
   };
 
-  const addQuestionToPaper = () => {
-    if (!questionMode) return toast.error("Select question type first");
+  const addQuestionToPaper = (mode: "mcq" | "sba" = questionMode as "mcq" | "sba") => {
+    if (!mode) return toast.error("Select question type first");
     const next: DraftQuestion = {
       id: mkId(),
-      questionMode: questionMode as "mcq" | "sba",
+      questionMode: mode,
       subject,
       system,
       topic,
@@ -408,12 +417,13 @@ export default function CreateQuestionAI() {
         status,
         marks: Number(marks) || 0,
       },
-      mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
-      sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
+      mcq: mode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
+      sba: mode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
       sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
     };
+    setQuestionMode(mode);
     setQueuedQuestions((prev) => [...prev, next]);
-    toast.success("Question added to paper");
+    toast.success(`${mode.toUpperCase()} question added to paper`);
   };
 
   return (
@@ -750,9 +760,13 @@ export default function CreateQuestionAI() {
       </Card>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-2">
-        <Button type="button" variant="secondary" onClick={addQuestionToPaper} disabled={!questionMode}>
+        <Button type="button" variant="secondary" onClick={() => addQuestionToPaper("mcq")}>
           <Plus className="mr-2 h-4 w-4" />
-          Add question
+          Add new question: MCQ
+        </Button>
+        <Button type="button" variant="secondary" onClick={() => addQuestionToPaper("sba")}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add new question: SBA
         </Button>
         <Button type="button" variant="outline" onClick={resetForm}>
           Reset

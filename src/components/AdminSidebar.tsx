@@ -34,15 +34,10 @@ type NavItem = {
 };
 
 const items: NavItem[] = [
+  { label: "Home", to: "/", icon: School },
+  { label: "Suggestions", to: "/suggestions", icon: Target },
   { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
-  // {
-  //   label: "Academic",
-  //   icon: Target,
-  //   children: [
-  //     { label: "Classes", to: "/admin/academic/classes" },
-  //     { label: "Subjects", to: "/admin/academic/subjects" },
-  //   ],
-  // },
+
   {
     label: "Question bank",
     icon: BookOpen,

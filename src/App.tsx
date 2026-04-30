@@ -7,6 +7,7 @@ import Index from "./pages/Index.tsx";
 import Suggestions from "./pages/Suggestions.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLayout from "./layouts/AdminLayout.tsx";
+import AppSidebarLayout from "./layouts/AppSidebarLayout.tsx";
 import CreateQuestionAI from "./pages/CreateQuestionAI.tsx";
 import AdminPlaceholder from "./pages/AdminPlaceholder.tsx";
 import AllQuestions from "./pages/AllQuestions.tsx";
@@ -22,8 +23,10 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/suggestions" element={<Suggestions />} />
+          <Route path="/" element={<AppSidebarLayout />}>
+            <Route index element={<Index />} />
+            <Route path="suggestions" element={<Suggestions />} />
+          </Route>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminPlaceholder />} />
             <Route path="academic/classes" element={<AdminPlaceholder />} />
