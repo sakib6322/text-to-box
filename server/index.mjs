@@ -91,8 +91,23 @@ function isQuotaError(err) {
 
 function isLeakedOrBlockedKeyError(err) {
   const msg = String(err?.message ?? err ?? "").toLowerCase();
-  return msg.includes("403") && (msg.includes("reported as leaked") || msg.includes("api key") || msg.includes("forbidden"));
+  // Only treat as "leaked" when Google explicitly reports it.
+  return msg.includes("403") && msg.includes("reported as leaked");
 }
+
+function maskKey(k) {
+  const s = String(k ?? "");
+  if (!s) return "";
+  if (s.length <= 12) return `${s.slice(0, 3)}…${s.slice(-3)}`;
+  return `${s.slice(0, 8)}…${s.slice(-4)}`;
+}
+
+process.on("unhandledRejection", (reason) => {
+  console.error("unhandledRejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException:", err);
+});
 
 async function embedText(text, apiKey) {
   const t = String(text ?? "").trim();
@@ -284,6 +299,17 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
 });
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// Debug only (masked): confirm server env is updated.
+app.get("/api/debug/env", (_req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  return res.json({
+    hasKey: Boolean(apiKey),
+    keyMasked: apiKey ? maskKey(apiKey) : null,
+    primaryModel: process.env.PRIMARY_AI_MODEL || null,
+    fallbackModel: process.env.FALLBACK_AI_MODEL || null,
+  });
+});
 
 app.get("/api/db-health", async (_req, res) => {
   const db = requireSupabase(res);
