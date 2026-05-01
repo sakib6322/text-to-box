@@ -31,6 +31,14 @@ function requireSupabase(res) {
   return supabaseAdmin;
 }
 
+async function linkConceptBoards(db, conceptId, boardIds) {
+  const ids = Array.isArray(boardIds) ? boardIds.filter((id) => typeof id === "string" && id.trim()) : [];
+  if (ids.length === 0 || !conceptId) return;
+  const rows = ids.map((board_id) => ({ concept_id: conceptId, board_id: board_id.trim() }));
+  const { error } = await db.from("concept_boards").upsert(rows, { onConflict: "concept_id,board_id" });
+  if (error) console.error("linkConceptBoards:", error.message);
+}
+
 function fileToGenerativePart(fileBuffer, mimeType) {
   return {
     inlineData: {
@@ -79,6 +87,11 @@ function sanitizeModelText(value) {
 function isQuotaError(err) {
   const msg = String(err?.message ?? err ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("quota") || msg.includes("rate limit");
+}
+
+function isLeakedOrBlockedKeyError(err) {
+  const msg = String(err?.message ?? err ?? "").toLowerCase();
+  return msg.includes("403") && (msg.includes("reported as leaked") || msg.includes("api key") || msg.includes("forbidden"));
 }
 
 async function embedText(text, apiKey) {
@@ -254,6 +267,12 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     return res.json({ concept_name, verbatim_text, high_yield_points });
   } catch (e) {
     console.error(e);
+    if (isLeakedOrBlockedKeyError(e)) {
+      return res.status(403).json({
+        error:
+          "This Gemini API key is blocked (reported leaked/forbidden). Generate a new key, update .env GEMINI_API_KEY, then restart API server.",
+      });
+    }
     if (isQuotaError(e)) {
       return res.status(429).json({
         error:
@@ -274,11 +293,64 @@ app.get("/api/db-health", async (_req, res) => {
   return res.json({ ok: true });
 });
 
+app.get("/api/boards", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const { data, error } = await db.from("boards").select("id, name, created_at").order("name", { ascending: true });
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ boards: data ?? [] });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/boards", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const name = String(req.body?.name ?? "").trim();
+    if (!name) return res.status(400).json({ error: "name required" });
+    const { data, error } = await db.from("boards").insert({ name }).select("id, name, created_at").single();
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ board: data });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/boards/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    const { error } = await db.from("boards").delete().eq("id", id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.post("/api/approve-point", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const { matched_key_point_id, point_id, question_text, concept, subject, system, topic } = req.body ?? {};
+    const {
+      matched_key_point_id,
+      point_id,
+      question_text,
+      concept,
+      subject,
+      system,
+      topic,
+      board_ids,
+    } = req.body ?? {};
+    const boardIds = Array.isArray(board_ids) ? board_ids.filter((id) => typeof id === "string" && id.trim()) : [];
     if (typeof question_text !== "string" || !question_text.trim()) return res.status(400).json({ error: "question_text required" });
     let targetId = typeof matched_key_point_id === "string" && matched_key_point_id.trim()
       ? matched_key_point_id.trim()
@@ -348,7 +420,22 @@ app.post("/api/approve-point", async (req, res) => {
       createdNewPoint = true;
     }
 
-    const { data: conceptRow } = await db.from("concepts").select("title").eq("id", point.concept_id).single();
+    const conceptPatch = {};
+    if (typeof subject === "string") conceptPatch.subject = subject.trim() || null;
+    if (typeof system === "string") conceptPatch.system = system.trim() || null;
+    if (typeof topic === "string") conceptPatch.topic = topic.trim() || null;
+    if (typeof concept === "string" && concept.trim()) conceptPatch.title = concept.trim();
+    if (Object.keys(conceptPatch).length) {
+      const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
+      if (upErr) return res.status(500).json({ error: upErr.message });
+    }
+    await linkConceptBoards(db, point.concept_id, boardIds);
+
+    const { data: conceptRow } = await db
+      .from("concepts")
+      .select("title, subject, system, topic")
+      .eq("id", point.concept_id)
+      .single();
     const apiKey = process.env.GEMINI_API_KEY;
     const emb = apiKey ? await embedText(question_text, apiKey) : null;
     const embedding = toPgVector(emb);
@@ -363,9 +450,9 @@ app.post("/api/approve-point", async (req, res) => {
       status: "published",
       difficulty: "medium",
       marks: 1,
-      subject: null,
-      system: null,
-      topic: null,
+      subject: conceptRow?.subject ?? null,
+      system: conceptRow?.system ?? null,
+      topic: conceptRow?.topic ?? null,
       concept: conceptRow?.title ?? null,
     });
     if (qErr) return res.status(500).json({ error: qErr.message });
@@ -423,18 +510,24 @@ app.post("/api/match-key-points", async (req, res) => {
       const conceptIds = Array.from(new Set((matches ?? []).map((m) => m.concept_id).filter(Boolean)));
       const { data: conceptRows } = await db
         .from("concepts")
-        .select("id, title")
+        .select("id, title, subject, system, topic")
         .in("id", conceptIds);
-      const conceptTitleById = new Map((conceptRows ?? []).map((c) => [c.id, c.title]));
+      const conceptById = new Map((conceptRows ?? []).map((c) => [c.id, c]));
 
-      const enrichedMatches = (matches ?? []).map((m) => ({
-        id: m.id,
-        content: m.content,
-        concept_id: m.concept_id,
-        concept_title: conceptTitleById.get(m.concept_id) ?? null,
-        increment_count: m.increment_count,
-        vector_similarity: m.similarity,
-      }));
+      const enrichedMatches = (matches ?? []).map((m) => {
+        const c = conceptById.get(m.concept_id);
+        return {
+          id: m.id,
+          content: m.content,
+          concept_id: m.concept_id,
+          concept_title: c?.title ?? null,
+          concept_subject: c?.subject ?? null,
+          concept_system: c?.system ?? null,
+          concept_topic: c?.topic ?? null,
+          increment_count: m.increment_count,
+          vector_similarity: m.similarity,
+        };
+      });
       let aiScoreById = {};
       if (useAiScoring) {
         try {
@@ -455,6 +548,9 @@ app.post("/api/match-key-points", async (req, res) => {
             content: m.content,
             concept_id: m.concept_id,
             concept_title: m.concept_title,
+            concept_subject: m.concept_subject,
+            concept_system: m.concept_system,
+            concept_topic: m.concept_topic,
             increment_count: m.increment_count,
             similarity: finalPct / 100,
             percentage: finalPct,
@@ -509,6 +605,11 @@ app.post("/api/save-concept", async (req, res) => {
       .select("id")
       .single();
     if (cErr || !concept) return res.status(500).json({ error: cErr?.message ?? "Failed to create concept" });
+
+    const saveBoardIds = Array.isArray(body?.board_ids)
+      ? body.board_ids.filter((id) => typeof id === "string" && id.trim())
+      : [];
+    await linkConceptBoards(db, concept.id, saveBoardIds);
 
     const keyPointRows = await Promise.all(
       points.map(async (content, idx) => {

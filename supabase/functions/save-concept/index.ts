@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
       })
       .select()
       .single();
-    if (cErr) throw cErr;
+    if (cErr) throw cErr;t
 
     const rows = [];
     for (let i = 0; i < normalizedPoints.length; i++) {

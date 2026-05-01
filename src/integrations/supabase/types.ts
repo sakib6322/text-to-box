@@ -21,7 +21,10 @@ export type Database = {
           id: string
           raw_extraction: Json | null
           source_image_path: string | null
+          subject: string | null
+          system: string | null
           title: string | null
+          topic: string | null
           updated_at: string
         }
         Insert: {
@@ -30,7 +33,10 @@ export type Database = {
           id?: string
           raw_extraction?: Json | null
           source_image_path?: string | null
+          subject?: string | null
+          system?: string | null
           title?: string | null
+          topic?: string | null
           updated_at?: string
         }
         Update: {
@@ -39,10 +45,64 @@ export type Database = {
           id?: string
           raw_extraction?: Json | null
           source_image_path?: string | null
+          subject?: string | null
+          system?: string | null
           title?: string | null
+          topic?: string | null
           updated_at?: string
         }
         Relationships: []
+      }
+      boards: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      concept_boards: {
+        Row: {
+          board_id: string
+          concept_id: string
+          created_at: string
+        }
+        Insert: {
+          board_id: string
+          concept_id: string
+          created_at?: string
+        }
+        Update: {
+          board_id?: string
+          concept_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_boards_board_id_fkey"
+            columns: ["board_id"]
+            isOneToOne: false
+            referencedRelation: "boards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_boards_concept_id_fkey"
+            columns: ["concept_id"]
+            isOneToOne: false
+            referencedRelation: "concepts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       key_points: {
         Row: {

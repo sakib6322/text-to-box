@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -36,11 +36,16 @@ type ApprovedPoint = {
     key_point_id: string;
     similarity: number; // 0..1
     concept_title: string | null;
+    concept_subject?: string | null;
+    concept_system?: string | null;
+    concept_topic?: string | null;
     ai_percentage?: number | null;
     ai_reason?: string | null;
     vector_percentage?: number;
   } | null;
 };
+
+type BoardOption = { id: string; name: string };
 
 type TfItem = {
   id: string;
@@ -134,7 +139,8 @@ export default function CreateQuestionAI() {
 
   const [questionMode, setQuestionMode] = useState<QuestionMode>(null);
 
-  const [boards, setBoards] = useState([""]);
+  const [boardOptions, setBoardOptions] = useState<BoardOption[]>([]);
+  const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [importantSchools, setImportantSchools] = useState([""]);
   const [sources, setSources] = useState([""]);
   const [teachers, setTeachers] = useState([""]);
@@ -157,6 +163,32 @@ export default function CreateQuestionAI() {
     const s = (v: string, fallback: string) => (v.trim() ? v.trim() : fallback);
     return [s(subject, "Subject"), s(system, "System"), s(topic, "Topic"), s(conceptTitle, "Concept")];
   }, [subject, system, topic, conceptTitle]);
+
+  const selectedBoardNames = useMemo(() => {
+    const byId = new Map(boardOptions.map((b) => [b.id, b.name]));
+    return selectedBoardIds.map((id) => byId.get(id)).filter((n): n is string => Boolean(n?.trim()));
+  }, [boardOptions, selectedBoardIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch("/api/boards");
+        const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
+        if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
+        setBoardOptions(j.boards.map((b) => ({ id: b.id, name: b.name })));
+      } catch {
+        /* non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleBoard = (id: string) => {
+    setSelectedBoardIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   const applyAutofillFromExtract = (extracted: ExtractResult) => {
     setConceptTitle(extracted.concept_name);
@@ -231,6 +263,9 @@ export default function CreateQuestionAI() {
           id: string;
           similarity: number;
           concept_title: string | null;
+          concept_subject?: string | null;
+          concept_system?: string | null;
+          concept_topic?: string | null;
           ai_percentage?: number;
           ai_reason?: string | null;
           vector_percentage?: number;
@@ -253,6 +288,9 @@ export default function CreateQuestionAI() {
                   key_point_id: best.id,
                   similarity: best.similarity,
                   concept_title: best.concept_title ?? null,
+                  concept_subject: best.concept_subject ?? null,
+                  concept_system: best.concept_system ?? null,
+                  concept_topic: best.concept_topic ?? null,
                   ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
                   ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
                   vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
@@ -287,6 +325,7 @@ export default function CreateQuestionAI() {
           system,
           topic,
           question_text: p.text,
+          board_ids: selectedBoardIds,
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as { error?: string; created_new_point?: boolean; point_id?: string };
@@ -300,7 +339,18 @@ export default function CreateQuestionAI() {
                 approved: true,
                 saving: false,
                 approveError: null,
-                match: x.match ?? (data.point_id ? { key_point_id: data.point_id, similarity: 0, concept_title: conceptTitle || null } : x.match),
+                match:
+                  x.match ??
+                  (data.point_id
+                    ? {
+                        key_point_id: data.point_id,
+                        similarity: 0,
+                        concept_title: conceptTitle || null,
+                        concept_subject: subject.trim() || null,
+                        concept_system: system.trim() || null,
+                        concept_topic: topic.trim() || null,
+                      }
+                    : x.match),
               }
             : x,
         ),
@@ -326,7 +376,7 @@ export default function CreateQuestionAI() {
   };
 
   const resetForm = () => {
-    setBoards([""]);
+    setSelectedBoardIds([]);
     setImportantSchools([""]);
     setSources([""]);
     setTeachers([""]);
@@ -362,7 +412,7 @@ export default function CreateQuestionAI() {
         concept: conceptTitle,
         questionMode: questionMode as "mcq" | "sba",
         metadata: {
-          boards: boards.map((b) => b.trim()).filter(Boolean),
+          boards: selectedBoardNames,
           importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
           sources: sources.map((b) => b.trim()).filter(Boolean),
           teachers: teachers.map((b) => b.trim()).filter(Boolean),
@@ -408,7 +458,7 @@ export default function CreateQuestionAI() {
       topic,
       concept: conceptTitle,
       metadata: {
-        boards: boards.map((b) => b.trim()).filter(Boolean),
+        boards: selectedBoardNames,
         importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
         sources: sources.map((b) => b.trim()).filter(Boolean),
         teachers: teachers.map((b) => b.trim()).filter(Boolean),
@@ -563,9 +613,21 @@ export default function CreateQuestionAI() {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span className="font-mono">{p.point_id.slice(0, 10)}…</span>
                           {p.match ? (
-                            <Badge variant="outline">
+                            <Badge variant="outline" className="max-w-full whitespace-normal text-left font-normal">
                               AI score: {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%
-                              {p.match.concept_title ? ` · ${p.match.concept_title}` : ""}
+                              {[
+                                p.match.concept_subject,
+                                p.match.concept_system,
+                                p.match.concept_topic,
+                                p.match.concept_title,
+                              ]
+                                .map((x) => (x ?? "").trim())
+                                .filter(Boolean).length
+                                ? ` · ${[p.match.concept_subject, p.match.concept_system, p.match.concept_topic, p.match.concept_title]
+                                    .map((x) => (x ?? "").trim())
+                                    .filter(Boolean)
+                                    .join(" → ")}`
+                                : ""}
                             </Badge>
                           ) : (
                             <Badge variant="secondary">AI score: —</Badge>
@@ -588,7 +650,30 @@ export default function CreateQuestionAI() {
                         <>
                           <span className="font-medium text-foreground">AI score:</span>{" "}
                           {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%{" "}
-                          {p.match.concept_title ? `with "${p.match.concept_title}"` : ""}
+                          {[
+                            p.match.concept_subject,
+                            p.match.concept_system,
+                            p.match.concept_topic,
+                            p.match.concept_title,
+                          ]
+                            .map((x) => (x ?? "").trim())
+                            .filter(Boolean).length ? (
+                            <>
+                              {" "}
+                              with path{" "}
+                              <span className="text-foreground">
+                                {[
+                                  p.match.concept_subject,
+                                  p.match.concept_system,
+                                  p.match.concept_topic,
+                                  p.match.concept_title,
+                                ]
+                                  .map((x) => (x ?? "").trim())
+                                  .filter(Boolean)
+                                  .join(" → ")}
+                              </span>
+                            </>
+                          ) : null}
                           {typeof p.match.vector_percentage === "number" ? (
                             <>
                               <br />
@@ -624,7 +709,24 @@ export default function CreateQuestionAI() {
         <p className="mb-4 mt-1 text-xs text-muted-foreground">All fields are editable. Multi-value fields use one or more lines.</p>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <MultiLineField label="Boards (multi)" values={boards} onChange={setBoards} />
+          <div className="space-y-2 md:col-span-2 lg:col-span-3">
+            <Label>Boards</Label>
+            <p className="text-xs text-muted-foreground">
+              Create boards in Admin → Settings. Selected boards are saved on the concept when you approve a point.
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border p-3">
+              {boardOptions.length === 0 ? (
+                <span className="text-sm text-muted-foreground">No boards yet. Add them in Settings.</span>
+              ) : (
+                boardOptions.map((b) => (
+                  <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                    <Checkbox checked={selectedBoardIds.includes(b.id)} onCheckedChange={() => toggleBoard(b.id)} />
+                    {b.name}
+                  </label>
+                ))
+              )}
+            </div>
+          </div>
           <MultiLineField label="Important schools (multi)" values={importantSchools} onChange={setImportantSchools} />
           <MultiLineField label="Sources (multi)" values={sources} onChange={setSources} />
           <MultiLineField label="Teachers (multi)" values={teachers} onChange={setTeachers} />
