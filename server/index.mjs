@@ -311,6 +311,45 @@ app.get("/api/debug/env", (_req, res) => {
   });
 });
 
+/** One minimal generateContent call to verify key + model access (dev only). */
+app.get("/api/debug/test-gemini", async (_req, res) => {
+  const apiKey = process.env.GEMINI_API_KEY || "";
+  const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+  if (!apiKey) {
+    return res.status(500).json({ ok: false, kind: "missing_key", message: "GEMINI_API_KEY not set" });
+  }
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: 'Reply with exactly: "ok"' }] }],
+      generationConfig: { temperature: 0, maxOutputTokens: 8 },
+    });
+    const text = String(result?.response?.text?.() ?? "").trim();
+    return res.json({
+      ok: true,
+      model: modelName,
+      keyMasked: maskKey(apiKey),
+      snippet: text.slice(0, 120),
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const lower = msg.toLowerCase();
+    let kind = "other";
+    if (lower.includes("reported as leaked")) kind = "leaked_key";
+    else if (lower.includes("403") && lower.includes("forbidden")) kind = "forbidden";
+    else if (lower.includes("429") || lower.includes("quota") || lower.includes("rate limit")) kind = "quota";
+    const status = kind === "leaked_key" || kind === "forbidden" ? 403 : kind === "quota" ? 429 : 502;
+    return res.status(status).json({
+      ok: false,
+      kind,
+      model: modelName,
+      keyMasked: maskKey(apiKey),
+      message: msg,
+    });
+  }
+});
+
 app.get("/api/db-health", async (_req, res) => {
   const db = requireSupabase(res);
   if (!db) return;

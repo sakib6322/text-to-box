@@ -13,6 +13,8 @@ create table if not exists public.question_papers (
   created_at timestamptz not null default now()
 );
 
+
+
 -- Questions table stores MCQ/SBA with vector embedding for retrieval
 create table if not exists public.questions (
   id uuid primary key default gen_random_uuid(),
