@@ -84,6 +84,47 @@ function sanitizeModelText(value) {
     .trim();
 }
 
+/** Preserve line breaks and wording for exam questions (no paraphrase cleanup). */
+function preserveVerbatimText(value) {
+  return decodeHtmlEntities(String(value ?? ""))
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function normalizeQuestionType(value) {
+  const s = String(value ?? "").toLowerCase().trim();
+  if (s === "mcq" || s === "multiple" || s.includes("true/false") || s.includes("t/f")) return "mcq";
+  if (s === "sba" || s === "single" || s.includes("best answer")) return "sba";
+  return null;
+}
+
+function normalizeTfAnswer(value) {
+  const s = String(value ?? "").toLowerCase().trim();
+  if (s === "t" || s === "true" || s === "1" || s === "yes") return "true";
+  return "false";
+}
+
+function labelToOptionIndex(label) {
+  const ch = String(label ?? "").toLowerCase().replace(/[^a-e]/g, "");
+  const map = { a: 0, b: 1, c: 2, d: 3, e: 4 };
+  return ch in map ? map[ch] : 0;
+}
+
+async function generateWithFallback(genAI, modelName, fallbackModelName, request) {
+  try {
+    const model = genAI.getGenerativeModel({ model: modelName });
+    return await model.generateContent(request);
+  } catch (err) {
+    if (!isQuotaError(err) || fallbackModelName === modelName) throw err;
+    const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName });
+    return await fallbackModel.generateContent(request);
+  }
+}
+
 function isQuotaError(err) {
   const msg = String(err?.message ?? err ?? "").toLowerCase();
   return msg.includes("429") || msg.includes("quota") || msg.includes("rate limit");
@@ -245,27 +286,17 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     const prompt =
       "You are an expert Medical Professor. Analyze the uploaded medical textbook image and/or given source text.\n" +
       "First extract verbatim_text as close to the original wording as possible (plain text, no HTML).\n" +
-      "Convert the essay-like text into the maximum possible number of easy, exam-friendly, high-yield points or stems.\n" +
+      "For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.\n" +
+      "Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.\n" +
       "Return the output STRICTLY matching the JSON schema. Do not include any extra text.";
 
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
 
-    let result;
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      result = await model.generateContent({
-        contents: [{ role: "user", parts }],
-        generationConfig,
-      });
-    } catch (err) {
-      if (!isQuotaError(err) || fallbackModelName === modelName) throw err;
-      const fallbackModel = genAI.getGenerativeModel({ model: fallbackModelName });
-      result = await fallbackModel.generateContent({
-        contents: [{ role: "user", parts }],
-        generationConfig,
-      });
-    }
+    const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
+      contents: [{ role: "user", parts }],
+      generationConfig,
+    });
 
     const text = result?.response?.text?.() ?? "";
     const parsed = parseGeminiJson(text);
@@ -280,6 +311,199 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
       : [];
 
     return res.json({ concept_name, verbatim_text, high_yield_points });
+  } catch (e) {
+    console.error(e);
+    if (isLeakedOrBlockedKeyError(e)) {
+      return res.status(403).json({
+        error:
+          "This Gemini API key is blocked (reported leaked/forbidden). Generate a new key, update .env GEMINI_API_KEY, then restart API server.",
+      });
+    }
+    if (isQuotaError(e)) {
+      return res.status(429).json({
+        error:
+          "AI quota exceeded. Please try again after a short wait, or switch to a lower-cost model (e.g. gemini-2.5-flash).",
+      });
+    }
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
+  try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
+
+    const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
+    const inputText = String(req.body?.input_text ?? "").trim();
+    if (!req.file && !inputText) {
+      return res.status(400).json({ error: "Image file or input text is required" });
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    const responseSchema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        questions: {
+          type: SchemaType.ARRAY,
+          description: "Every distinct exam question found in the source, in order.",
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              question_type: {
+                type: SchemaType.STRING,
+                description: "Exactly mcq or sba.",
+              },
+              question_number: {
+                type: SchemaType.STRING,
+                description: "Question number prefix if present, e.g. 04.",
+              },
+              stem: {
+                type: SchemaType.STRING,
+                description: "Exact question stem as printed, including number and exam tag.",
+              },
+              mcq_statements: {
+                type: SchemaType.ARRAY,
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    text: {
+                      type: SchemaType.STRING,
+                      description: "Exact option line as printed, e.g. a) Azygos vein",
+                    },
+                    correct: {
+                      type: SchemaType.STRING,
+                      description: "true or false from the answer key for this option.",
+                    },
+                  },
+                  required: ["text", "correct"],
+                },
+              },
+              sba_options: {
+                type: SchemaType.ARRAY,
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    text: {
+                      type: SchemaType.STRING,
+                      description: "Exact option line as printed, e.g. a) Azygos vein",
+                    },
+                  },
+                  required: ["text"],
+                },
+              },
+              sba_correct_index: {
+                type: SchemaType.NUMBER,
+                description: "0-based index of the single correct SBA option (0=a).",
+              },
+            },
+            required: ["question_type", "stem"],
+          },
+        },
+      },
+      required: ["questions"],
+    };
+
+    const generationConfig = {
+      temperature: 0,
+      responseMimeType: "application/json",
+      responseSchema,
+    };
+
+    const prompt = `You digitize medical exam papers from images or text.
+
+TASK: Find every exam question (MCQ or SBA) and return them in "questions". Copy text EXACTLY as written — same words, punctuation, labels, numbers, and parenthetical tags. Do NOT paraphrase, translate, fix grammar, or summarize.
+
+CLASSIFICATION (each question is either mcq OR sba, never both):
+
+Use "mcq" when:
+- The answer key lists True/False (or T/F) per option, e.g. "Answer: T F F T F" or "TFTFF"
+- Each option a–e is marked true or false independently
+- Wording implies multiple true/false statements under one stem
+
+Use "sba" when:
+- Exactly ONE best answer (single letter a–e, or one highlighted correct option)
+- Classic single-best-answer multiple choice
+
+MCQ fields:
+- stem: exact stem line(s) including question number and tags like "(Residency March 2025)"
+- mcq_statements: one item per option line, text copied exactly (keep "a)", "b)" prefixes if printed)
+- correct: "true" or "false" matching the answer key for that line
+
+SBA fields:
+- stem: exact question text
+- sba_options: each option line copied exactly (up to 5)
+- sba_correct_index: 0 for a, 1 for b, … from the answer key
+
+MULTIPLE QUESTIONS: If the image has Q04, Q05, etc., return one object per question in reading order.
+
+If there are no exam questions, return "questions": [].
+
+Do not invent options or answers not visible in the source.`;
+
+    const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
+    if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
+
+    const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
+      contents: [{ role: "user", parts }],
+      generationConfig,
+    });
+
+    const text = result?.response?.text?.() ?? "";
+    const parsed = parseGeminiJson(text);
+    const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+
+    const questions = rawQuestions
+      .map((q) => {
+        const question_type = normalizeQuestionType(q?.question_type);
+        const stem = preserveVerbatimText(q?.stem);
+        if (!question_type || !stem) return null;
+
+        if (question_type === "mcq") {
+          const mcq_statements = Array.isArray(q?.mcq_statements)
+            ? q.mcq_statements
+                .map((row) => {
+                  const line = preserveVerbatimText(row?.text);
+                  if (!line) return null;
+                  return { text: line, correct: normalizeTfAnswer(row?.correct) };
+                })
+                .filter(Boolean)
+            : [];
+          if (mcq_statements.length === 0) return null;
+          return {
+            question_type: "mcq",
+            question_number: preserveVerbatimText(q?.question_number) || null,
+            stem,
+            mcq_statements,
+          };
+        }
+
+        const sba_options = Array.isArray(q?.sba_options)
+          ? q.sba_options
+              .map((row) => {
+                const line = preserveVerbatimText(row?.text);
+                return line ? { text: line } : null;
+              })
+              .filter(Boolean)
+          : [];
+        if (sba_options.length === 0) return null;
+        let sba_correct_index = Number(q?.sba_correct_index);
+        if (!Number.isInteger(sba_correct_index) || sba_correct_index < 0 || sba_correct_index > 4) {
+          sba_correct_index = labelToOptionIndex(q?.sba_correct_label ?? q?.correct_option);
+        }
+        return {
+          question_type: "sba",
+          question_number: preserveVerbatimText(q?.question_number) || null,
+          stem,
+          sba_options: sba_options.slice(0, 5),
+          sba_correct_index: Math.min(sba_correct_index, sba_options.length - 1),
+        };
+      })
+      .filter(Boolean);
+
+    return res.json({ questions });
   } catch (e) {
     console.error(e);
     if (isLeakedOrBlockedKeyError(e)) {

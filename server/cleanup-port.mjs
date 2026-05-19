@@ -4,19 +4,47 @@ import { setTimeout } from "node:timers/promises";
 const port = Number(process.env.PORT || 8787);
 const maxWaitMs = Number(process.env.CLEANUP_PORT_WAIT_MS || 8000);
 
-function killOnWindows(targetPort) {
-  const output = execSync(`netstat -ano | findstr :${targetPort}`, { stdio: ["ignore", "pipe", "ignore"] })
-    .toString();
-  const pids = Array.from(
-    new Set(
-      output
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => line.split(/\s+/).at(-1))
-        .filter((pid) => pid && pid !== "0"),
-    ),
-  );
+function getListeningPids(targetPort) {
+  try {
+    if (process.platform === "win32") {
+      const output = execSync(`netstat -ano | findstr :${targetPort}`, {
+        stdio: ["ignore", "pipe", "ignore"],
+      }).toString();
+      return Array.from(
+        new Set(
+          output
+            .split(/\r?\n/)
+            .map((line) => line.trim())
+            .filter((line) => line.includes("LISTENING"))
+            .map((line) => line.split(/\s+/).at(-1))
+            .filter((pid) => pid && pid !== "0"),
+        ),
+      );
+    }
+
+    const output = execSync(`ss -tlnp 'sport = :${targetPort}'`, {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const pids = new Set();
+    const re = /pid=(\d+)/g;
+    let match;
+    while ((match = re.exec(output)) !== null) {
+      pids.add(match[1]);
+    }
+    return Array.from(pids);
+  } catch {
+    try {
+      const output = execSync(`lsof -ti :${targetPort} -sTCP:LISTEN`, {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+      return output.split(/\r?\n/).filter(Boolean);
+    } catch {
+      return [];
+    }
+  }
+}
 
 function killPids(pids) {
   for (const pid of pids) {
@@ -60,6 +88,8 @@ function pm2Jlist() {
 
 /** PM2 auto-restarts killed children; stop those apps so dev can bind the port. */
 function stopPm2OnPort(targetPort) {
+  pm2Command("stop pgdiary-api");
+
   const pidsOnPort = new Set(getListeningPids(targetPort));
   if (pidsOnPort.size === 0) return;
 

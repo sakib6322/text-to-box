@@ -2,10 +2,13 @@ import { Outlet } from "react-router-dom";
 import { SidebarInset, SidebarProvider, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { Separator } from "@/components/ui/separator";
+import { useSidebarOpen } from "@/hooks/use-sidebar-open";
 
 export default function AppSidebarLayout() {
+  const [open, setOpen] = useSidebarOpen(true);
+
   return (
-    <SidebarProvider defaultOpen>
+    <SidebarProvider open={open} onOpenChange={setOpen}>
       <AdminSidebar />
       <SidebarRail />
       <SidebarInset>

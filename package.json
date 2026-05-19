@@ -11,8 +11,10 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview --host 0.0.0.0 --port 8080",
-    "start": "node server/index.mjs",
-    "start:prod": "npm run build && pm2 start ecosystem.config.cjs",
+    "start:api": "node server/index.mjs",
+    "start:web": "vite preview --host 0.0.0.0 --port 8080",
+    "start": "concurrently -k \"npm run start:api\" \"npm run start:web\"",
+    "pm2:prod": "npm run build && pm2 start ecosystem.config.cjs && pm2 save",
     "test": "vitest run",
     "test:watch": "vitest"
   },

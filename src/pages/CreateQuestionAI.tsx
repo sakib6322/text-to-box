@@ -26,6 +26,16 @@ type ExtractResult = {
   high_yield_points: string[];
 };
 
+type ExtractedMcqStatement = { text: string; correct: "true" | "false" };
+type ExtractedQuestion = {
+  question_type: "mcq" | "sba";
+  question_number: string | null;
+  stem: string;
+  mcq_statements?: ExtractedMcqStatement[];
+  sba_options?: { text: string }[];
+  sba_correct_index?: number;
+};
+
 type ApprovedPoint = {
   point_id: string;
   text: string;
@@ -158,6 +168,8 @@ export default function CreateQuestionAI() {
 
   const [saving, setSaving] = useState(false);
   const [queuedQuestions, setQueuedQuestions] = useState<DraftQuestion[]>([]);
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [extractedQuestionSummary, setExtractedQuestionSummary] = useState<string | null>(null);
 
   const breadcrumb = useMemo(() => {
     const s = (v: string, fallback: string) => (v.trim() ? v.trim() : fallback);
@@ -192,33 +204,103 @@ export default function CreateQuestionAI() {
 
   const applyAutofillFromExtract = (extracted: ExtractResult) => {
     setConceptTitle(extracted.concept_name);
-    const lines = extracted.high_yield_points;
-    const verbatim = extracted.verbatim_text.trim();
-    if (lines.length > 0) {
-      const stemFromExtract = verbatim || lines[0] || "";
-      setMcqStem(stemFromExtract);
-      setSbaStem(stemFromExtract);
-      const nextOpts: [string, string, string, string, string] = ["", "", "", "", ""];
-      for (let i = 0; i < 5; i++) nextOpts[i] = lines[i + 1] ?? lines[i] ?? "";
-      setSbaOptions(nextOpts);
-      setTfItems(
-        lines.map((text) => ({
-          id: mkId(),
-          statement: text,
-          correct: "true",
-        })),
-      );
-    } else {
-      setMcqStem("");
-      setSbaStem("");
-      setSbaOptions(["", "", "", "", ""]);
-      setTfItems([{ id: mkId(), statement: "", correct: "true" }]);
+  };
+
+  const buildMetadata = (): DraftQuestion["metadata"] => ({
+    boards: selectedBoardNames,
+    importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
+    sources: sources.map((b) => b.trim()).filter(Boolean),
+    teachers: teachers.map((b) => b.trim()).filter(Boolean),
+    tags: tags.map((b) => b.trim()).filter(Boolean),
+    difficulty,
+    status,
+    marks: Number(marks) || 0,
+  });
+
+  const loadQuestionIntoForm = (q: DraftQuestion) => {
+    setQuestionMode(q.questionMode);
+    if (q.questionMode === "mcq" && q.mcq) {
+      setMcqStem(q.mcq.stem);
+      setTfItems(q.mcq.trueFalse.length ? q.mcq.trueFalse : [{ id: mkId(), statement: "", correct: "true" }]);
+    } else if (q.questionMode === "sba" && q.sba) {
+      setSbaStem(q.sba.stem);
+      const opts: [string, string, string, string, string] = ["", "", "", "", ""];
+      for (let i = 0; i < 5; i++) opts[i] = q.sba.options[i] ?? "";
+      setSbaOptions(opts);
+      setSbaCorrect(q.sba.correctIndex as 0 | 1 | 2 | 3 | 4);
     }
+  };
+
+  const draftFromExtracted = (q: ExtractedQuestion, conceptOverride?: string): DraftQuestion => {
+    const concept = conceptOverride ?? conceptTitle;
+    if (q.question_type === "mcq") {
+      return {
+        id: mkId(),
+        questionMode: "mcq",
+        subject,
+        system,
+        topic,
+        concept,
+        metadata: buildMetadata(),
+        mcq: {
+          stem: q.stem,
+          trueFalse: (q.mcq_statements ?? []).map((row) => ({
+            id: mkId(),
+            statement: row.text,
+            correct: row.correct,
+          })),
+        },
+        sba: null,
+        sourcePointId: null,
+      };
+    }
+
+    const opts: [string, string, string, string, string] = ["", "", "", "", ""];
+    (q.sba_options ?? []).slice(0, 5).forEach((row, i) => {
+      opts[i] = row.text;
+    });
+
+    return {
+      id: mkId(),
+      questionMode: "sba",
+      subject,
+      system,
+      topic,
+      concept,
+      metadata: buildMetadata(),
+      mcq: null,
+      sba: {
+        stem: q.stem,
+        options: opts,
+        correctIndex: (q.sba_correct_index ?? 0) as 0 | 1 | 2 | 3 | 4,
+      },
+      sourcePointId: null,
+    };
+  };
+
+  const applyExtractedQuestions = (questions: ExtractedQuestion[], conceptOverride?: string) => {
+    if (questions.length === 0) {
+      setExtractedQuestionSummary(null);
+      return;
+    }
+
+    const drafts = questions.map((q) => draftFromExtracted(q, conceptOverride));
+    setQueuedQuestions(drafts);
+    setActiveQuestionIndex(0);
+    loadQuestionIntoForm(drafts[0]);
+
+    const mcqCount = questions.filter((q) => q.question_type === "mcq").length;
+    const sbaCount = questions.filter((q) => q.question_type === "sba").length;
+    const parts = [];
+    if (mcqCount) parts.push(`${mcqCount} MCQ`);
+    if (sbaCount) parts.push(`${sbaCount} SBA`);
+    setExtractedQuestionSummary(parts.join(", "));
   };
 
   const handleExtract = async () => {
     if (!imageFile && !sourceText.trim()) return toast.error("Please upload image or paste text");
     setExtracting(true);
+    setExtractedQuestionSummary(null);
     try {
       const formData = new FormData();
       if (imageFile) {
@@ -226,20 +308,43 @@ export default function CreateQuestionAI() {
         formData.append("image", compressed);
       }
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
-      const resp = await fetch("/api/extract-concept", { method: "POST", body: formData });
-      const data = (await resp.json().catch(() => ({}))) as {
+
+      const [conceptResp, questionsResp] = await Promise.all([
+        fetch("/api/extract-concept", { method: "POST", body: formData }),
+        fetch("/api/extract-questions", { method: "POST", body: formData }),
+      ]);
+
+      const data = (await conceptResp.json().catch(() => ({}))) as {
         error?: string;
         concept_name?: string;
         verbatim_text?: string;
         high_yield_points?: string[];
       };
-      if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
+      if (!conceptResp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
       const extracted: ExtractResult = {
         concept_name: typeof data?.concept_name === "string" ? data.concept_name : "",
         verbatim_text: typeof data?.verbatim_text === "string" ? data.verbatim_text : "",
         high_yield_points: Array.isArray(data?.high_yield_points) ? data.high_yield_points.filter((x): x is string => typeof x === "string") : [],
       };
+
+      const questionsData = (await questionsResp.json().catch(() => ({}))) as {
+        error?: string;
+        questions?: ExtractedQuestion[];
+      };
+      if (!questionsResp.ok) {
+        console.warn("extract-questions:", questionsData?.error);
+      }
+
+      const extractedQuestions = Array.isArray(questionsData?.questions)
+        ? questionsData.questions.filter(
+            (q): q is ExtractedQuestion =>
+              Boolean(q) &&
+              (q.question_type === "mcq" || q.question_type === "sba") &&
+              typeof q.stem === "string" &&
+              q.stem.trim().length > 0,
+          )
+        : [];
 
       setResult(extracted);
       setPoints(
@@ -252,6 +357,7 @@ export default function CreateQuestionAI() {
         })),
       );
       applyAutofillFromExtract(extracted);
+      applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       // Fetch similarity matches against existing suggestions (key_points)
       try {
         const resp2 = await fetch("/api/match-key-points", {
@@ -302,7 +408,11 @@ export default function CreateQuestionAI() {
       } catch {
         // non-blocking
       }
-      toast.success(`Extracted ${extracted.high_yield_points.length} points`);
+      const questionMsg =
+        extractedQuestions.length > 0
+          ? ` · ${extractedQuestions.length} question${extractedQuestions.length > 1 ? "s" : ""} (verbatim MCQ/SBA)`
+          : "";
+      toast.success(`Extracted ${extracted.high_yield_points.length} points${questionMsg}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Extraction failed");
     } finally {
@@ -393,6 +503,8 @@ export default function CreateQuestionAI() {
     setResult(null);
     setPoints([]);
     setQueuedQuestions([]);
+    setActiveQuestionIndex(0);
+    setExtractedQuestionSummary(null);
     setSourceText("");
     setConceptTitle("");
     setSubject("");
@@ -404,33 +516,13 @@ export default function CreateQuestionAI() {
     if (!questionMode) return toast.error("Select a question type");
     setSaving(true);
     try {
-      const currentQuestion: DraftQuestion = {
-        id: mkId(),
-        subject,
-        system,
-        topic,
-        concept: conceptTitle,
-        questionMode: questionMode as "mcq" | "sba",
-        metadata: {
-          boards: selectedBoardNames,
-          importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
-          sources: sources.map((b) => b.trim()).filter(Boolean),
-          teachers: teachers.map((b) => b.trim()).filter(Boolean),
-          tags: tags.map((b) => b.trim()).filter(Boolean),
-          difficulty,
-          status,
-          marks: Number(marks) || 0,
-        },
-        mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
-        sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
-        sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
-      };
+      const toSave = questionsForSave();
       const payload = {
         source: {
           text: sourceText.trim() || null,
           hasImage: Boolean(imageFile),
         },
-        questions: queuedQuestions.length ? queuedQuestions : [currentQuestion],
+        questions: toSave,
       };
       const resp = await fetch("/api/save-question", {
         method: "POST",
@@ -472,8 +564,46 @@ export default function CreateQuestionAI() {
       sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
     };
     setQuestionMode(mode);
-    setQueuedQuestions((prev) => [...prev, next]);
+    setQueuedQuestions((prev) => {
+      const merged = [...prev, next];
+      setActiveQuestionIndex(merged.length - 1);
+      return merged;
+    });
     toast.success(`${mode.toUpperCase()} question added to paper`);
+  };
+
+  const selectQueuedQuestion = (index: number) => {
+    if (index === activeQuestionIndex) return;
+    updateActiveDraftFromForm();
+    const q = queuedQuestions[index];
+    if (!q) return;
+    setActiveQuestionIndex(index);
+    loadQuestionIntoForm(q);
+  };
+
+  const buildCurrentDraftFromForm = (): DraftQuestion => ({
+    id: queuedQuestions[activeQuestionIndex]?.id ?? mkId(),
+    questionMode: questionMode as "mcq" | "sba",
+    subject,
+    system,
+    topic,
+    concept: conceptTitle,
+    metadata: buildMetadata(),
+    mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
+    sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
+    sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
+  });
+
+  const updateActiveDraftFromForm = () => {
+    if (queuedQuestions.length === 0 || !questionMode) return;
+    const updated = buildCurrentDraftFromForm();
+    setQueuedQuestions((prev) => prev.map((q, i) => (i === activeQuestionIndex ? updated : q)));
+  };
+
+  const questionsForSave = (): DraftQuestion[] => {
+    const current = buildCurrentDraftFromForm();
+    if (queuedQuestions.length === 0) return [current];
+    return queuedQuestions.map((q, i) => (i === activeQuestionIndex ? current : q));
   };
 
   return (
@@ -770,6 +900,13 @@ export default function CreateQuestionAI() {
           </div>
         </div>
 
+        {extractedQuestionSummary ? (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Detected from image (verbatim): <span className="font-medium text-foreground">{extractedQuestionSummary}</span>
+            {queuedQuestions.length > 1 ? ` · ${queuedQuestions.length} questions in paper — select below to edit each` : null}
+          </p>
+        ) : null}
+
         {questionMode === "mcq" ? (
           <div className="mt-8 space-y-4 border-t pt-6">
             <div className="text-sm font-medium text-sky-900 dark:text-sky-100">MCQ</div>
@@ -883,7 +1020,19 @@ export default function CreateQuestionAI() {
           <div className="mb-2 text-sm font-medium">Question paper preview ({queuedQuestions.length})</div>
           <div className="space-y-2">
             {queuedQuestions.map((q, idx) => (
-              <div key={q.id} className="flex items-center justify-between rounded-md border p-3">
+              <div
+                key={q.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => selectQueuedQuestion(idx)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") selectQueuedQuestion(idx);
+                }}
+                className={cn(
+                  "flex cursor-pointer items-center justify-between rounded-md border p-3 transition",
+                  idx === activeQuestionIndex ? "border-sky-600 bg-sky-50 dark:bg-sky-950/30" : "hover:bg-muted/50",
+                )}
+              >
                 <div className="min-w-0">
                   <div className="text-sm font-medium">
                     {idx + 1}. {q.questionMode.toUpperCase()} - {q.concept || "Untitled concept"}
@@ -896,7 +1045,10 @@ export default function CreateQuestionAI() {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  onClick={() => setQueuedQuestions((prev) => prev.filter((item) => item.id !== q.id))}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setQueuedQuestions((prev) => prev.filter((item) => item.id !== q.id));
+                  }}
                   aria-label="Delete question"
                 >
                   <Trash2 className="h-4 w-4" />
