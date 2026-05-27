@@ -11,7 +11,7 @@ import AppSidebarLayout from "./layouts/AppSidebarLayout.tsx";
 import CreateQuestionAI from "./pages/CreateQuestionAI.tsx";
 import AdminPlaceholder from "./pages/AdminPlaceholder.tsx";
 import AllQuestions from "./pages/AllQuestions.tsx";
-import AdminSettingsBoards from "./pages/AdminSettingsBoards.tsx";
+import AdminSettings from "./pages/AdminSettings.tsx";
 
 
 
@@ -40,7 +40,7 @@ const App = () => (
             <Route path="students" element={<AdminPlaceholder />} />
             <Route path="teachers" element={<AdminPlaceholder />} />
             <Route path="organization" element={<AdminPlaceholder />} />
-            <Route path="settings" element={<AdminSettingsBoards />} />
+            <Route path="settings" element={<AdminSettings />} />
           </Route>
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

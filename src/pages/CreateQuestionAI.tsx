@@ -10,6 +10,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { MultiLineField } from "@/components/MultiLineField";
+import { TaxonomySelects } from "@/components/TaxonomySelects";
+import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 import {
   Select,
   SelectContent,
@@ -19,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
+import { apiUrl } from "@/lib/apiBase";
 
 type ExtractResult = {
   concept_name: string;
@@ -48,6 +51,7 @@ type ApprovedPoint = {
     concept_title: string | null;
     concept_subject?: string | null;
     concept_system?: string | null;
+    concept_chapter?: string | null;
     concept_topic?: string | null;
     ai_percentage?: number | null;
     ai_reason?: string | null;
@@ -70,7 +74,9 @@ type DraftQuestion = {
   questionMode: "mcq" | "sba";
   subject: string;
   system: string;
+  chapter: string;
   topic: string;
+  topicId?: string;
   concept: string;
   metadata: {
     boards: string[];
@@ -134,9 +140,7 @@ async function compressImage(file: File): Promise<File> {
 
 export default function CreateQuestionAI() {
   const [conceptTitle, setConceptTitle] = useState("");
-  const [subject, setSubject] = useState("");
-  const [system, setSystem] = useState("");
-  const [topic, setTopic] = useState("");
+  const [taxonomy, setTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection());
 
   const [enableBijoyPaste, setEnableBijoyPaste] = useState(false);
   const [enableHelper, setEnableHelper] = useState(true);
@@ -173,8 +177,13 @@ export default function CreateQuestionAI() {
 
   const breadcrumb = useMemo(() => {
     const s = (v: string, fallback: string) => (v.trim() ? v.trim() : fallback);
-    return [s(subject, "Subject"), s(system, "System"), s(topic, "Topic"), s(conceptTitle, "Concept")];
-  }, [subject, system, topic, conceptTitle]);
+    return [
+      s(taxonomy.subjectName, "Subject"),
+      s(taxonomy.systemName, "System"),
+      s(taxonomy.chapterName, "Chapter"),
+      s(taxonomy.topicName, "Topic"),
+    ];
+  }, [taxonomy]);
 
   const selectedBoardNames = useMemo(() => {
     const byId = new Map(boardOptions.map((b) => [b.id, b.name]));
@@ -185,7 +194,7 @@ export default function CreateQuestionAI() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch("/api/boards");
+        const r = await fetch(apiUrl("/api/boards"));
         const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
         if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
         setBoardOptions(j.boards.map((b) => ({ id: b.id, name: b.name })));
@@ -197,6 +206,22 @@ export default function CreateQuestionAI() {
       cancelled = true;
     };
   }, []);
+
+  const taxonomyNames = () => ({
+    subject: taxonomy.subjectName,
+    system: taxonomy.systemName,
+    chapter: taxonomy.chapterName,
+    topic: taxonomy.topicName,
+    topicId: taxonomy.topicId,
+  });
+
+  const requireTaxonomy = () => {
+    if (!taxonomy.subjectId || !taxonomy.systemId || !taxonomy.chapterId || !taxonomy.topicId) {
+      toast.error("Select subject, system, chapter, and topic");
+      return false;
+    }
+    return true;
+  };
 
   const toggleBoard = (id: string) => {
     setSelectedBoardIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -219,6 +244,32 @@ export default function CreateQuestionAI() {
 
   const loadQuestionIntoForm = (q: DraftQuestion) => {
     setQuestionMode(q.questionMode);
+    if (q.topicId) {
+      void (async () => {
+        try {
+          const r = await fetch(apiUrl(`/api/taxonomy/resolve/${encodeURIComponent(q.topicId)}`));
+          const j = (await r.json().catch(() => ({}))) as {
+            subject?: { id: string; name: string };
+            system?: { id: string; name: string };
+            chapter?: { id: string; name: string };
+            topic?: { id: string; name: string };
+          };
+          if (!r.ok) return;
+          setTaxonomy({
+            subjectId: j.subject?.id ?? "",
+            subjectName: j.subject?.name ?? "",
+            systemId: j.system?.id ?? "",
+            systemName: j.system?.name ?? "",
+            chapterId: j.chapter?.id ?? "",
+            chapterName: j.chapter?.name ?? "",
+            topicId: j.topic?.id ?? q.topicId,
+            topicName: j.topic?.name ?? q.topic,
+          });
+        } catch {
+          /* keep current taxonomy */
+        }
+      })();
+    }
     if (q.questionMode === "mcq" && q.mcq) {
       setMcqStem(q.mcq.stem);
       setTfItems(q.mcq.trueFalse.length ? q.mcq.trueFalse : [{ id: mkId(), statement: "", correct: "true" }]);
@@ -232,14 +283,17 @@ export default function CreateQuestionAI() {
   };
 
   const draftFromExtracted = (q: ExtractedQuestion, conceptOverride?: string): DraftQuestion => {
+    const t = taxonomyNames();
     const concept = conceptOverride ?? conceptTitle;
     if (q.question_type === "mcq") {
       return {
         id: mkId(),
         questionMode: "mcq",
-        subject,
-        system,
-        topic,
+        subject: t.subject,
+        system: t.system,
+        chapter: t.chapter,
+        topic: t.topic,
+        topicId: t.topicId,
         concept,
         metadata: buildMetadata(),
         mcq: {
@@ -263,9 +317,11 @@ export default function CreateQuestionAI() {
     return {
       id: mkId(),
       questionMode: "sba",
-      subject,
-      system,
-      topic,
+      subject: t.subject,
+      system: t.system,
+      chapter: t.chapter,
+      topic: t.topic,
+      topicId: t.topicId,
       concept,
       metadata: buildMetadata(),
       mcq: null,
@@ -310,8 +366,8 @@ export default function CreateQuestionAI() {
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
 
       const [conceptResp, questionsResp] = await Promise.all([
-        fetch("/api/extract-concept", { method: "POST", body: formData }),
-        fetch("/api/extract-questions", { method: "POST", body: formData }),
+        fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData }),
+        fetch(apiUrl("/api/extract-questions"), { method: "POST", body: formData }),
       ]);
 
       const data = (await conceptResp.json().catch(() => ({}))) as {
@@ -360,7 +416,7 @@ export default function CreateQuestionAI() {
       applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       // Fetch similarity matches against existing suggestions (key_points)
       try {
-        const resp2 = await fetch("/api/match-key-points", {
+        const resp2 = await fetch(apiUrl("/api/match-key-points"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ texts: extracted.high_yield_points.slice(0, 30), threshold: 0.55, count: 1 }),
@@ -371,6 +427,7 @@ export default function CreateQuestionAI() {
           concept_title: string | null;
           concept_subject?: string | null;
           concept_system?: string | null;
+          concept_chapter?: string | null;
           concept_topic?: string | null;
           ai_percentage?: number;
           ai_reason?: string | null;
@@ -396,6 +453,7 @@ export default function CreateQuestionAI() {
                   concept_title: best.concept_title ?? null,
                   concept_subject: best.concept_subject ?? null,
                   concept_system: best.concept_system ?? null,
+                  concept_chapter: best.concept_chapter ?? null,
                   concept_topic: best.concept_topic ?? null,
                   ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
                   ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
@@ -423,17 +481,21 @@ export default function CreateQuestionAI() {
   const approvePoint = async (idx: number) => {
     const p = points[idx];
     if (!p) return;
+    if (!requireTaxonomy()) return;
+    const t = taxonomyNames();
     setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, approveError: null } : x)));
     try {
-      const resp = await fetch("/api/approve-point", {
+      const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           matched_key_point_id: p.match?.key_point_id ?? null,
           concept: conceptTitle,
-          subject,
-          system,
-          topic,
+          subject: t.subject,
+          system: t.system,
+          chapter: t.chapter,
+          topic: t.topic,
+          topic_id: t.topicId,
           question_text: p.text,
           board_ids: selectedBoardIds,
         }),
@@ -456,9 +518,9 @@ export default function CreateQuestionAI() {
                         key_point_id: data.point_id,
                         similarity: 0,
                         concept_title: conceptTitle || null,
-                        concept_subject: subject.trim() || null,
-                        concept_system: system.trim() || null,
-                        concept_topic: topic.trim() || null,
+                        concept_subject: t.subject || null,
+                        concept_system: t.system || null,
+                        concept_topic: t.topic || null,
                       }
                     : x.match),
               }
@@ -507,13 +569,12 @@ export default function CreateQuestionAI() {
     setExtractedQuestionSummary(null);
     setSourceText("");
     setConceptTitle("");
-    setSubject("");
-    setSystem("");
-    setTopic("");
+    setTaxonomy(emptyTaxonomySelection());
   };
 
   const saveQuestion = async () => {
     if (!questionMode) return toast.error("Select a question type");
+    if (!requireTaxonomy()) return;
     setSaving(true);
     try {
       const toSave = questionsForSave();
@@ -524,7 +585,7 @@ export default function CreateQuestionAI() {
         },
         questions: toSave,
       };
-      const resp = await fetch("/api/save-question", {
+      const resp = await fetch(apiUrl("/api/save-question"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -542,12 +603,16 @@ export default function CreateQuestionAI() {
 
   const addQuestionToPaper = (mode: "mcq" | "sba" = questionMode as "mcq" | "sba") => {
     if (!mode) return toast.error("Select question type first");
+    if (!requireTaxonomy()) return;
+    const t = taxonomyNames();
     const next: DraftQuestion = {
       id: mkId(),
       questionMode: mode,
-      subject,
-      system,
-      topic,
+      subject: t.subject,
+      system: t.system,
+      chapter: t.chapter,
+      topic: t.topic,
+      topicId: t.topicId,
       concept: conceptTitle,
       metadata: {
         boards: selectedBoardNames,
@@ -581,18 +646,23 @@ export default function CreateQuestionAI() {
     loadQuestionIntoForm(q);
   };
 
-  const buildCurrentDraftFromForm = (): DraftQuestion => ({
-    id: queuedQuestions[activeQuestionIndex]?.id ?? mkId(),
-    questionMode: questionMode as "mcq" | "sba",
-    subject,
-    system,
-    topic,
-    concept: conceptTitle,
-    metadata: buildMetadata(),
-    mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
-    sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
-    sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
-  });
+  const buildCurrentDraftFromForm = (): DraftQuestion => {
+    const t = taxonomyNames();
+    return {
+      id: queuedQuestions[activeQuestionIndex]?.id ?? mkId(),
+      questionMode: questionMode as "mcq" | "sba",
+      subject: t.subject,
+      system: t.system,
+      chapter: t.chapter,
+      topic: t.topic,
+      topicId: t.topicId,
+      concept: conceptTitle,
+      metadata: buildMetadata(),
+      mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
+      sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
+      sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
+    };
+  };
 
   const updateActiveDraftFromForm = () => {
     if (queuedQuestions.length === 0 || !questionMode) return;
@@ -610,7 +680,7 @@ export default function CreateQuestionAI() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold">Create Question</h1>
+          <h1 className="page-title">Create Question</h1>
           <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
             {breadcrumb.map((b, i) => (
               <span key={`${b}-${i}`} className="inline-flex max-w-full items-center gap-1">
@@ -624,23 +694,12 @@ export default function CreateQuestionAI() {
       </div>
 
       <Card className="p-4">
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label>Concept *</Label>
-            <Input value={conceptTitle} onChange={(e) => setConceptTitle(e.target.value)} />
+            <Input value={conceptTitle} onChange={(e) => setConceptTitle(e.target.value)} placeholder="Concept title" />
           </div>
-          <div className="space-y-2">
-            <Label>Subject *</Label>
-            <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>System *</Label>
-            <Input value={system} onChange={(e) => setSystem(e.target.value)} />
-          </div>
-          <div className="space-y-2">
-            <Label>Topic *</Label>
-            <Input value={topic} onChange={(e) => setTopic(e.target.value)} />
-          </div>
+          <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
@@ -692,7 +751,7 @@ export default function CreateQuestionAI() {
               }}
               className={cn(
                 "w-full rounded-lg border p-3 text-left transition",
-                questionMode === "mcq" ? "border-sky-600 bg-sky-50 dark:bg-sky-950/30" : "hover:bg-muted/50",
+                questionMode === "mcq" ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
               )}
             >
               <div className="font-medium">MCQ</div>
@@ -703,7 +762,7 @@ export default function CreateQuestionAI() {
               onClick={() => setQuestionMode("sba")}
               className={cn(
                 "w-full rounded-lg border p-3 text-left transition",
-                questionMode === "sba" ? "border-sky-600 bg-sky-50 dark:bg-sky-950/30" : "hover:bg-muted/50",
+                questionMode === "sba" ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
               )}
             >
               <div className="font-medium">SBA</div>
@@ -748,12 +807,13 @@ export default function CreateQuestionAI() {
                               {[
                                 p.match.concept_subject,
                                 p.match.concept_system,
+                                p.match.concept_chapter,
                                 p.match.concept_topic,
                                 p.match.concept_title,
                               ]
                                 .map((x) => (x ?? "").trim())
                                 .filter(Boolean).length
-                                ? ` · ${[p.match.concept_subject, p.match.concept_system, p.match.concept_topic, p.match.concept_title]
+                                ? ` · ${[p.match.concept_subject, p.match.concept_system, p.match.concept_chapter, p.match.concept_topic, p.match.concept_title]
                                     .map((x) => (x ?? "").trim())
                                     .filter(Boolean)
                                     .join(" → ")}`
@@ -783,6 +843,7 @@ export default function CreateQuestionAI() {
                           {[
                             p.match.concept_subject,
                             p.match.concept_system,
+                            p.match.concept_chapter,
                             p.match.concept_topic,
                             p.match.concept_title,
                           ]
@@ -795,6 +856,7 @@ export default function CreateQuestionAI() {
                                 {[
                                   p.match.concept_subject,
                                   p.match.concept_system,
+                                  p.match.concept_chapter,
                                   p.match.concept_topic,
                                   p.match.concept_title,
                                 ]
@@ -842,7 +904,7 @@ export default function CreateQuestionAI() {
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <Label>Boards</Label>
             <p className="text-xs text-muted-foreground">
-              Create boards in Admin → Settings. Selected boards are saved on the concept when you approve a point.
+              Create subject, system, chapter, topic, and boards in Admin → Settings before saving questions.
             </p>
             <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border p-3">
               {boardOptions.length === 0 ? (
@@ -909,7 +971,7 @@ export default function CreateQuestionAI() {
 
         {questionMode === "mcq" ? (
           <div className="mt-8 space-y-4 border-t pt-6">
-            <div className="text-sm font-medium text-sky-900 dark:text-sky-100">MCQ</div>
+            <div className="text-sm font-medium text-primary">MCQ</div>
             <div className="space-y-2">
               <Label>Question (stem) *</Label>
               <Textarea value={mcqStem} onChange={(e) => setMcqStem(e.target.value)} rows={3} className="resize-y" />
@@ -957,7 +1019,7 @@ export default function CreateQuestionAI() {
 
         {questionMode === "sba" ? (
           <div className="mt-8 space-y-4 border-t pt-6">
-            <div className="text-sm font-medium text-sky-900 dark:text-sky-100">SBA (single best answer)</div>
+            <div className="text-sm font-medium text-primary">SBA (single best answer)</div>
             <div className="space-y-2">
               <Label>Question *</Label>
               <Textarea value={sbaStem} onChange={(e) => setSbaStem(e.target.value)} rows={3} className="resize-y" />
@@ -1030,7 +1092,7 @@ export default function CreateQuestionAI() {
                 }}
                 className={cn(
                   "flex cursor-pointer items-center justify-between rounded-md border p-3 transition",
-                  idx === activeQuestionIndex ? "border-sky-600 bg-sky-50 dark:bg-sky-950/30" : "hover:bg-muted/50",
+                  idx === activeQuestionIndex ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
                 )}
               >
                 <div className="min-w-0">

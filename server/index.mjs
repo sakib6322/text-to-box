@@ -31,12 +31,88 @@ function requireSupabase(res) {
   return supabaseAdmin;
 }
 
+function formatSupabaseError(error) {
+  if (error == null) return "Unknown error";
+  if (typeof error === "string") return error;
+  const code = String(error.code ?? "");
+  const msg = String(error.message ?? error ?? "Unknown error");
+  const details = error.details != null ? String(error.details) : "";
+  const hint = error.hint != null ? String(error.hint) : "";
+  if (msg.includes("fetch failed") || msg.includes("ENOTFOUND")) {
+    return `Cannot reach Supabase (${SUPABASE_URL}). Check SUPABASE_URL in .env matches your active Supabase project.`;
+  }
+  if (code === "PGRST205" || msg.includes("Could not find the table")) {
+    const table = msg.match(/table '([^']+)'/i)?.[1] ?? "unknown table";
+    return `Missing table ${table} on ${SUPABASE_URL}. Run taxonomy migration on THIS project in Supabase SQL Editor, then retry.`;
+  }
+  if (code === "PGRST116" || msg.toLowerCase().includes("contains 0 rows")) {
+    return "Save returned no row (often RLS blocking RETURNING, or wrong table). In Supabase SQL Editor run the taxonomy migration and confirm policies on subjects/systems/chapters/topics.";
+  }
+  if (code === "23505") {
+    return details ? `Duplicate: ${details}` : "That name already exists under this parent.";
+  }
+  const extra = [details, hint].filter(Boolean).join(" — ");
+  return extra ? `${msg} (${extra})` : msg;
+}
+
+app.get("/api/debug/schema-check", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts"];
+    const checks = {};
+    for (const table of tables) {
+      const { error } = await db.from(table).select("id").limit(1);
+      checks[table] = {
+        ok: !error,
+        code: error?.code ?? null,
+        message: error?.message ?? null,
+      };
+    }
+    return res.json({ supabase_url: SUPABASE_URL, checks });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 async function linkConceptBoards(db, conceptId, boardIds) {
   const ids = Array.isArray(boardIds) ? boardIds.filter((id) => typeof id === "string" && id.trim()) : [];
   if (ids.length === 0 || !conceptId) return;
-  const rows = ids.map((board_id) => ({ concept_id: conceptId, board_id: board_id.trim() }));
-  const { error } = await db.from("concept_boards").upsert(rows, { onConflict: "concept_id,board_id" });
-  if (error) console.error("linkConceptBoards:", error.message);
+  for (const board_id of ids.map((id) => id.trim())) {
+    const { data: existing } = await db
+      .from("concept_boards")
+      .select("mention_count")
+      .eq("concept_id", conceptId)
+      .eq("board_id", board_id)
+      .maybeSingle();
+    if (existing) {
+      const { error } = await db
+        .from("concept_boards")
+        .update({ mention_count: Number(existing.mention_count || 0) + 1 })
+        .eq("concept_id", conceptId)
+        .eq("board_id", board_id);
+      if (error) console.error("linkConceptBoards:", error.message);
+    } else {
+      const { error } = await db.from("concept_boards").insert({ concept_id: conceptId, board_id, mention_count: 1 });
+      if (error) console.error("linkConceptBoards:", error.message);
+    }
+  }
+}
+
+function taxonomyTable(level) {
+  if (level === "subjects") return "subjects";
+  if (level === "systems") return "systems";
+  if (level === "chapters") return "chapters";
+  if (level === "topics") return "topics";
+  return null;
+}
+
+function taxonomyParentKey(level) {
+  if (level === "systems") return "subject_id";
+  if (level === "chapters") return "system_id";
+  if (level === "topics") return "chapter_id";
+  return null;
 }
 
 function fileToGenerativePart(fileBuffer, mimeType) {
@@ -587,7 +663,7 @@ app.get("/api/boards", async (_req, res) => {
     const db = requireSupabase(res);
     if (!db) return;
     const { data, error } = await db.from("boards").select("id, name, created_at").order("name", { ascending: true });
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
     return res.json({ boards: data ?? [] });
   } catch (e) {
     console.error(e);
@@ -601,9 +677,11 @@ app.post("/api/boards", async (req, res) => {
     if (!db) return;
     const name = String(req.body?.name ?? "").trim();
     if (!name) return res.status(400).json({ error: "name required" });
-    const { data, error } = await db.from("boards").insert({ name }).select("id, name, created_at").single();
-    if (error) return res.status(500).json({ error: error.message });
-    return res.json({ board: data });
+    const { data, error } = await db.from("boards").insert({ name }).select("id, name, created_at");
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    const board = Array.isArray(data) ? data[0] : null;
+    if (!board) return res.status(500).json({ error: "Board insert returned no row (check RLS and SUPABASE_SERVICE_ROLE_KEY)." });
+    return res.json({ board });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -617,7 +695,100 @@ app.delete("/api/boards/:id", async (req, res) => {
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
     const { error } = await db.from("boards").delete().eq("id", id);
-    if (error) return res.status(500).json({ error: error.message });
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+/** Must be registered before GET /api/taxonomy/:level so "resolve" is not captured as :level */
+app.get("/api/taxonomy/resolve/:topicId", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const topicId = String(req.params.topicId ?? "").trim();
+    if (!topicId) return res.status(400).json({ error: "topicId required" });
+    const { data: topic, error: tErr } = await db.from("topics").select("id, name, chapter_id").eq("id", topicId).single();
+    if (tErr || !topic) return res.status(404).json({ error: "Topic not found" });
+    const { data: chapter } = await db.from("chapters").select("id, name, system_id").eq("id", topic.chapter_id).single();
+    const { data: system } = chapter ? await db.from("systems").select("id, name, subject_id").eq("id", chapter.system_id).single() : { data: null };
+    const { data: subject } = system ? await db.from("subjects").select("id, name").eq("id", system.subject_id).single() : { data: null };
+    return res.json({
+      subject: subject ? { id: subject.id, name: subject.name } : null,
+      system: system ? { id: system.id, name: system.name } : null,
+      chapter: chapter ? { id: chapter.id, name: chapter.name } : null,
+      topic: { id: topic.id, name: topic.name },
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.get("/api/taxonomy/:level", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const table = taxonomyTable(String(req.params.level ?? ""));
+    if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
+    const parentKey = taxonomyParentKey(String(req.params.level ?? ""));
+    const parentId = String(req.query.parent_id ?? "").trim();
+    let query = db.from(table).select("id, name, sort_order, created_at" + (parentKey ? `, ${parentKey}` : "")).order("name", { ascending: true });
+    if (parentKey && parentId) query = query.eq(parentKey, parentId);
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ items: data ?? [] });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/taxonomy/:level", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const level = String(req.params.level ?? "");
+    const table = taxonomyTable(level);
+    if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
+    const name = String(req.body?.name ?? "").trim();
+    if (!name) return res.status(400).json({ error: "name required" });
+    const row = { name };
+    const parentKey = taxonomyParentKey(level);
+    if (parentKey) {
+      const parentId = String(req.body?.parent_id ?? "").trim();
+      if (!parentId) return res.status(400).json({ error: "parent_id required" });
+      row[parentKey] = parentId;
+    }
+    const selectCols = "id, name, sort_order, created_at" + (parentKey ? `, ${parentKey}` : "");
+    const { data, error } = await db.from(table).insert(row).select(selectCols);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    const item = Array.isArray(data) ? data[0] : null;
+    if (!item) {
+      return res.status(500).json({
+        error:
+          "Insert did not return a row. If the row was created, RLS may be blocking read-back — use the service role key (SUPABASE_SERVICE_ROLE_KEY) in .env for the API server, or add a SELECT policy for anon.",
+      });
+    }
+    return res.json({ item });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/taxonomy/:level/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const table = taxonomyTable(String(req.params.level ?? ""));
+    if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    const { error } = await db.from(table).delete().eq("id", id);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
     return res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -636,7 +807,9 @@ app.post("/api/approve-point", async (req, res) => {
       concept,
       subject,
       system,
+      chapter,
       topic,
+      topic_id,
       board_ids,
     } = req.body ?? {};
     const boardIds = Array.isArray(board_ids) ? board_ids.filter((id) => typeof id === "string" && id.trim()) : [];
@@ -676,7 +849,9 @@ app.post("/api/approve-point", async (req, res) => {
           detected_language: "mixed",
           subject: typeof subject === "string" ? subject.trim() || null : null,
           system: typeof system === "string" ? system.trim() || null : null,
+          chapter: typeof chapter === "string" ? chapter.trim() || null : null,
           topic: typeof topic === "string" ? topic.trim() || null : null,
+          topic_id: typeof topic_id === "string" && topic_id.trim() ? topic_id.trim() : null,
           raw_extraction: {
             source: "create-ai-approve-fallback",
             text: question_text.trim(),
@@ -712,7 +887,9 @@ app.post("/api/approve-point", async (req, res) => {
     const conceptPatch = {};
     if (typeof subject === "string") conceptPatch.subject = subject.trim() || null;
     if (typeof system === "string") conceptPatch.system = system.trim() || null;
+    if (typeof chapter === "string") conceptPatch.chapter = chapter.trim() || null;
     if (typeof topic === "string") conceptPatch.topic = topic.trim() || null;
+    if (typeof topic_id === "string" && topic_id.trim()) conceptPatch.topic_id = topic_id.trim();
     if (typeof concept === "string" && concept.trim()) conceptPatch.title = concept.trim();
     if (Object.keys(conceptPatch).length) {
       const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
@@ -722,7 +899,7 @@ app.post("/api/approve-point", async (req, res) => {
 
     const { data: conceptRow } = await db
       .from("concepts")
-      .select("title, subject, system, topic")
+      .select("title, subject, system, chapter, topic")
       .eq("id", point.concept_id)
       .single();
     const apiKey = process.env.GEMINI_API_KEY;
@@ -741,6 +918,7 @@ app.post("/api/approve-point", async (req, res) => {
       marks: 1,
       subject: conceptRow?.subject ?? null,
       system: conceptRow?.system ?? null,
+      chapter: conceptRow?.chapter ?? null,
       topic: conceptRow?.topic ?? null,
       concept: conceptRow?.title ?? null,
     });
@@ -799,7 +977,7 @@ app.post("/api/match-key-points", async (req, res) => {
       const conceptIds = Array.from(new Set((matches ?? []).map((m) => m.concept_id).filter(Boolean)));
       const { data: conceptRows } = await db
         .from("concepts")
-        .select("id, title, subject, system, topic")
+        .select("id, title, subject, system, chapter, topic")
         .in("id", conceptIds);
       const conceptById = new Map((conceptRows ?? []).map((c) => [c.id, c]));
 
@@ -812,6 +990,7 @@ app.post("/api/match-key-points", async (req, res) => {
           concept_title: c?.title ?? null,
           concept_subject: c?.subject ?? null,
           concept_system: c?.system ?? null,
+          concept_chapter: c?.chapter ?? null,
           concept_topic: c?.topic ?? null,
           increment_count: m.increment_count,
           vector_similarity: m.similarity,
@@ -839,6 +1018,7 @@ app.post("/api/match-key-points", async (req, res) => {
             concept_title: m.concept_title,
             concept_subject: m.concept_subject,
             concept_system: m.concept_system,
+            concept_chapter: m.concept_chapter,
             concept_topic: m.concept_topic,
             increment_count: m.increment_count,
             similarity: finalPct / 100,
@@ -868,7 +1048,9 @@ app.post("/api/save-concept", async (req, res) => {
     const conceptName = String(body?.concept_name ?? "").trim();
     const subject = body?.subject ? String(body.subject).trim() : null;
     const system = body?.system ? String(body.system).trim() : null;
+    const chapter = body?.chapter ? String(body.chapter).trim() : null;
     const topic = body?.topic ? String(body.topic).trim() : null;
+    const topicId = body?.topic_id ? String(body.topic_id).trim() : null;
     const rawPoints = Array.isArray(body?.high_yield_points) ? body.high_yield_points : [];
     const points = rawPoints
       .filter((p) => typeof p === "string")
@@ -884,7 +1066,9 @@ app.post("/api/save-concept", async (req, res) => {
         detected_language: "mixed",
         subject,
         system,
+        chapter,
         topic,
+        topic_id: topicId,
         raw_extraction: {
           concept_name: conceptName,
           high_yield_points: points,
@@ -940,7 +1124,9 @@ app.post("/api/save-question", async (req, res) => {
             return {
               subject: q.subject ?? null,
               system: q.system ?? null,
+              chapter: q.chapter ?? null,
               topic: q.topic ?? null,
+              topicId: q.topicId ?? q.topic_id ?? null,
               concept: q.concept ?? null,
               questionMode: q.questionMode,
               metadata: q.metadata ?? {},
@@ -961,6 +1147,7 @@ app.post("/api/save-question", async (req, res) => {
       .insert({
         subject: first.subject,
         system: first.system,
+        chapter: first.chapter,
         topic: first.topic,
         concept: first.concept,
         metadata: first.metadata,
@@ -982,6 +1169,7 @@ app.post("/api/save-question", async (req, res) => {
       marks: Number(q.metadata?.marks ?? 1),
       subject: q.subject,
       system: q.system,
+      chapter: q.chapter,
       topic: q.topic,
       concept: q.concept,
     }));
@@ -1003,15 +1191,23 @@ app.get("/api/questions", async (req, res) => {
     const type = String(req.query.type ?? "").trim();
     const status = String(req.query.status ?? "").trim();
     const difficulty = String(req.query.difficulty ?? "").trim();
+    const subject = String(req.query.subject ?? "").trim();
+    const system = String(req.query.system ?? "").trim();
+    const chapter = String(req.query.chapter ?? "").trim();
+    const topic = String(req.query.topic ?? "").trim();
 
     let query = db
       .from("questions")
-      .select("id, created_at, question_mode, stem, status, difficulty, marks, subject, system, topic, concept")
+      .select("id, created_at, question_mode, stem, payload, status, difficulty, marks, subject, system, chapter, topic, concept")
       .order("created_at", { ascending: false })
       .limit(300);
     if (type) query = query.eq("question_mode", type);
     if (status) query = query.eq("status", status);
     if (difficulty) query = query.eq("difficulty", difficulty);
+    if (subject) query = query.eq("subject", subject);
+    if (system) query = query.eq("system", system);
+    if (chapter) query = query.eq("chapter", chapter);
+    if (topic) query = query.eq("topic", topic);
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
@@ -1021,15 +1217,17 @@ app.get("/api/questions", async (req, res) => {
       questionMode: q.question_mode,
       subject: q.subject ?? "",
       system: q.system ?? "",
+      chapter: q.chapter ?? "",
       topic: q.topic ?? "",
       concept: q.concept ?? "",
+      marks: q.marks ?? 1,
       metadata: { status: q.status ?? "", difficulty: q.difficulty ?? "" },
-      mcq: q.question_mode === "mcq" ? { stem: q.stem } : null,
-      sba: q.question_mode === "sba" ? { stem: q.stem } : null,
+      mcq: q.question_mode === "mcq" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+      sba: q.question_mode === "sba" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
     }));
     if (search) {
       rows = rows.filter((q) =>
-        `${q.subject} ${q.system} ${q.topic} ${q.concept} ${q.mcq?.stem ?? ""} ${q.sba?.stem ?? ""}`
+        `${q.subject} ${q.system} ${q.chapter} ${q.topic} ${q.concept} ${q.mcq?.stem ?? ""} ${q.sba?.stem ?? ""}`
           .toLowerCase()
           .includes(search),
       );

@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
+import { apiUrl } from "@/lib/apiBase";
 
 type KeyPoint = { content: string };
 const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "Unknown error");
@@ -72,7 +73,7 @@ const Index = () => {
       const formData = new FormData();
       formData.append("image", compressed);
 
-      const resp = await fetch("/api/extract-concept", { method: "POST", body: formData });
+      const resp = await fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
@@ -102,7 +103,7 @@ const Index = () => {
     }
     setSaving(true);
     try {
-      const resp = await fetch("/api/save-concept", {
+      const resp = await fetch(apiUrl("/api/save-concept"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -134,7 +135,7 @@ const Index = () => {
       <header className="border-b">
         <div className="container mx-auto px-4 py-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-balance">Medical Question Bank— Concept Builder</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Medical Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
               Upload a book page → AI extracts exam-oriented key points  → verify → save with vector embeddings.
             </p>

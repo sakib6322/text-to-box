@@ -43,7 +43,7 @@ export default function AdminPlaceholder() {
         </Button>
       </div>
       <Card className="p-6">
-        <h1 className="text-2xl font-semibold text-sky-900 dark:text-sky-100">{title}</h1>
+        <h1 className="page-title">{title}</h1>
         <p className="mt-2 text-muted-foreground">{description}</p>
       </Card>
     </div>

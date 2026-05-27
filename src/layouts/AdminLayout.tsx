@@ -11,13 +11,15 @@ export default function AdminLayout() {
     <SidebarProvider open={open} onOpenChange={setOpen}>
       <AdminSidebar />
       <SidebarRail />
-      <SidebarInset>
-        <header className="flex h-14 items-center gap-2 border-b px-4">
-          <SidebarTrigger />
+      <SidebarInset className="app-mesh-bg">
+        <header className="app-header-bar flex h-14 items-center gap-2 px-4">
+          <SidebarTrigger className="text-primary" />
           <Separator orientation="vertical" className="h-5" />
-          <div className="text-sm text-muted-foreground">Admin Panel</div>
+          <div className="text-sm font-medium bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+            Admin Panel
+          </div>
         </header>
-        <div className="flex-1 p-4">
+        <div className="app-mesh-content flex-1 p-4 md:p-6">
           <Outlet />
         </div>
       </SidebarInset>

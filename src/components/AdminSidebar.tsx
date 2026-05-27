@@ -67,8 +67,12 @@ export function AdminSidebar() {
 
 
   return (
-    <Sidebar collapsible="icon" variant="sidebar">
+    <Sidebar collapsible="icon" variant="sidebar" className="border-r border-sidebar-border">
       <SidebarContent>
+        <div className="sidebar-brand border-b border-sidebar-border">
+          <p className="sidebar-brand-title">PG Diary</p>
+          <p className="text-[10px] text-sidebar-foreground/60 mt-0.5">Question Bank</p>
+        </div>
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
