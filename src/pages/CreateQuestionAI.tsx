@@ -40,24 +40,25 @@ type ExtractedQuestion = {
   sba_correct_index?: number;
 };
 
+type SuggestionMatch = {
+  key_point_id: string;
+  similarity: number;
+  concept_title: string | null;
+  concept_subject?: string | null;
+  concept_system?: string | null;
+  concept_chapter?: string | null;
+  concept_topic?: string | null;
+  ai_percentage?: number | null;
+  ai_reason?: string | null;
+  vector_percentage?: number;
+};
+
 type ApprovedPoint = {
   point_id: string;
   text: string;
   approved: boolean;
   saving?: boolean;
   approveError?: string | null;
-  match?: {
-    key_point_id: string;
-    similarity: number; // 0..1
-    concept_title: string | null;
-    concept_subject?: string | null;
-    concept_system?: string | null;
-    concept_chapter?: string | null;
-    concept_topic?: string | null;
-    ai_percentage?: number | null;
-    ai_reason?: string | null;
-    vector_percentage?: number;
-  } | null;
 };
 
 type BoardOption = { id: string; name: string };
@@ -92,10 +93,107 @@ type DraftQuestion = {
   mcq: { stem: string; trueFalse: TfItem[] } | null;
   sba: { stem: string; options: string[]; correctIndex: number } | null;
   sourcePointId: string | null;
+  match?: SuggestionMatch | null;
 };
 
 const mkId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+
+function questionStem(q: Pick<DraftQuestion, "mcq" | "sba">): string {
+  return (q.mcq?.stem ?? q.sba?.stem ?? "").trim();
+}
+
+function matchPct(m: SuggestionMatch): number {
+  return Math.round((m.ai_percentage ?? m.similarity * 100));
+}
+
+function matchPath(m: SuggestionMatch): string {
+  return [m.concept_subject, m.concept_system, m.concept_chapter, m.concept_topic, m.concept_title]
+    .map((x) => (x ?? "").trim())
+    .filter(Boolean)
+    .join(" → ");
+}
+
+async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
+  const bestByText = new Map<string, SuggestionMatch | null>();
+  const list = texts.filter((t) => t.trim());
+  if (list.length === 0) return bestByText;
+
+  const resp = await fetch(apiUrl("/api/match-key-points"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texts: list.slice(0, 30), threshold: 0.55, count: 1 }),
+  });
+  type Match = {
+    id: string;
+    similarity: number;
+    concept_title: string | null;
+    concept_subject?: string | null;
+    concept_system?: string | null;
+    concept_chapter?: string | null;
+    concept_topic?: string | null;
+    ai_percentage?: number;
+    ai_reason?: string | null;
+    vector_percentage?: number;
+  };
+  type MatchResult = { text: string; matches: Match[] };
+  const j = (await resp.json().catch(() => ({}))) as { results?: MatchResult[]; error?: string };
+  if (!resp.ok) throw new Error(j.error ?? "Match failed");
+
+  for (const r of j.results ?? []) {
+    const best = Array.isArray(r?.matches) && r.matches.length ? r.matches[0] : null;
+    if (typeof r?.text !== "string") continue;
+    if (!best?.id || typeof best.similarity !== "number") {
+      bestByText.set(r.text, null);
+      continue;
+    }
+    bestByText.set(r.text, {
+      key_point_id: best.id,
+      similarity: best.similarity,
+      concept_title: best.concept_title ?? null,
+      concept_subject: best.concept_subject ?? null,
+      concept_system: best.concept_system ?? null,
+      concept_chapter: best.concept_chapter ?? null,
+      concept_topic: best.concept_topic ?? null,
+      ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
+      ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
+      vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
+    });
+  }
+  return bestByText;
+}
+
+function SuggestionMatchPanel({ match }: { match: SuggestionMatch | null | undefined }) {
+  if (!match) {
+    return <p className="text-xs text-muted-foreground">No matching suggestion in database yet.</p>;
+  }
+  const path = matchPath(match);
+  return (
+    <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">Suggestion match:</span> {matchPct(match)}%
+      {path ? (
+        <>
+          {" "}
+          · <span className="text-foreground">{path}</span>
+        </>
+      ) : null}
+      {typeof match.vector_percentage === "number" ? (
+        <>
+          <br />
+          <span className="font-medium text-foreground">Vector score:</span> {Math.round(match.vector_percentage)}%
+        </>
+      ) : null}
+      <br />
+      <span className="font-mono">Key point ID: {match.key_point_id}</span>
+      {match.ai_reason ? (
+        <>
+          <br />
+          <span className="font-medium text-foreground">Analysis:</span> {match.ai_reason}
+        </>
+      ) : null}
+    </div>
+  );
+}
 
 async function compressImage(file: File): Promise<File> {
   if (!file.type.startsWith("image/")) return file;
@@ -336,13 +434,29 @@ export default function CreateQuestionAI() {
     };
   };
 
-  const applyExtractedQuestions = (questions: ExtractedQuestion[], conceptOverride?: string) => {
+  const applyExtractedQuestions = async (questions: ExtractedQuestion[], conceptOverride?: string) => {
     if (questions.length === 0) {
       setExtractedQuestionSummary(null);
       return;
     }
 
-    const drafts = questions.map((q) => draftFromExtracted(q, conceptOverride));
+    let drafts = questions.map((q) => draftFromExtracted(q, conceptOverride));
+    try {
+      const stems = drafts.map(questionStem).filter(Boolean);
+      const bestByText = await fetchSuggestionMatches(stems);
+      drafts = drafts.map((q) => {
+        const stem = questionStem(q);
+        const match = stem ? (bestByText.get(stem) ?? null) : null;
+        return {
+          ...q,
+          match,
+          sourcePointId: match?.key_point_id ?? null,
+        };
+      });
+    } catch {
+      /* non-blocking — questions still load without match scores */
+    }
+
     setQueuedQuestions(drafts);
     setActiveQuestionIndex(0);
     loadQuestionIntoForm(drafts[0]);
@@ -411,63 +525,10 @@ export default function CreateQuestionAI() {
           text,
           approved: false,
           approveError: null,
-          match: null,
         })),
       );
       applyAutofillFromExtract(extracted);
-      applyExtractedQuestions(extractedQuestions, extracted.concept_name);
-      // Fetch similarity matches against existing suggestions (key_points)
-      try {
-        const resp2 = await fetch(apiUrl("/api/match-key-points"), {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ texts: extracted.high_yield_points.slice(0, 30), threshold: 0.55, count: 1 }),
-        });
-        type Match = {
-          id: string;
-          similarity: number;
-          concept_title: string | null;
-          concept_subject?: string | null;
-          concept_system?: string | null;
-          concept_chapter?: string | null;
-          concept_topic?: string | null;
-          ai_percentage?: number;
-          ai_reason?: string | null;
-          vector_percentage?: number;
-        };
-        type MatchResult = { text: string; matches: Match[] };
-        const j = (await resp2.json().catch(() => ({}))) as { results?: MatchResult[] };
-        if (resp2.ok && Array.isArray(j?.results)) {
-          const bestByText = new Map<string, Match | null>();
-          for (const r of j.results) {
-            const best = Array.isArray(r?.matches) && r.matches.length ? r.matches[0] : null;
-            if (typeof r?.text === "string") bestByText.set(r.text, best);
-          }
-          setPoints((prev) =>
-            prev.map((p) => {
-              const best = bestByText.get(p.text);
-              if (!best?.id || typeof best?.similarity !== "number") return p;
-              return {
-                ...p,
-                match: {
-                  key_point_id: best.id,
-                  similarity: best.similarity,
-                  concept_title: best.concept_title ?? null,
-                  concept_subject: best.concept_subject ?? null,
-                  concept_system: best.concept_system ?? null,
-                  concept_chapter: best.concept_chapter ?? null,
-                  concept_topic: best.concept_topic ?? null,
-                  ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
-                  ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
-                  vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
-                },
-              };
-            }),
-          );
-        }
-      } catch {
-        // non-blocking
-      }
+      await applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       const questionMsg =
         extractedQuestions.length > 0
           ? ` · ${extractedQuestions.length} question${extractedQuestions.length > 1 ? "s" : ""} (verbatim MCQ/SBA)`
@@ -491,7 +552,7 @@ export default function CreateQuestionAI() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          matched_key_point_id: p.match?.key_point_id ?? null,
+          matched_key_point_id: null,
           concept: conceptTitle,
           subject: t.subject,
           system: t.system,
@@ -513,18 +574,6 @@ export default function CreateQuestionAI() {
                 approved: true,
                 saving: false,
                 approveError: null,
-                match:
-                  x.match ??
-                  (data.point_id
-                    ? {
-                        key_point_id: data.point_id,
-                        similarity: 0,
-                        concept_title: conceptTitle || null,
-                        concept_subject: t.subject || null,
-                        concept_system: t.system || null,
-                        concept_topic: t.topic || null,
-                      }
-                    : x.match),
               }
             : x,
         ),
@@ -675,7 +724,11 @@ export default function CreateQuestionAI() {
   const questionsForSave = (): DraftQuestion[] => {
     const current = buildCurrentDraftFromForm();
     if (queuedQuestions.length === 0) return [current];
-    return queuedQuestions.map((q, i) => (i === activeQuestionIndex ? current : q));
+    return queuedQuestions.map((q, i) => {
+      const draft = i === activeQuestionIndex ? current : q;
+      const matchId = draft.match?.key_point_id ?? draft.sourcePointId;
+      return { ...draft, sourcePointId: matchId ?? null };
+    });
   };
 
   return (
@@ -784,7 +837,7 @@ export default function CreateQuestionAI() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
-                  <div className="text-xs text-muted-foreground">Approve each to increment line count and store in the database.</div>
+                  <div className="text-xs text-muted-foreground">Approve each line to store as a suggestion (vector only, no match).</div>
                 </div>
                 <Badge variant="outline">
                   {points.filter((p) => p.approved).length}/{points.length} approved
@@ -801,30 +854,7 @@ export default function CreateQuestionAI() {
                           rows={2}
                           className="resize-none"
                         />
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span className="font-mono">{p.point_id.slice(0, 10)}…</span>
-                          {p.match ? (
-                            <Badge variant="outline" className="max-w-full whitespace-normal text-left font-normal">
-                              AI score: {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%
-                              {[
-                                p.match.concept_subject,
-                                p.match.concept_system,
-                                p.match.concept_chapter,
-                                p.match.concept_topic,
-                                p.match.concept_title,
-                              ]
-                                .map((x) => (x ?? "").trim())
-                                .filter(Boolean).length
-                                ? ` · ${[p.match.concept_subject, p.match.concept_system, p.match.concept_chapter, p.match.concept_topic, p.match.concept_title]
-                                    .map((x) => (x ?? "").trim())
-                                    .filter(Boolean)
-                                    .join(" → ")}`
-                                : ""}
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">AI score: —</Badge>
-                          )}
-                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground font-mono">{p.point_id.slice(0, 10)}…</div>
                       </div>
                       <Button
                         type="button"
@@ -836,56 +866,6 @@ export default function CreateQuestionAI() {
                         {p.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                         {p.approved ? "Approved" : "Approve"}
                       </Button>
-                    </div>
-                    <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
-                      {p.match ? (
-                        <>
-                          <span className="font-medium text-foreground">AI score:</span>{" "}
-                          {Math.round((p.match.ai_percentage ?? p.match.similarity * 100))}%{" "}
-                          {[
-                            p.match.concept_subject,
-                            p.match.concept_system,
-                            p.match.concept_chapter,
-                            p.match.concept_topic,
-                            p.match.concept_title,
-                          ]
-                            .map((x) => (x ?? "").trim())
-                            .filter(Boolean).length ? (
-                            <>
-                              {" "}
-                              with path{" "}
-                              <span className="text-foreground">
-                                {[
-                                  p.match.concept_subject,
-                                  p.match.concept_system,
-                                  p.match.concept_chapter,
-                                  p.match.concept_topic,
-                                  p.match.concept_title,
-                                ]
-                                  .map((x) => (x ?? "").trim())
-                                  .filter(Boolean)
-                                  .join(" → ")}
-                              </span>
-                            </>
-                          ) : null}
-                          {typeof p.match.vector_percentage === "number" ? (
-                            <>
-                              <br />
-                              <span className="font-medium text-foreground">Vector score:</span> {Math.round(p.match.vector_percentage)}%
-                            </>
-                          ) : null}
-                          <br />
-                          <span className="font-mono">Matched Point ID: {p.match.key_point_id}</span>
-                          {p.match.ai_reason ? (
-                            <>
-                              <br />
-                              <span className="font-medium text-foreground">AI analysis:</span> {p.match.ai_reason}
-                            </>
-                          ) : null}
-                        </>
-                      ) : (
-                        <span>No matched suggestion found yet.</span>
-                      )}
                     </div>
                     {p.approveError ? (
                       <p className="text-xs text-destructive">{p.approveError}</p>
@@ -968,7 +948,14 @@ export default function CreateQuestionAI() {
           <p className="mt-4 text-xs text-muted-foreground">
             Detected from image (verbatim): <span className="font-medium text-foreground">{extractedQuestionSummary}</span>
             {queuedQuestions.length > 1 ? ` · ${queuedQuestions.length} questions in paper — select below to edit each` : null}
+            {queuedQuestions.some((q) => q.match) ? " · suggestion match % shown per question" : null}
           </p>
+        ) : null}
+
+        {queuedQuestions[activeQuestionIndex]?.match ? (
+          <div className="mt-4">
+            <SuggestionMatchPanel match={queuedQuestions[activeQuestionIndex]?.match} />
+          </div>
         ) : null}
 
         {questionMode === "mcq" ? (
@@ -1097,13 +1084,21 @@ export default function CreateQuestionAI() {
                   idx === activeQuestionIndex ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
                 )}
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-sm font-medium">
                     {idx + 1}. {q.questionMode.toUpperCase()} - {q.concept || "Untitled concept"}
+                    {q.match ? (
+                      <Badge variant="outline" className="ml-2 font-normal">
+                        {matchPct(q.match)}% match
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="truncate text-xs text-muted-foreground">
                     {q.mcq?.stem || q.sba?.stem || "No stem"}
                   </div>
+                  {q.match && matchPath(q.match) ? (
+                    <div className="truncate text-[11px] text-muted-foreground">{matchPath(q.match)}</div>
+                  ) : null}
                 </div>
                 <Button
                   type="button"

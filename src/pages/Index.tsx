@@ -171,10 +171,24 @@ const Index = () => {
           high_yield_points: points.map((p) => p.content),
         }),
       });
-      const data = await resp.json().catch(() => ({}));
+      const data = await resp.json().catch(() => ({})) as {
+        error?: string;
+        count?: number;
+        embeddings_saved?: number;
+        embeddings_missing?: number;
+      };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
 
-      toast.success(`Saved ${data?.count ?? points.length} points to database`);
+      const saved = data?.count ?? points.length;
+      const embSaved = data?.embeddings_saved;
+      const embMissing = data?.embeddings_missing;
+      if (typeof embMissing === "number" && embMissing > 0) {
+        toast.warning(`Saved ${saved} points but ${embMissing} embedding(s) failed — check Gemini API keys`);
+      } else if (typeof embSaved === "number") {
+        toast.success(`Saved ${saved} points with ${embSaved} vector embedding(s)`);
+      } else {
+        toast.success(`Saved ${saved} points to database`);
+      }
       resetForm();
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Save failed");
@@ -200,7 +214,7 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Medical Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
-              Upload a book page → AI extracts exam-oriented key points → verify → save with vector embeddings.
+              Upload a book page → AI extracts exam-oriented key points → verify → save line-by-line vectors (no similarity match).
             </p>
           </div>
           <Button asChild variant="outline" className="shrink-0">

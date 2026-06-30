@@ -95,6 +95,41 @@ app.get("/api/debug/schema-check", async (_req, res) => {
   }
 });
 
+app.get("/api/debug/embeddings-stats", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const { count: total, error: totalErr } = await db
+      .from("key_points")
+      .select("id", { count: "exact", head: true });
+    if (totalErr) return res.status(500).json({ error: formatSupabaseError(totalErr) });
+
+    const { data: sample, error: sampleErr } = await db
+      .from("key_points")
+      .select("id, content, embedding")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (sampleErr) return res.status(500).json({ error: formatSupabaseError(sampleErr) });
+
+    const rows = sample ?? [];
+    const withEmbedding = rows.filter((r) => r.embedding != null).length;
+    const withoutEmbedding = rows.filter((r) => r.embedding == null).length;
+
+    return res.json({
+      key_points_total: total ?? 0,
+      sample_size: rows.length,
+      sample_with_embedding: withEmbedding,
+      sample_without_embedding: withoutEmbedding,
+      embedding_model: EMBEDDING_MODEL,
+      embedding_dim: EMBEDDING_DIM,
+      note: "Each key_point line stores one 768-dim vector in key_points.embedding (pgvector). Matching runs only when linking questions to suggestions.",
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 async function linkConceptBoards(db, conceptId, boardIds) {
   const ids = Array.isArray(boardIds) ? boardIds.filter((id) => typeof id === "string" && id.trim()) : [];
   if (ids.length === 0 || !conceptId) return;
@@ -1436,10 +1471,18 @@ app.post("/api/save-concept", async (req, res) => {
         };
       }),
     );
+    const embeddingsSaved = keyPointRows.filter((r) => r.embedding != null).length;
+    const embeddingsMissing = keyPointRows.length - embeddingsSaved;
     const { data: insertedKp, error: kpErr } = await db.from("key_points").insert(keyPointRows).select("id");
     if (kpErr) return res.status(500).json({ error: kpErr.message });
 
-    return res.json({ ok: true, concept_id: concept.id, count: insertedKp?.length ?? 0 });
+    return res.json({
+      ok: true,
+      concept_id: concept.id,
+      count: insertedKp?.length ?? 0,
+      embeddings_saved: embeddingsSaved,
+      embeddings_missing: embeddingsMissing,
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
