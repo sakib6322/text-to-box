@@ -11,6 +11,7 @@ import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type KeyPoint = { content: string };
 type BoardOption = { id: string; name: string };
@@ -65,6 +66,7 @@ const Index = () => {
   const [conceptName, setConceptName] = useState("");
   const [sourceText, setSourceText] = useState("");
   const [points, setPoints] = useState<KeyPoint[]>([]);
+  const [deletePointIndex, setDeletePointIndex] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -322,7 +324,12 @@ const Index = () => {
                       <Badge variant="outline" className="tabular-nums">
                         #{i + 1}
                       </Badge>
-                      <Button variant="ghost" size="icon" onClick={() => removePoint(i)} aria-label="Delete">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setDeletePointIndex(i)}
+                        aria-label="Delete"
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -349,6 +356,25 @@ const Index = () => {
           )}
         </section>
       </main>
+
+      <ConfirmDeleteDialog
+        open={deletePointIndex !== null}
+        onOpenChange={(open) => !open && setDeletePointIndex(null)}
+        title="Delete key point?"
+        description={
+          deletePointIndex !== null ? (
+            <>
+              Key point <strong>#{deletePointIndex + 1}</strong> will be removed.
+            </>
+          ) : null
+        }
+        onConfirm={() => {
+          if (deletePointIndex !== null) {
+            removePoint(deletePointIndex);
+            setDeletePointIndex(null);
+          }
+        }}
+      />
     </div>
   );
 };

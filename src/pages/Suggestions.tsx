@@ -12,6 +12,7 @@ import { ArrowLeft, Loader2, RotateCcw, Trash2, TrendingUp } from "lucide-react"
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type BoardLink = {
   board_id: string;
@@ -62,6 +63,7 @@ const Suggestions = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [search, setSearch] = useState("");
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
@@ -190,6 +192,7 @@ const Suggestions = () => {
     else {
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       toast.success("Deleted");
+      setDeleteTarget(null);
     }
     setDeleting(null);
   };
@@ -440,7 +443,7 @@ const Suggestions = () => {
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => remove(r)}
+                    onClick={() => setDeleteTarget(r)}
                     disabled={deleting === r.id}
                     className="w-full"
                   >
@@ -452,6 +455,24 @@ const Suggestions = () => {
           </div>
         )}
       </main>
+
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete suggestion?"
+        description={
+          deleteTarget ? (
+            <>
+              This key point will be permanently deleted.
+              {deleteTarget.content ? (
+                <span className="mt-2 block text-muted-foreground line-clamp-2">{deleteTarget.content}</span>
+              ) : null}
+            </>
+          ) : null
+        }
+        confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
+        onConfirm={() => deleteTarget && remove(deleteTarget)}
+      />
     </div>
   );
 };

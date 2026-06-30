@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronRight, Home, Loader2, Trash2 } from "lucide-react";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -15,6 +16,7 @@ export default function AdminSettingsBoards() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -64,6 +66,7 @@ export default function AdminSettingsBoards() {
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setBoards((prev) => prev.filter((b) => b.id !== id));
       toast.success("Board removed");
+      setDeleteTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     } finally {
@@ -132,7 +135,7 @@ export default function AdminSettingsBoards() {
                   variant="ghost"
                   size="icon"
                   className="text-destructive hover:text-destructive"
-                  onClick={() => remove(b.id)}
+                  onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
                   disabled={deleting === b.id}
                   aria-label={`Delete ${b.name}`}
                 >
@@ -143,6 +146,21 @@ export default function AdminSettingsBoards() {
           </ul>
         )}
       </Card>
+
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete board?"
+        description={
+          deleteTarget ? (
+            <>
+              <strong>{deleteTarget.name}</strong> will be permanently removed.
+            </>
+          ) : null
+        }
+        confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }

@@ -22,6 +22,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/apiBase";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type ExtractResult = {
   concept_name: string;
@@ -174,6 +175,7 @@ export default function CreateQuestionAI() {
   const [queuedQuestions, setQueuedQuestions] = useState<DraftQuestion[]>([]);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [extractedQuestionSummary, setExtractedQuestionSummary] = useState<string | null>(null);
+  const [deleteQuestionTarget, setDeleteQuestionTarget] = useState<DraftQuestion | null>(null);
 
   const breadcrumb = useMemo(() => {
     const s = (v: string, fallback: string) => (v.trim() ? v.trim() : fallback);
@@ -1109,7 +1111,7 @@ export default function CreateQuestionAI() {
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setQueuedQuestions((prev) => prev.filter((item) => item.id !== q.id));
+                    setDeleteQuestionTarget(q);
                   }}
                   aria-label="Delete question"
                 >
@@ -1120,6 +1122,24 @@ export default function CreateQuestionAI() {
           </div>
         </Card>
       )}
+
+      <ConfirmDeleteDialog
+        open={Boolean(deleteQuestionTarget)}
+        onOpenChange={(open) => !open && setDeleteQuestionTarget(null)}
+        title="Delete draft question?"
+        description={
+          deleteQuestionTarget ? (
+            <>
+              <strong>{deleteQuestionTarget.concept || "Untitled"}</strong> ({deleteQuestionTarget.questionMode.toUpperCase()}) will be removed from the queue.
+            </>
+          ) : null
+        }
+        onConfirm={() => {
+          if (!deleteQuestionTarget) return;
+          setQueuedQuestions((prev) => prev.filter((item) => item.id !== deleteQuestionTarget.id));
+          setDeleteQuestionTarget(null);
+        }}
+      />
     </div>
   );
 }

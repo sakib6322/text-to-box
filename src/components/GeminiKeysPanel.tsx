@@ -20,16 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
@@ -503,25 +494,22 @@ export function GeminiKeysPanel() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>API Key মুছবেন?</AlertDialogTitle>
-            <AlertDialogDescription>
-              <strong>{deleteTarget?.label}</strong> ({deleteTarget?.masked}) স্থায়ীভাবে মুছে যাবে।
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>বাতিল</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={confirmDelete}
-            >
-              মুছুন
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="API Key মুছবেন?"
+        description={
+          deleteTarget ? (
+            <>
+              <strong>{deleteTarget.label}</strong> ({deleteTarget.masked}) স্থায়ীভাবে মুছে যাবে।
+            </>
+          ) : null
+        }
+        confirmLabel="মুছুন"
+        cancelLabel="বাতিল"
+        confirming={Boolean(deleteTarget && deletingId === deleteTarget.id)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

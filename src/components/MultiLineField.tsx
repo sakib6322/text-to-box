@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type MultiLineFieldProps = {
   label: string;
@@ -15,6 +17,8 @@ type MultiLineFieldProps = {
 
 /** Multi-value as separate lines; no placeholder (labels only). */
 export function MultiLineField({ label, required, values, onChange, className, rows = 2 }: MultiLineFieldProps) {
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
+
   const setRow = (i: number, v: string) => {
     const next = [...values];
     next[i] = v;
@@ -39,7 +43,13 @@ export function MultiLineField({ label, required, values, onChange, className, r
               className="min-h-0 resize-y"
             />
             {values.length > 1 ? (
-              <Button type="button" variant="outline" size="icon" onClick={() => remove(i)} aria-label="Remove row">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={() => setDeleteIndex(i)}
+                aria-label="Remove row"
+              >
                 <X className="h-4 w-4" />
               </Button>
             ) : null}
@@ -50,6 +60,26 @@ export function MultiLineField({ label, required, values, onChange, className, r
           Add line
         </Button>
       </div>
+
+      <ConfirmDeleteDialog
+        open={deleteIndex !== null}
+        onOpenChange={(open) => !open && setDeleteIndex(null)}
+        title="Remove this line?"
+        description={
+          deleteIndex !== null ? (
+            <>
+              Line <strong>{deleteIndex + 1}</strong> of {label} will be removed.
+            </>
+          ) : null
+        }
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (deleteIndex !== null) {
+            remove(deleteIndex);
+            setDeleteIndex(null);
+          }
+        }}
+      />
     </div>
   );
 }

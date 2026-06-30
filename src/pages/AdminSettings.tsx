@@ -12,6 +12,7 @@ import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
 import { DatabaseConnectionPanel } from "@/components/DatabaseConnectionPanel";
 import { GeminiKeysPanel } from "@/components/GeminiKeysPanel";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -33,6 +34,7 @@ function TaxonomySection({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -98,6 +100,7 @@ function TaxonomySection({
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setItems((prev) => prev.filter((x) => x.id !== id));
       toast.success("Removed");
+      setDeleteTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     } finally {
@@ -155,7 +158,7 @@ function TaxonomySection({
                 variant="ghost"
                 size="icon"
                 className="text-destructive hover:text-destructive"
-                onClick={() => remove(item.id)}
+                onClick={() => setDeleteTarget({ id: item.id, name: item.name })}
                 disabled={deleting === item.id}
               >
                 {deleting === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -164,6 +167,20 @@ function TaxonomySection({
           ))}
         </ul>
       )}
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title={`Delete ${label.toLowerCase()}?`}
+        description={
+          deleteTarget ? (
+            <>
+              <strong>{deleteTarget.name}</strong> will be permanently removed.
+            </>
+          ) : null
+        }
+        confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }
@@ -174,6 +191,7 @@ function BoardsSection() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -223,6 +241,7 @@ function BoardsSection() {
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setBoards((prev) => prev.filter((b) => b.id !== id));
       toast.success("Board removed");
+      setDeleteTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     } finally {
@@ -267,7 +286,7 @@ function BoardsSection() {
                 variant="ghost"
                 size="icon"
                 className="text-destructive hover:text-destructive"
-                onClick={() => remove(b.id)}
+                onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
                 disabled={deleting === b.id}
               >
                 {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -276,6 +295,20 @@ function BoardsSection() {
           ))}
         </ul>
       )}
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete board?"
+        description={
+          deleteTarget ? (
+            <>
+              <strong>{deleteTarget.name}</strong> will be permanently removed.
+            </>
+          ) : null
+        }
+        confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
+import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false" };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
@@ -39,6 +40,7 @@ export default function AllQuestions() {
   const [rows, setRows] = useState<QuestionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
@@ -140,6 +142,7 @@ export default function AllQuestions() {
       if (!resp.ok) throw new Error(data?.error ?? "Delete failed");
       setRows((prev) => prev.filter((r) => r.id !== id));
       toast.success("Question deleted");
+      setDeleteTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
     } finally {
@@ -301,7 +304,12 @@ export default function AllQuestions() {
                 variant="ghost"
                 size="icon"
                 className="absolute top-2 right-2 print:hidden opacity-80 group-hover:opacity-100"
-                onClick={() => remove(r.id)}
+                onClick={() =>
+                  setDeleteTarget({
+                    id: r.id,
+                    label: r.concept || r.mcq?.stem || r.sba?.stem || `Question ${i + 1}`,
+                  })
+                }
                 disabled={deletingId === r.id}
                 aria-label="Delete question"
               >
@@ -311,6 +319,20 @@ export default function AllQuestions() {
           ))}
         </div>
       )}
+      <ConfirmDeleteDialog
+        open={Boolean(deleteTarget)}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete question?"
+        description={
+          deleteTarget ? (
+            <>
+              <strong>{deleteTarget.label}</strong> will be permanently deleted.
+            </>
+          ) : null
+        }
+        confirming={Boolean(deleteTarget && deletingId === deleteTarget.id)}
+        onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
     </div>
   );
 }
