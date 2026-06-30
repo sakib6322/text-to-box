@@ -10,6 +10,8 @@ import { toast } from "sonner";
 import { ChevronRight, Home, Loader2, Trash2 } from "lucide-react";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
+import { DatabaseConnectionPanel } from "@/components/DatabaseConnectionPanel";
+import { GeminiKeysPanel } from "@/components/GeminiKeysPanel";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -306,12 +308,20 @@ export default function AdminSettings() {
 
         <Tabs defaultValue="subjects">
           <TabsList className="flex flex-wrap h-auto gap-1">
+            <TabsTrigger value="connection">Connection</TabsTrigger>
+            <TabsTrigger value="gemini">Gemini API</TabsTrigger>
             <TabsTrigger value="subjects">Subjects</TabsTrigger>
             <TabsTrigger value="systems">Systems</TabsTrigger>
             <TabsTrigger value="chapters">Chapters</TabsTrigger>
             <TabsTrigger value="topics">Topics</TabsTrigger>
             <TabsTrigger value="boards">Boards</TabsTrigger>
           </TabsList>
+          <TabsContent value="connection" className="mt-4">
+            <DatabaseConnectionPanel />
+          </TabsContent>
+          <TabsContent value="gemini" className="mt-4">
+            <GeminiKeysPanel />
+          </TabsContent>
           <TabsContent value="subjects" className="mt-4">
             <TaxonomySection level="subjects" label="Subject" />
           </TabsContent>

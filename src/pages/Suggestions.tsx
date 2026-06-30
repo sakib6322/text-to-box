@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, RotateCcw, Trash2, TrendingUp } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
+import { ConnectionStatus } from "@/components/ConnectionStatus";
 
 type BoardLink = {
   board_id: string;
@@ -226,6 +227,24 @@ const Suggestions = () => {
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
   }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, search]);
 
+  const resetFilters = () => {
+    setSearch("");
+    setSubjectId("all");
+    setSystemId("all");
+    setChapterId("all");
+    setTopicId("all");
+    setBoardFilter("all");
+    toast.success("Filters reset");
+  };
+
+  const hasActiveFilters =
+    search.trim() !== "" ||
+    subjectId !== "all" ||
+    systemId !== "all" ||
+    chapterId !== "all" ||
+    topicId !== "all" ||
+    boardFilter !== "all";
+
   return (
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
       <header className="app-header-bar border-b">
@@ -247,6 +266,19 @@ const Suggestions = () => {
 
       <main className="app-mesh-content container mx-auto px-4 py-8">
         <Card className="filter-card mb-4 space-y-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <ConnectionStatus compact />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={resetFilters}
+              disabled={!hasActiveFilters}
+            >
+              <RotateCcw className="mr-2 h-4 w-4" />
+              Reset filters
+            </Button>
+          </div>
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search text…" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <div className="space-y-1.5">

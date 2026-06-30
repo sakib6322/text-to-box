@@ -3,8 +3,10 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index.tsx";
 import Suggestions from "./pages/Suggestions.tsx";
+import Login from "./pages/Login.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLayout from "./layouts/AdminLayout.tsx";
 import AppSidebarLayout from "./layouts/AppSidebarLayout.tsx";
@@ -24,11 +26,26 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<AppSidebarLayout />}>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <AppSidebarLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<Index />} />
             <Route path="suggestions" element={<Suggestions />} />
           </Route>
-          <Route path="/admin" element={<AdminLayout />}>
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminLayout />
+              </ProtectedRoute>
+            }
+          >
             <Route index element={<AdminPlaceholder />} />
             <Route path="academic/classes" element={<AdminPlaceholder />} />
             <Route path="academic/subjects" element={<AdminPlaceholder />} />

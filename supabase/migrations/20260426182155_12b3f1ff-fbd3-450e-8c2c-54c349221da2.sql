@@ -25,6 +25,8 @@ create table public.key_points (
   created_at timestamptz not null default now()
 );
 
+
+
 create index key_points_concept_id_idx on public.key_points(concept_id);
 create index key_points_embedding_idx on public.key_points using ivfflat (embedding vector_cosine_ops) with (lists = 100);
 
@@ -46,6 +48,8 @@ create policy "public delete key_points" on public.key_points for delete using (
 insert into storage.buckets (id, name, public) values ('book-images', 'book-images', true)
 on conflict (id) do nothing;
 
+
+
 create policy "public read book-images"
   on storage.objects for select using (bucket_id = 'book-images');
 create policy "public upload book-images"
@@ -54,3 +58,17 @@ create policy "public update book-images"
   on storage.objects for update using (bucket_id = 'book-images');
 create policy "public delete book-images"
   on storage.objects for delete using (bucket_id = 'book-images');
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -4,6 +4,20 @@ import cors from "cors";
 import multer from "multer";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { createClient } from "@supabase/supabase-js";
+import {
+  addGeminiKeys,
+  deleteGeminiKey,
+  getGeminiKeyList,
+  hasGeminiKeys,
+  invalidateKeyCache,
+  listGeminiKeysForSettings,
+  maskKey,
+  saveGeminiKeys,
+  testAllGeminiKeys,
+  testGeminiKeyById,
+  updateGeminiKey,
+  withGeminiKeyRotation,
+} from "./geminiKeys.mjs";
 
 const app = express();
 app.use(cors());
@@ -59,7 +73,7 @@ app.get("/api/debug/schema-check", async (_req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts"];
+    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts", "gemini_api_keys"];
     const checks = {};
     for (const table of tables) {
       const { error } = await db.from(table).select("id").limit(1);
@@ -212,13 +226,6 @@ function isLeakedOrBlockedKeyError(err) {
   return msg.includes("403") && msg.includes("reported as leaked");
 }
 
-function maskKey(k) {
-  const s = String(k ?? "");
-  if (!s) return "";
-  if (s.length <= 12) return `${s.slice(0, 3)}…${s.slice(-3)}`;
-  return `${s.slice(0, 8)}…${s.slice(-4)}`;
-}
-
 process.on("unhandledRejection", (reason) => {
   console.error("unhandledRejection:", reason);
 });
@@ -226,7 +233,7 @@ process.on("uncaughtException", (err) => {
   console.error("uncaughtException:", err);
 });
 
-async function embedText(text, apiKey) {
+async function embedTextWithKey(text, apiKey) {
   const t = String(text ?? "").trim();
   if (!t) return null;
   const resp = await fetch(
@@ -242,11 +249,24 @@ async function embedText(text, apiKey) {
     },
   );
   if (!resp.ok) {
-    console.error("Embedding API failed", resp.status, await resp.text());
+    const body = await resp.text();
+    if (resp.status === 429 || resp.status === 403 || resp.status === 401) {
+      throw new Error(`Embedding API ${resp.status}: ${body.slice(0, 300)}`);
+    }
+    console.error("Embedding API failed", resp.status, body);
     return null;
   }
   const data = await resp.json();
   return Array.isArray(data?.embedding?.values) ? data.embedding.values : null;
+}
+
+async function embedTextRotating(db, text) {
+  try {
+    return await withGeminiKeyRotation(db, (apiKey) => embedTextWithKey(text, apiKey));
+  } catch (e) {
+    console.error("embedTextRotating:", e instanceof Error ? e.message : e);
+    return null;
+  }
 }
 
 function toPgVector(values) {
@@ -324,8 +344,11 @@ Higher means stronger conceptual match.`;
 
 app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await hasGeminiKeys(db))) {
+      return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
+    }
 
     const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
     const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
@@ -333,8 +356,6 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
 
     const responseSchema = {
       type: SchemaType.OBJECT,
@@ -369,22 +390,27 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
 
-    const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
-      contents: [{ role: "user", parts }],
-      generationConfig,
-    });
+    const { concept_name, verbatim_text, high_yield_points } = await withGeminiKeyRotation(db, async (apiKey) => {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
+        contents: [{ role: "user", parts }],
+        generationConfig,
+      });
 
-    const text = result?.response?.text?.() ?? "";
-    const parsed = parseGeminiJson(text);
-    const concept_name = typeof parsed?.concept_name === "string" ? sanitizeModelText(parsed.concept_name) : "";
-    const verbatim_text =
-      typeof parsed?.verbatim_text === "string" ? sanitizeModelText(parsed.verbatim_text) : "";
-    const high_yield_points = Array.isArray(parsed?.high_yield_points)
-      ? parsed.high_yield_points
-          .filter((x) => typeof x === "string")
-          .map((x) => sanitizeModelText(x))
-          .filter(Boolean)
-      : [];
+      const text = result?.response?.text?.() ?? "";
+      const parsed = parseGeminiJson(text);
+      return {
+        concept_name: typeof parsed?.concept_name === "string" ? sanitizeModelText(parsed.concept_name) : "",
+        verbatim_text:
+          typeof parsed?.verbatim_text === "string" ? sanitizeModelText(parsed.verbatim_text) : "",
+        high_yield_points: Array.isArray(parsed?.high_yield_points)
+          ? parsed.high_yield_points
+              .filter((x) => typeof x === "string")
+              .map((x) => sanitizeModelText(x))
+              .filter(Boolean)
+          : [],
+      };
+    });
 
     return res.json({ concept_name, verbatim_text, high_yield_points });
   } catch (e) {
@@ -392,13 +418,13 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     if (isLeakedOrBlockedKeyError(e)) {
       return res.status(403).json({
         error:
-          "This Gemini API key is blocked (reported leaked/forbidden). Generate a new key, update .env GEMINI_API_KEY, then restart API server.",
+          "All Gemini API keys are blocked or invalid. Add new keys in Settings → Gemini API.",
       });
     }
     if (isQuotaError(e)) {
       return res.status(429).json({
         error:
-          "AI quota exceeded. Please try again after a short wait, or switch to a lower-cost model (e.g. gemini-2.5-flash).",
+          "AI quota exceeded on all configured keys. Add more keys in Settings → Gemini API or wait and retry.",
       });
     }
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -407,8 +433,11 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
 
 app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
   try {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await hasGeminiKeys(db))) {
+      return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
+    }
 
     const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
     const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
@@ -416,8 +445,6 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
     }
-
-    const genAI = new GoogleGenerativeAI(apiKey);
 
     const responseSchema = {
       type: SchemaType.OBJECT,
@@ -522,76 +549,77 @@ Do not invent options or answers not visible in the source.`;
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
 
-    const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
-      contents: [{ role: "user", parts }],
-      generationConfig,
-    });
+    const questions = await withGeminiKeyRotation(db, async (apiKey) => {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
+        contents: [{ role: "user", parts }],
+        generationConfig,
+      });
 
-    const text = result?.response?.text?.() ?? "";
-    const parsed = parseGeminiJson(text);
-    const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+      const text = result?.response?.text?.() ?? "";
+      const parsed = parseGeminiJson(text);
+      const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
 
-    const questions = rawQuestions
-      .map((q) => {
-        const question_type = normalizeQuestionType(q?.question_type);
-        const stem = preserveVerbatimText(q?.stem);
-        if (!question_type || !stem) return null;
+      return rawQuestions
+        .map((q) => {
+          const question_type = normalizeQuestionType(q?.question_type);
+          const stem = preserveVerbatimText(q?.stem);
+          if (!question_type || !stem) return null;
 
-        if (question_type === "mcq") {
-          const mcq_statements = Array.isArray(q?.mcq_statements)
-            ? q.mcq_statements
+          if (question_type === "mcq") {
+            const mcq_statements = Array.isArray(q?.mcq_statements)
+              ? q.mcq_statements
+                  .map((row) => {
+                    const line = preserveVerbatimText(row?.text);
+                    if (!line) return null;
+                    return { text: line, correct: normalizeTfAnswer(row?.correct) };
+                  })
+                  .filter(Boolean)
+              : [];
+            if (mcq_statements.length === 0) return null;
+            return {
+              question_type: "mcq",
+              question_number: preserveVerbatimText(q?.question_number) || null,
+              stem,
+              mcq_statements,
+            };
+          }
+
+          const sba_options = Array.isArray(q?.sba_options)
+            ? q.sba_options
                 .map((row) => {
                   const line = preserveVerbatimText(row?.text);
-                  if (!line) return null;
-                  return { text: line, correct: normalizeTfAnswer(row?.correct) };
+                  return line ? { text: line } : null;
                 })
                 .filter(Boolean)
             : [];
-          if (mcq_statements.length === 0) return null;
+          if (sba_options.length === 0) return null;
+          let sba_correct_index = Number(q?.sba_correct_index);
+          if (!Number.isInteger(sba_correct_index) || sba_correct_index < 0 || sba_correct_index > 4) {
+            sba_correct_index = labelToOptionIndex(q?.sba_correct_label ?? q?.correct_option);
+          }
           return {
-            question_type: "mcq",
+            question_type: "sba",
             question_number: preserveVerbatimText(q?.question_number) || null,
             stem,
-            mcq_statements,
+            sba_options: sba_options.slice(0, 5),
+            sba_correct_index: Math.min(sba_correct_index, sba_options.length - 1),
           };
-        }
-
-        const sba_options = Array.isArray(q?.sba_options)
-          ? q.sba_options
-              .map((row) => {
-                const line = preserveVerbatimText(row?.text);
-                return line ? { text: line } : null;
-              })
-              .filter(Boolean)
-          : [];
-        if (sba_options.length === 0) return null;
-        let sba_correct_index = Number(q?.sba_correct_index);
-        if (!Number.isInteger(sba_correct_index) || sba_correct_index < 0 || sba_correct_index > 4) {
-          sba_correct_index = labelToOptionIndex(q?.sba_correct_label ?? q?.correct_option);
-        }
-        return {
-          question_type: "sba",
-          question_number: preserveVerbatimText(q?.question_number) || null,
-          stem,
-          sba_options: sba_options.slice(0, 5),
-          sba_correct_index: Math.min(sba_correct_index, sba_options.length - 1),
-        };
-      })
-      .filter(Boolean);
+        })
+        .filter(Boolean);
+    });
 
     return res.json({ questions });
   } catch (e) {
     console.error(e);
     if (isLeakedOrBlockedKeyError(e)) {
       return res.status(403).json({
-        error:
-          "This Gemini API key is blocked (reported leaked/forbidden). Generate a new key, update .env GEMINI_API_KEY, then restart API server.",
+        error: "All Gemini API keys are blocked or invalid. Add new keys in Settings → Gemini API.",
       });
     }
     if (isQuotaError(e)) {
       return res.status(429).json({
-        error:
-          "AI quota exceeded. Please try again after a short wait, or switch to a lower-cost model (e.g. gemini-2.5-flash).",
+        error: "AI quota exceeded on all configured keys. Add more keys in Settings → Gemini API or wait and retry.",
       });
     }
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -601,35 +629,52 @@ Do not invent options or answers not visible in the source.`;
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
 // Debug only (masked): confirm server env is updated.
-app.get("/api/debug/env", (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || "";
-  return res.json({
-    hasKey: Boolean(apiKey),
-    keyMasked: apiKey ? maskKey(apiKey) : null,
-    primaryModel: process.env.PRIMARY_AI_MODEL || null,
-    fallbackModel: process.env.FALLBACK_AI_MODEL || null,
-  });
+app.get("/api/debug/env", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const info = await listGeminiKeysForSettings(db);
+    const envKey = process.env.GEMINI_API_KEY || "";
+    return res.json({
+      hasKey: info.count > 0 || Boolean(envKey),
+      keySource: info.source,
+      keysInDb: info.count,
+      keyMasked: info.keys?.[0]?.masked ?? (envKey ? maskKey(envKey) : null),
+      envFallbackMasked: info.env_fallback_masked,
+      primaryModel: process.env.PRIMARY_AI_MODEL || null,
+      fallbackModel: process.env.FALLBACK_AI_MODEL || null,
+    });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
 });
 
 /** One minimal generateContent call to verify key + model access (dev only). */
 app.get("/api/debug/test-gemini", async (_req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY || "";
+  const db = requireSupabase(res);
+  if (!db) return;
   const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
-  if (!apiKey) {
-    return res.status(500).json({ ok: false, kind: "missing_key", message: "GEMINI_API_KEY not set" });
+  if (!(await hasGeminiKeys(db))) {
+    return res.status(500).json({ ok: false, kind: "missing_key", message: "No Gemini API keys configured" });
   }
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: 'Reply with exactly: "ok"' }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 8 },
+    const keyCount = (await getGeminiKeyList(db)).length;
+    let usedKey = "";
+    const text = await withGeminiKeyRotation(db, async (apiKey) => {
+      usedKey = apiKey;
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: 'Reply with exactly: "ok"' }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 8 },
+      });
+      return String(result?.response?.text?.() ?? "").trim();
     });
-    const text = String(result?.response?.text?.() ?? "").trim();
     return res.json({
       ok: true,
       model: modelName,
-      keyMasked: maskKey(apiKey),
+      keyMasked: maskKey(usedKey),
+      keys_tested: keyCount,
       snippet: text.slice(0, 120),
     });
   } catch (e) {
@@ -644,9 +689,94 @@ app.get("/api/debug/test-gemini", async (_req, res) => {
       ok: false,
       kind,
       model: modelName,
-      keyMasked: maskKey(apiKey),
       message: msg,
     });
+  }
+});
+
+app.get("/api/settings/gemini-keys", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await listGeminiKeysForSettings(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.put("/api/settings/gemini-keys", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const keys = req.body?.keys;
+    const result = await saveGeminiKeys(db, keys);
+    invalidateKeyCache();
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Save failed" });
+  }
+});
+
+app.post("/api/settings/gemini-keys", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const keys = req.body?.keys ?? (req.body?.api_key ? [req.body.api_key] : []);
+    const result = await addGeminiKeys(db, keys);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Add failed" });
+  }
+});
+
+app.patch("/api/settings/gemini-keys/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await updateGeminiKey(db, req.params.id, req.body ?? {});
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
+  }
+});
+
+app.delete("/api/settings/gemini-keys/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    await deleteGeminiKey(db, req.params.id);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Delete failed" });
+  }
+});
+
+app.post("/api/settings/gemini-keys/:id/test", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await testGeminiKeyById(db, req.params.id);
+    const status = result.ok ? 200 : result.status === "quota_exceeded" ? 429 : result.status === "invalid" ? 403 : 502;
+    return res.status(status).json(result);
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ ok: false, error: e instanceof Error ? e.message : "Test failed" });
+  }
+});
+
+app.post("/api/settings/gemini-keys/test-all", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await testAllGeminiKeys(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Test failed" });
   }
 });
 
@@ -861,8 +991,7 @@ app.post("/api/approve-point", async (req, res) => {
         .single();
       if (conceptErr || !newConcept) return res.status(500).json({ error: conceptErr?.message ?? "Failed to create concept fallback" });
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      const emb = apiKey ? await embedText(question_text, apiKey) : null;
+      const emb = await embedTextRotating(db, question_text);
       const embedding = toPgVector(emb);
 
       const { data: newPoint, error: kpErr } = await db
@@ -902,8 +1031,7 @@ app.post("/api/approve-point", async (req, res) => {
       .select("title, subject, system, chapter, topic")
       .eq("id", point.concept_id)
       .single();
-    const apiKey = process.env.GEMINI_API_KEY;
-    const emb = apiKey ? await embedText(question_text, apiKey) : null;
+    const emb = await embedTextRotating(db, question_text);
     const embedding = toPgVector(emb);
 
     const { error: qErr } = await db.from("questions").insert({
@@ -949,8 +1077,9 @@ app.post("/api/match-key-points", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY missing in server env" });
+    if (!(await hasGeminiKeys(db))) {
+      return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
+    }
 
     const { texts, threshold, count } = req.body ?? {};
     const useAiScoring = String(process.env.MATCH_USE_AI_SCORING || "false").toLowerCase() === "true";
@@ -961,7 +1090,7 @@ app.post("/api/match-key-points", async (req, res) => {
 
     const results = [];
     for (const text of list) {
-      const emb = await embedText(text, apiKey);
+      const emb = await embedTextRotating(db, text);
       const embStr = toPgVector(emb);
       if (!embStr) {
         results.push({ text, matches: [] });
@@ -999,7 +1128,9 @@ app.post("/api/match-key-points", async (req, res) => {
       let aiScoreById = {};
       if (useAiScoring) {
         try {
-          aiScoreById = await scoreMatchesWithGemini(apiKey, text, enrichedMatches.slice(0, 5));
+          aiScoreById = await withGeminiKeyRotation(db, (key) =>
+            scoreMatchesWithGemini(key, text, enrichedMatches.slice(0, 5)),
+          );
         } catch (err) {
           console.error("Gemini match scoring failed, using vector similarity fallback", err);
         }
@@ -1042,7 +1173,6 @@ app.post("/api/save-concept", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const apiKey = process.env.GEMINI_API_KEY;
     const body = req.body ?? {};
 
     const conceptName = String(body?.concept_name ?? "").trim();
@@ -1086,7 +1216,7 @@ app.post("/api/save-concept", async (req, res) => {
 
     const keyPointRows = await Promise.all(
       points.map(async (content, idx) => {
-        const emb = apiKey ? await embedText(content, apiKey) : null;
+        const emb = await embedTextRotating(db, content);
         return {
           concept_id: concept.id,
           content,
@@ -1110,7 +1240,6 @@ app.post("/api/save-question", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const apiKey = process.env.GEMINI_API_KEY;
     const body = req.body ?? {};
     const list = Array.isArray(body?.questions) ? body.questions : [body];
 
@@ -1120,7 +1249,7 @@ app.post("/api/save-question", async (req, res) => {
           .filter((q) => q && (q.questionMode === "mcq" || q.questionMode === "sba"))
           .map(async (q) => {
             const stem = q.questionMode === "mcq" ? q?.mcq?.stem : q?.sba?.stem;
-            const emb = apiKey ? await embedText(stem ?? "", apiKey) : null;
+            const emb = await embedTextRotating(db, stem ?? "");
             return {
               subject: q.subject ?? null,
               system: q.system ?? null,

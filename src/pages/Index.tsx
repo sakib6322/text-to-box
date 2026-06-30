@@ -1,14 +1,20 @@
-import { useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
+import { TaxonomySelects } from "@/components/TaxonomySelects";
+import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 
 type KeyPoint = { content: string };
+type BoardOption = { id: string; name: string };
+
 const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "Unknown error");
 
 async function compressImage(file: File, maxWidth = 1600, quality = 0.82): Promise<File> {
@@ -52,11 +58,42 @@ const Index = () => {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const [taxonomy, setTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection());
+  const [boardOptions, setBoardOptions] = useState<BoardOption[]>([]);
+  const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [conceptName, setConceptName] = useState("");
-  const [subject, setSubject] = useState("");
-  const [system, setSystem] = useState("");
-  const [topic, setTopic] = useState("");
+  const [sourceText, setSourceText] = useState("");
   const [points, setPoints] = useState<KeyPoint[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(apiUrl("/api/boards"));
+        const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
+        if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
+        setBoardOptions(j.boards.map((b) => ({ id: b.id, name: b.name })));
+      } catch {
+        /* boards optional until settings configured */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const toggleBoard = (id: string) => {
+    setSelectedBoardIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const requireTaxonomy = () => {
+    if (!taxonomy.subjectId || !taxonomy.systemId || !taxonomy.chapterId || !taxonomy.topicId) {
+      toast.error("Select subject, system, chapter, and topic");
+      return false;
+    }
+    return true;
+  };
 
   const onPick = (f: File) => {
     setImageFile(f);
@@ -66,23 +103,28 @@ const Index = () => {
   };
 
   const handleExtract = async () => {
-    if (!imageFile) return toast.error("Pick a book page image first");
+    if (!imageFile && !sourceText.trim()) {
+      return toast.error("Upload an image or paste source text");
+    }
     setExtracting(true);
     try {
-      const compressed = await compressImage(imageFile);
       const formData = new FormData();
-      formData.append("image", compressed);
+      if (imageFile) {
+        const compressed = await compressImage(imageFile);
+        formData.append("image", compressed);
+      }
+      if (sourceText.trim()) formData.append("input_text", sourceText.trim());
 
       const resp = await fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
-      setConceptName(data.concept_name ?? "");
+      setConceptName(typeof data.concept_name === "string" ? data.concept_name : "");
       const extractedPoints = Array.isArray(data.high_yield_points)
         ? data.high_yield_points.map((content: string) => ({ content }))
         : [];
       setPoints(extractedPoints);
-      toast.success(`Extracted ${extractedPoints.length} high-yield points`);
+      toast.success(`Concept auto-filled · ${extractedPoints.length} key points extracted`);
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Extraction failed");
     } finally {
@@ -95,22 +137,35 @@ const Index = () => {
   const removePoint = (i: number) => setPoints((p) => p.filter((_, idx) => idx !== i));
   const addPoint = () => setPoints((p) => [...p, { content: "" }]);
 
+  const resetForm = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    setConceptName("");
+    setSourceText("");
+    setTaxonomy(emptyTaxonomySelection());
+    setSelectedBoardIds([]);
+    setPoints([]);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
   const handleSave = async () => {
+    if (!requireTaxonomy()) return;
     if (!points.length) return toast.error("No key points to save");
     if (points.some((p) => !p.content.trim())) return toast.error("Empty boxes — fill or remove");
-    if (!conceptName.trim() || !subject.trim() || !system.trim() || !topic.trim()) {
-      return toast.error("Fill Concept, Subject, System and Topic");
-    }
+    if (!conceptName.trim()) return toast.error("Concept is required — extract from image or type manually");
     setSaving(true);
     try {
       const resp = await fetch(apiUrl("/api/save-concept"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          concept_name: conceptName,
-          subject,
-          system,
-          topic,
+          concept_name: conceptName.trim(),
+          subject: taxonomy.subjectName,
+          system: taxonomy.systemName,
+          chapter: taxonomy.chapterName,
+          topic: taxonomy.topicName,
+          topic_id: taxonomy.topicId,
+          board_ids: selectedBoardIds,
           high_yield_points: points.map((p) => p.content),
         }),
       });
@@ -118,8 +173,7 @@ const Index = () => {
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
 
       toast.success(`Saved ${data?.count ?? points.length} points to database`);
-      setImageFile(null); setImagePreview(null); setConceptName(""); setSubject(""); setSystem(""); setTopic(""); setPoints([]);
-      if (fileRef.current) fileRef.current.value = "";
+      resetForm();
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Save failed");
     } finally {
@@ -127,9 +181,16 @@ const Index = () => {
     }
   };
 
+  const taxonomySummary = useMemo(() => {
+    const parts = [
+      taxonomy.subjectName,
+      taxonomy.systemName,
+      taxonomy.chapterName,
+      taxonomy.topicName,
+    ].filter(Boolean);
+    return parts.length ? parts.join(" → ") : null;
+  }, [taxonomy]);
 
-
-  
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="border-b">
@@ -137,18 +198,16 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Medical Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
-              Upload a book page → AI extracts exam-oriented key points  → verify → save with vector embeddings.
+              Upload a book page → AI extracts exam-oriented key points → verify → save with vector embeddings.
             </p>
           </div>
           <Button asChild variant="outline" className="shrink-0">
             <a href="/suggestions">Suggestions →</a>
           </Button>
         </div>
-        
       </header>
 
       <main className="container mx-auto px-4 py-8 grid lg:grid-cols-[380px_1fr] gap-8">
-        {/* Left column: upload */}
         <section className="space-y-4">
           <Card className="p-4 space-y-4">
             <div>
@@ -166,51 +225,103 @@ const Index = () => {
                 <img src={imagePreview} alt="Book page preview" className="w-full" />
               </div>
             )}
-            <Button onClick={handleExtract} disabled={!imageFile || extracting} className="w-full">
+            <div className="space-y-2">
+              <Label htmlFor="source-text">Source text (Text to concept generator)</Label>
+              <Textarea
+                id="source-text"
+                value={sourceText}
+                onChange={(e) => setSourceText(e.target.value)}
+                rows={5}
+                className="resize-y"
+                placeholder="Paste textbook notes or paragraph here to extract concept without an image…"
+              />
+            </div>
+            <Button
+              onClick={handleExtract}
+              disabled={(!imageFile && !sourceText.trim()) || extracting}
+              className="w-full"
+            >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {extracting ? "Extracting…" : "Extract Concept"}
             </Button>
+            <p className="text-xs text-muted-foreground">
+              Image <strong>অথবা</strong> source text দিয়ে extract করুন। AI শুধু <strong>Concept</strong> ও key points
+              বের করবে।
+            </p>
           </Card>
         </section>
 
-        {/* Right column: extracted boxes */}
         <section className="space-y-4">
+          <Card className="p-4 space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold">Classification</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                Settings থেকে taxonomy ও boards লোড হয়। Concept ছাড়া বাকি সব ম্যানুয়ালি সিলেক্ট করুন।
+              </p>
+            </div>
+
+            <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
+
+            <div className="space-y-2">
+              <Label>Boards</Label>
+              <p className="text-xs text-muted-foreground">Admin → Settings থেকে board যোগ করুন।</p>
+              <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border p-3 min-h-[2.5rem]">
+                {boardOptions.length === 0 ? (
+                  <span className="text-sm text-muted-foreground">No boards yet.</span>
+                ) : (
+                  boardOptions.map((b) => (
+                    <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox checked={selectedBoardIds.includes(b.id)} onCheckedChange={() => toggleBoard(b.id)} />
+                      {b.name}
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="concept-name">Concept *</Label>
+              <Input
+                id="concept-name"
+                value={conceptName}
+                onChange={(e) => setConceptName(e.target.value)}
+                placeholder="AI extract করলে এখানে auto-fill হবে"
+                className={conceptName ? "border-primary/40" : ""}
+              />
+              <p className="text-xs text-muted-foreground">
+                শুধু এই ফিল্ড AI দিয়ে auto generate হয়। প্রয়োজনে হাতে এডিট করতে পারবেন।
+              </p>
+            </div>
+
+            {taxonomySummary ? (
+              <p className="text-xs text-muted-foreground">
+                Selected: <span className="text-foreground">{taxonomySummary}</span>
+              </p>
+            ) : null}
+          </Card>
+
           {points.length === 0 ? (
             <Card className="p-12 text-center text-muted-foreground border-dashed">
               <Upload className="mx-auto h-10 w-10 mb-3 opacity-50" />
-              <p>Upload a page and click <span className="font-medium text-foreground">Extract Concept</span> to begin.</p>
+              <p>
+                Taxonomy সিলেক্ট করুন, তারপর image upload <strong>অথবা</strong> source text দিয়ে{" "}
+                <span className="font-medium text-foreground">Extract Concept</span> চাপুন।
+              </p>
             </Card>
           ) : (
             <>
-              <Card className="p-4 space-y-3">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge>{points.length} points</Badge>
-                </div>
-                <div>
-                  <label className="text-sm font-medium">Concept *</label>
-                  <Input value={conceptName} onChange={(e) => setConceptName(e.target.value)} className="mt-1" />
-                </div>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <label className="text-sm font-medium">Subject *</label>
-                    <Input value={subject} onChange={(e) => setSubject(e.target.value)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">System *</label>
-                    <Input value={system} onChange={(e) => setSystem(e.target.value)} className="mt-1" />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium">Topic *</label>
-                    <Input value={topic} onChange={(e) => setTopic(e.target.value)} className="mt-1" />
-                  </div>
-                </div>
-              </Card>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge>{points.length} points</Badge>
+                {conceptName ? <Badge variant="secondary">Concept ready</Badge> : null}
+              </div>
 
               <div className="grid sm:grid-cols-2 gap-3">
                 {points.map((p, i) => (
                   <Card key={i} className="p-3 space-y-2 transition-shadow hover:shadow-md">
                     <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="tabular-nums">#{i + 1}</Badge>
+                      <Badge variant="outline" className="tabular-nums">
+                        #{i + 1}
+                      </Badge>
                       <Button variant="ghost" size="icon" onClick={() => removePoint(i)} aria-label="Delete">
                         <Trash2 className="h-4 w-4" />
                       </Button>

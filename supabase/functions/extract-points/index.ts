@@ -38,6 +38,8 @@ function parseGeminiJson(rawText: string): ExtractResponse {
   throw new Error("Model returned non-JSON output");
 }
 
+
+
 async function resolveImagePayload(req: Request): Promise<{ imageBase64: string; mimeType: string }> {
   const contentType = req.headers.get("content-type") ?? "";
 
@@ -167,3 +169,31 @@ Return output STRICTLY matching the JSON schema. Do not add explanations, markdo
     });
   }
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

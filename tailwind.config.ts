@@ -4,6 +4,8 @@ export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
   prefix: "",
+
+
   theme: {
     container: {
       center: true,
@@ -12,6 +14,8 @@ export default {
         "2xl": "1400px",
       },
     },
+
+    
     extend: {
       colors: {
         border: "hsl(var(--border))",
@@ -111,3 +115,14 @@ export default {
   },
   plugins: [require("tailwindcss-animate")],
 } satisfies Config;
+
+
+
+
+// This is a minimal config.
+// If you need the full config, get it from here:
+// If you need to change the default config, get it from here:
+
+
+
+

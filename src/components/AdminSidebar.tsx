@@ -6,11 +6,14 @@ import {
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
+  LogOut,
   School,
   Settings,
   Target,
   Users,
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { logout } from "@/lib/auth";
 
 import {
   Sidebar,
@@ -63,9 +66,13 @@ const items: NavItem[] = [
 
 export function AdminSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const isActive = (to?: string) => (to ? location.pathname === to || location.pathname.startsWith(`${to}/`) : false);
 
-
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
   return (
     <Sidebar collapsible="icon" variant="sidebar" className="border-r border-sidebar-border">
       <SidebarContent>
@@ -115,6 +122,18 @@ export function AdminSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarSeparator />
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton onClick={handleLogout} tooltip="Sign out">
+                  <LogOut />
+                  <span>Sign out</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );
