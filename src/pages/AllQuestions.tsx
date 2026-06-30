@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,15 @@ import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false" };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
@@ -41,6 +50,14 @@ export default function AllQuestions() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; label: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<QuestionRow | null>(null);
+  const [editConcept, setEditConcept] = useState("");
+  const [editStem, setEditStem] = useState("");
+  const [editSubject, setEditSubject] = useState("");
+  const [editSystem, setEditSystem] = useState("");
+  const [editChapter, setEditChapter] = useState("");
+  const [editTopic, setEditTopic] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
@@ -147,6 +164,63 @@ export default function AllQuestions() {
       toast.error(e instanceof Error ? e.message : "Delete failed");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const openEdit = (row: QuestionRow) => {
+    setEditTarget(row);
+    setEditConcept(row.concept);
+    setEditStem(row.mcq?.stem ?? row.sba?.stem ?? "");
+    setEditSubject(row.subject);
+    setEditSystem(row.system);
+    setEditChapter(row.chapter);
+    setEditTopic(row.topic);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    setSavingEdit(true);
+    try {
+      const resp = await fetch(apiUrl(`/api/questions/${editTarget.id}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          concept: editConcept,
+          stem: editStem,
+          subject: editSubject,
+          system: editSystem,
+          chapter: editChapter,
+          topic: editTopic,
+          status: editTarget.metadata?.status,
+          difficulty: editTarget.metadata?.difficulty,
+          marks: editTarget.marks,
+          payload: editTarget.questionMode === "mcq" ? editTarget.mcq : editTarget.sba,
+        }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data?.error ?? "Update failed");
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === editTarget.id
+            ? {
+                ...r,
+                concept: editConcept.trim(),
+                subject: editSubject.trim(),
+                system: editSystem.trim(),
+                chapter: editChapter.trim(),
+                topic: editTopic.trim(),
+                mcq: r.mcq ? { ...r.mcq, stem: editStem } : null,
+                sba: r.sba ? { ...r.sba, stem: editStem } : null,
+              }
+            : r,
+        ),
+      );
+      toast.success("Question updated");
+      setEditTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -300,21 +374,30 @@ export default function AllQuestions() {
                 mcq={r.mcq}
                 sba={r.sba}
               />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 print:hidden opacity-80 group-hover:opacity-100"
-                onClick={() =>
-                  setDeleteTarget({
-                    id: r.id,
-                    label: r.concept || r.mcq?.stem || r.sba?.stem || `Question ${i + 1}`,
-                  })
-                }
-                disabled={deletingId === r.id}
-                aria-label="Delete question"
-              >
-                {deletingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
+              <div className="absolute top-2 right-2 print:hidden flex gap-1 opacity-80 group-hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => openEdit(r)}
+                  aria-label="Edit question"
+                >
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    setDeleteTarget({
+                      id: r.id,
+                      label: r.concept || r.mcq?.stem || r.sba?.stem || `Question ${i + 1}`,
+                    })
+                  }
+                  disabled={deletingId === r.id}
+                  aria-label="Delete question"
+                >
+                  {deletingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -333,6 +416,51 @@ export default function AllQuestions() {
         confirming={Boolean(deleteTarget && deletingId === deleteTarget.id)}
         onConfirm={() => deleteTarget && remove(deleteTarget.id)}
       />
+
+      <Dialog open={Boolean(editTarget)} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit question</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div className="space-y-1.5">
+              <Label>Concept</Label>
+              <Input value={editConcept} onChange={(e) => setEditConcept(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Stem</Label>
+              <Textarea value={editStem} onChange={(e) => setEditStem(e.target.value)} rows={4} className="resize-y" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>System</Label>
+                <Input value={editSystem} onChange={(e) => setEditSystem(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Chapter</Label>
+                <Input value={editChapter} onChange={(e) => setEditChapter(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Topic</Label>
+                <Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={saveEdit} disabled={savingEdit || !editStem.trim()}>
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

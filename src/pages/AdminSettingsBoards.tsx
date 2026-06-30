@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronRight, Home, Loader2, Trash2 } from "lucide-react";
+import { ChevronRight, Home, Loader2, Pencil, Trash2 } from "lucide-react";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { EditItemDialog } from "@/components/EditItemDialog";
+import { apiUrl } from "@/lib/apiBase";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -17,11 +19,14 @@ export default function AdminSettingsBoards() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/boards");
+      const r = await fetch(apiUrl("/api/boards"));
       const j = (await r.json().catch(() => ({}))) as { boards?: BoardRow[]; error?: string };
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to load boards");
       setBoards(Array.isArray(j.boards) ? j.boards : []);
@@ -41,7 +46,7 @@ export default function AdminSettingsBoards() {
     if (!n) return toast.error("Enter a board name");
     setSaving(true);
     try {
-      const r = await fetch("/api/boards", {
+      const r = await fetch(apiUrl("/api/boards"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: n }),
@@ -61,7 +66,7 @@ export default function AdminSettingsBoards() {
   const remove = async (id: string) => {
     setDeleting(id);
     try {
-      const r = await fetch(`/api/boards/${encodeURIComponent(id)}`, { method: "DELETE" });
+      const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(id)}`), { method: "DELETE" });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setBoards((prev) => prev.filter((b) => b.id !== id));
@@ -71,6 +76,36 @@ export default function AdminSettingsBoards() {
       toast.error(e instanceof Error ? e.message : "Failed to delete");
     } finally {
       setDeleting(null);
+    }
+  };
+
+  const openEdit = (board: BoardRow) => {
+    setEditTarget({ id: board.id, name: board.name });
+    setEditName(board.name);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const n = editName.trim();
+    if (!n) return toast.error("Enter a board name");
+    setSavingEdit(true);
+    try {
+      const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(editTarget.id)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { board?: BoardRow; error?: string };
+      if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Update failed");
+      setBoards((prev) =>
+        prev.map((b) => (b.id === editTarget.id ? { ...b, name: n } : b)).sort((a, c) => a.name.localeCompare(c.name)),
+      );
+      toast.success("Board updated");
+      setEditTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -130,17 +165,22 @@ export default function AdminSettingsBoards() {
             {boards.map((b) => (
               <li key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <span className="font-medium">{b.name}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="text-destructive hover:text-destructive"
-                  onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
-                  disabled={deleting === b.id}
-                  aria-label={`Delete ${b.name}`}
-                >
-                  {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                </Button>
+                <div className="flex gap-1">
+                  <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`}>
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
+                    disabled={deleting === b.id}
+                    aria-label={`Delete ${b.name}`}
+                  >
+                    {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -160,6 +200,16 @@ export default function AdminSettingsBoards() {
         }
         confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
         onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
+      <EditItemDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+        title="Edit board"
+        label="Board name"
+        value={editName}
+        onChange={setEditName}
+        onSave={saveEdit}
+        saving={savingEdit}
       />
     </div>
   );

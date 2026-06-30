@@ -8,11 +8,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, RotateCcw, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, RotateCcw, Trash2, TrendingUp } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 
 type BoardLink = {
   board_id: string;
@@ -39,6 +47,7 @@ type Row = {
 };
 
 type BoardOption = { id: string; name: string };
+type ConceptOption = { id: string; title: string | null };
 
 function compactTaxonomy(c: ConceptJoin): string {
   if (!c) return "";
@@ -64,6 +73,10 @@ const Suggestions = () => {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [editTarget, setEditTarget] = useState<Row | null>(null);
+  const [editContent, setEditContent] = useState("");
+  const [editConceptTitle, setEditConceptTitle] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
@@ -71,12 +84,15 @@ const Suggestions = () => {
   const [chapters, setChapters] = useState<TaxonomyItem[]>([]);
   const [topics, setTopics] = useState<TaxonomyItem[]>([]);
   const [boardList, setBoardList] = useState<BoardOption[]>([]);
+  const [conceptOptions, setConceptOptions] = useState<ConceptOption[]>([]);
+  const [loadingConcepts, setLoadingConcepts] = useState(false);
 
   const [subjectId, setSubjectId] = useState("all");
   const [systemId, setSystemId] = useState("all");
   const [chapterId, setChapterId] = useState("all");
   const [topicId, setTopicId] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
+  const [conceptFilter, setConceptFilter] = useState("all");
 
   const subjectName = useMemo(
     () => (subjectId === "all" ? "" : subjects.find((s) => s.id === subjectId)?.name ?? ""),
@@ -185,6 +201,39 @@ const Suggestions = () => {
     };
   }, []);
 
+  useEffect(() => {
+    setConceptFilter("all");
+  }, [subjectId, systemId, chapterId, topicId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingConcepts(true);
+      try {
+        let query = supabase.from("concepts").select("id, title").order("title").limit(300);
+        if (subjectName) query = query.eq("subject", subjectName);
+        if (systemName) query = query.eq("system", systemName);
+        if (chapterName) query = query.eq("chapter", chapterName);
+        if (topicId !== "all") query = query.eq("topic_id", topicId);
+        else if (topicName) query = query.eq("topic", topicName);
+
+        const { data, error } = await query;
+        if (cancelled) return;
+        if (error) {
+          toast.error(error.message);
+          setConceptOptions([]);
+          return;
+        }
+        setConceptOptions((data ?? []).map((c) => ({ id: c.id, title: c.title })));
+      } finally {
+        if (!cancelled) setLoadingConcepts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [subjectName, systemName, chapterName, topicName, topicId]);
+
   const remove = async (row: Row) => {
     setDeleting(row.id);
     const { error } = await supabase.from("key_points").delete().eq("id", row.id);
@@ -195,6 +244,48 @@ const Suggestions = () => {
       setDeleteTarget(null);
     }
     setDeleting(null);
+  };
+
+  const openEdit = (row: Row) => {
+    setEditTarget(row);
+    setEditContent(row.content);
+    setEditConceptTitle((row.concepts?.title ?? "").trim());
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const content = editContent.trim();
+    const conceptTitle = editConceptTitle.trim();
+    if (!content) return toast.error("Content is required");
+    setSavingEdit(true);
+    try {
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(editTarget.id)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, concept_title: conceptTitle || undefined }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Update failed");
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === editTarget.id
+            ? {
+                ...row,
+                content,
+                concepts: row.concepts
+                  ? { ...row.concepts, title: conceptTitle || row.concepts.title }
+                  : row.concepts,
+              }
+            : row,
+        ),
+      );
+      toast.success("Updated");
+      setEditTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const filteredRows = useMemo(() => {
@@ -211,6 +302,7 @@ const Suggestions = () => {
         );
         if (!ids.has(boardFilter)) return false;
       }
+      if (conceptFilter !== "all" && r.concept_id !== conceptFilter) return false;
       const bySearch = q
         ? `${r.content} ${c?.title ?? ""} ${c?.subject ?? ""} ${c?.system ?? ""} ${c?.chapter ?? ""} ${c?.topic ?? ""}`
             .toLowerCase()
@@ -228,7 +320,7 @@ const Suggestions = () => {
       });
     }
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
-  }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, search]);
+  }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search]);
 
   const resetFilters = () => {
     setSearch("");
@@ -237,6 +329,7 @@ const Suggestions = () => {
     setChapterId("all");
     setTopicId("all");
     setBoardFilter("all");
+    setConceptFilter("all");
     toast.success("Filters reset");
   };
 
@@ -246,7 +339,8 @@ const Suggestions = () => {
     systemId !== "all" ||
     chapterId !== "all" ||
     topicId !== "all" ||
-    boardFilter !== "all";
+    boardFilter !== "all" ||
+    conceptFilter !== "all";
 
   return (
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
@@ -283,7 +377,7 @@ const Suggestions = () => {
             </Button>
           </div>
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search text…" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Subject</Label>
               <Select
@@ -293,6 +387,7 @@ const Suggestions = () => {
                   setSystemId("all");
                   setChapterId("all");
                   setTopicId("all");
+                  setConceptFilter("all");
                 }}
               >
                 <SelectTrigger>
@@ -316,6 +411,7 @@ const Suggestions = () => {
                   setSystemId(v);
                   setChapterId("all");
                   setTopicId("all");
+                  setConceptFilter("all");
                 }}
                 disabled={subjectId === "all"}
               >
@@ -339,6 +435,7 @@ const Suggestions = () => {
                 onValueChange={(v) => {
                   setChapterId(v);
                   setTopicId("all");
+                  setConceptFilter("all");
                 }}
                 disabled={systemId === "all"}
               >
@@ -357,7 +454,7 @@ const Suggestions = () => {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Topic</Label>
-              <Select value={topicId} onValueChange={setTopicId} disabled={chapterId === "all"}>
+              <Select value={topicId} onValueChange={(v) => { setTopicId(v); setConceptFilter("all"); }} disabled={chapterId === "all"}>
                 <SelectTrigger>
                   <SelectValue placeholder="All topics" />
                 </SelectTrigger>
@@ -366,6 +463,22 @@ const Suggestions = () => {
                   {topics.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Concept</Label>
+              <Select value={conceptFilter} onValueChange={setConceptFilter} disabled={loadingConcepts}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingConcepts ? "Loading…" : "All concepts"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All concepts</SelectItem>
+                  {conceptOptions.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {(c.title ?? "").trim() || "Untitled concept"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -440,15 +553,25 @@ const Suggestions = () => {
                       </div>
                     ) : null}
                   </div>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => setDeleteTarget(r)}
-                    disabled={deleting === r.id}
-                    className="w-full"
-                  >
-                    {deleting === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(r)}>
+                      <Pencil className="h-4 w-4 mr-1" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="flex-1"
+                      onClick={() => setDeleteTarget(r)}
+                      disabled={deleting === r.id}
+                    >
+                      {deleting === r.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 </Card>
               );
             })}
@@ -473,6 +596,33 @@ const Suggestions = () => {
         confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
         onConfirm={() => deleteTarget && remove(deleteTarget)}
       />
+
+      <Dialog open={Boolean(editTarget)} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit suggestion</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Concept</Label>
+              <Input value={editConceptTitle} onChange={(e) => setEditConceptTitle(e.target.value)} placeholder="Concept title" />
+            </div>
+            <div className="space-y-2">
+              <Label>Key point content</Label>
+              <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={5} className="resize-y" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={saveEdit} disabled={savingEdit || !editContent.trim()}>
+              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

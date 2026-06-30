@@ -18,6 +18,11 @@ import {
   updateGeminiKey,
   withGeminiKeyRotation,
 } from "./geminiKeys.mjs";
+import {
+  getExtractQuestionsPrompt,
+  resetExtractQuestionsPrompt,
+  saveExtractQuestionsPrompt,
+} from "./appSettings.mjs";
 
 const app = express();
 app.use(cors());
@@ -73,7 +78,7 @@ app.get("/api/debug/schema-check", async (_req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts", "gemini_api_keys"];
+    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts", "gemini_api_keys", "app_settings"];
     const checks = {};
     for (const table of tables) {
       const { error } = await db.from(table).select("id").limit(1);
@@ -515,36 +520,7 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
       responseSchema,
     };
 
-    const prompt = `You digitize medical exam papers from images or text.
-
-TASK: Find every exam question (MCQ or SBA) and return them in "questions". Copy text EXACTLY as written — same words, punctuation, labels, numbers, and parenthetical tags. Do NOT paraphrase, translate, fix grammar, or summarize.
-
-CLASSIFICATION (each question is either mcq OR sba, never both):
-
-Use "mcq" when:
-- The answer key lists True/False (or T/F) per option, e.g. "Answer: T F F T F" or "TFTFF"
-- Each option a–e is marked true or false independently
-- Wording implies multiple true/false statements under one stem
-
-Use "sba" when:
-- Exactly ONE best answer (single letter a–e, or one highlighted correct option)
-- Classic single-best-answer multiple choice
-
-MCQ fields:
-- stem: exact stem line(s) including question number and tags like "(Residency March 2025)"
-- mcq_statements: one item per option line, text copied exactly (keep "a)", "b)" prefixes if printed)
-- correct: "true" or "false" matching the answer key for that line
-
-SBA fields:
-- stem: exact question text
-- sba_options: each option line copied exactly (up to 5)
-- sba_correct_index: 0 for a, 1 for b, … from the answer key
-
-MULTIPLE QUESTIONS: If the image has Q04, Q05, etc., return one object per question in reading order.
-
-If there are no exam questions, return "questions": [].
-
-Do not invent options or answers not visible in the source.`;
+    const { prompt } = await getExtractQuestionsPrompt(db);
 
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
@@ -694,6 +670,41 @@ app.get("/api/debug/test-gemini", async (_req, res) => {
   }
 });
 
+app.get("/api/settings/prompts/extract-questions", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await getExtractQuestionsPrompt(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.put("/api/settings/prompts/extract-questions", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await saveExtractQuestionsPrompt(db, req.body?.prompt);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Save failed" });
+  }
+});
+
+app.post("/api/settings/prompts/extract-questions/reset", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await resetExtractQuestionsPrompt(db);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
 app.get("/api/settings/gemini-keys", async (_req, res) => {
   try {
     const db = requireSupabase(res);
@@ -704,6 +715,7 @@ app.get("/api/settings/gemini-keys", async (_req, res) => {
     return res.status(500).json({ error: formatSupabaseError(e) });
   }
 });
+
 
 app.put("/api/settings/gemini-keys", async (req, res) => {
   try {
@@ -744,6 +756,7 @@ app.patch("/api/settings/gemini-keys/:id", async (req, res) => {
   }
 });
 
+
 app.delete("/api/settings/gemini-keys/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
@@ -769,6 +782,7 @@ app.post("/api/settings/gemini-keys/:id/test", async (req, res) => {
   }
 });
 
+
 app.post("/api/settings/gemini-keys/test-all", async (req, res) => {
   try {
     const db = requireSupabase(res);
@@ -788,6 +802,109 @@ app.get("/api/db-health", async (_req, res) => {
   return res.json({ ok: true });
 });
 
+app.get("/api/concepts", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const topicId = String(req.query.topic_id ?? "").trim();
+    const subject = String(req.query.subject ?? "").trim();
+    const system = String(req.query.system ?? "").trim();
+    const chapter = String(req.query.chapter ?? "").trim();
+    const topic = String(req.query.topic ?? "").trim();
+    const search = String(req.query.search ?? "").trim().toLowerCase();
+
+    let query = db
+      .from("concepts")
+      .select("id, title, subject, system, chapter, topic, topic_id, created_at, key_points(count)")
+      .order("created_at", { ascending: false })
+      .limit(500);
+    if (topicId) query = query.eq("topic_id", topicId);
+    if (subject) query = query.eq("subject", subject);
+    if (system) query = query.eq("system", system);
+    if (chapter) query = query.eq("chapter", chapter);
+    if (topic) query = query.eq("topic", topic);
+
+    const { data, error } = await query;
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+
+    let concepts = (data ?? []).map((row) => ({
+      id: row.id,
+      title: row.title,
+      subject: row.subject,
+      system: row.system,
+      chapter: row.chapter,
+      topic: row.topic,
+      topic_id: row.topic_id,
+      created_at: row.created_at,
+      key_point_count: Array.isArray(row.key_points) && row.key_points[0]?.count != null ? Number(row.key_points[0].count) : 0,
+    }));
+
+    if (search) {
+      concepts = concepts.filter((c) =>
+        `${c.title ?? ""} ${c.subject ?? ""} ${c.system ?? ""} ${c.chapter ?? ""} ${c.topic ?? ""}`
+          .toLowerCase()
+          .includes(search),
+      );
+    }
+
+    return res.json({ concepts });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.patch("/api/concepts/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const patch = { updated_at: new Date().toISOString() };
+    if (typeof req.body?.title === "string") {
+      const title = req.body.title.trim();
+      if (!title) return res.status(400).json({ error: "title cannot be empty" });
+      patch.title = title;
+    }
+    if (typeof req.body?.subject === "string") patch.subject = req.body.subject.trim() || null;
+    if (typeof req.body?.system === "string") patch.system = req.body.system.trim() || null;
+    if (typeof req.body?.chapter === "string") patch.chapter = req.body.chapter.trim() || null;
+    if (typeof req.body?.topic === "string") patch.topic = req.body.topic.trim() || null;
+    if (typeof req.body?.topic_id === "string") patch.topic_id = req.body.topic_id.trim() || null;
+
+    if (Object.keys(patch).length <= 1) return res.status(400).json({ error: "No fields to update" });
+
+    const { data, error } = await db
+      .from("concepts")
+      .update(patch)
+      .eq("id", id)
+      .select("id, title, subject, system, chapter, topic, topic_id, created_at");
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    const concept = Array.isArray(data) ? data[0] : null;
+    if (!concept) return res.status(404).json({ error: "Concept not found" });
+    return res.json({ concept });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/concepts/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    const { error } = await db.from("concepts").delete().eq("id", id);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.get("/api/boards", async (_req, res) => {
   try {
     const db = requireSupabase(res);
@@ -800,6 +917,8 @@ app.get("/api/boards", async (_req, res) => {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
 });
+
+
 
 app.post("/api/boards", async (req, res) => {
   try {
@@ -832,6 +951,27 @@ app.delete("/api/boards/:id", async (req, res) => {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
 });
+
+app.patch("/api/boards/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    const name = String(req.body?.name ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    if (!name) return res.status(400).json({ error: "name required" });
+    const { data, error } = await db.from("boards").update({ name }).eq("id", id).select("id, name, created_at");
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    const board = Array.isArray(data) ? data[0] : null;
+    if (!board) return res.status(404).json({ error: "Board not found" });
+    return res.json({ board });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+
 
 /** Must be registered before GET /api/taxonomy/:level so "resolve" is not captured as :level */
 app.get("/api/taxonomy/resolve/:topicId", async (req, res) => {
@@ -925,6 +1065,76 @@ app.delete("/api/taxonomy/:level/:id", async (req, res) => {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
 });
+
+app.patch("/api/taxonomy/:level/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const level = String(req.params.level ?? "");
+    const table = taxonomyTable(level);
+    if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
+    const id = String(req.params.id ?? "").trim();
+    const name = String(req.body?.name ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    if (!name) return res.status(400).json({ error: "name required" });
+    const parentKey = taxonomyParentKey(level);
+    const selectCols = "id, name, sort_order, created_at" + (parentKey ? `, ${parentKey}` : "");
+    const { data, error } = await db.from(table).update({ name }).eq("id", id).select(selectCols);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    const item = Array.isArray(data) ? data[0] : null;
+    if (!item) return res.status(404).json({ error: "Item not found" });
+    return res.json({ item });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.patch("/api/key-points/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : null;
+    const conceptTitle = typeof req.body?.concept_title === "string" ? req.body.concept_title.trim() : null;
+    if (!content && !conceptTitle) return res.status(400).json({ error: "content or concept_title required" });
+
+
+
+    const { data: existing, error: findErr } = await db
+      .from("key_points")
+      .select("id, concept_id, content")
+      .eq("id", id)
+      .maybeSingle();
+    if (findErr) return res.status(500).json({ error: findErr.message });
+    if (!existing) return res.status(404).json({ error: "Key point not found" });
+
+    const patch = {};
+    if (content) {
+      patch.content = content;
+      const emb = await embedTextRotating(db, content);
+      patch.embedding = toPgVector(emb);
+    }
+    if (Object.keys(patch).length) {
+      const { error: kpErr } = await db.from("key_points").update(patch).eq("id", id);
+      if (kpErr) return res.status(500).json({ error: kpErr.message });
+    }
+
+    if (conceptTitle && existing.concept_id) {
+      const { error: cErr } = await db.from("concepts").update({ title: conceptTitle }).eq("id", existing.concept_id);
+      if (cErr) return res.status(500).json({ error: cErr.message });
+    }
+
+    return res.json({ ok: true, id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+
 
 app.post("/api/approve-point", async (req, res) => {
   try {
@@ -1267,6 +1477,7 @@ app.post("/api/save-question", async (req, res) => {
           }),
       )
     );
+    
 
     if (normalized.length === 0) return res.status(400).json({ error: "No valid questions supplied" });
 
@@ -1375,6 +1586,46 @@ app.delete("/api/questions/:id", async (req, res) => {
     const { error } = await db.from("questions").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.patch("/api/questions/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const body = req.body ?? {};
+    const patch = {};
+    if (typeof body.concept === "string") patch.concept = body.concept.trim() || null;
+    if (typeof body.subject === "string") patch.subject = body.subject.trim() || null;
+    if (typeof body.system === "string") patch.system = body.system.trim() || null;
+    if (typeof body.chapter === "string") patch.chapter = body.chapter.trim() || null;
+    if (typeof body.topic === "string") patch.topic = body.topic.trim() || null;
+    if (typeof body.status === "string") patch.status = body.status.trim() || null;
+    if (typeof body.difficulty === "string") patch.difficulty = body.difficulty.trim() || null;
+    if (body.marks != null) patch.marks = Number(body.marks) || 1;
+
+    const stem = typeof body.stem === "string" ? body.stem.trim() : null;
+    if (stem) {
+      patch.stem = stem;
+      const emb = await embedTextRotating(db, stem);
+      patch.embedding = toPgVector(emb);
+      if (body.payload && typeof body.payload === "object") {
+        patch.payload = { ...body.payload, stem };
+      }
+    }
+
+    if (Object.keys(patch).length === 0) return res.status(400).json({ error: "Nothing to update" });
+
+    const { data, error } = await db.from("questions").update(patch).eq("id", id).select("id");
+    if (error) return res.status(500).json({ error: error.message });
+    if (!data?.length) return res.status(404).json({ error: "Question not found" });
+    return res.json({ ok: true, id });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });

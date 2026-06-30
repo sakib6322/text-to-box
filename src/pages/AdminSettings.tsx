@@ -7,12 +7,15 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ChevronRight, Home, Loader2, Trash2 } from "lucide-react";
+import { ChevronRight, Home, Loader2, Pencil, Trash2 } from "lucide-react";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
 import { DatabaseConnectionPanel } from "@/components/DatabaseConnectionPanel";
 import { GeminiKeysPanel } from "@/components/GeminiKeysPanel";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { EditItemDialog } from "@/components/EditItemDialog";
+import { ExtractQuestionsPromptPanel } from "@/components/ExtractQuestionsPromptPanel";
+import { ConceptsPanel } from "@/components/ConceptsPanel";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -35,6 +38,9 @@ function TaxonomySection({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const loadItems = useCallback(async () => {
     setLoading(true);
@@ -108,6 +114,34 @@ function TaxonomySection({
     }
   };
 
+  const openEdit = (item: TaxonomyItem) => {
+    setEditTarget({ id: item.id, name: item.name });
+    setEditName(item.name);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const n = editName.trim();
+    if (!n) return toast.error("Enter a name");
+    setSavingEdit(true);
+    try {
+      const r = await fetch(apiUrl(`/api/taxonomy/${level}/${encodeURIComponent(editTarget.id)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { item?: TaxonomyItem; error?: string };
+      if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Update failed");
+      setItems((prev) => prev.map((x) => (x.id === editTarget.id ? { ...x, name: n } : x)));
+      toast.success("Updated");
+      setEditTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {parentLevel ? (
@@ -153,16 +187,21 @@ function TaxonomySection({
           {items.map((item) => (
             <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="font-medium">{item.name}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteTarget({ id: item.id, name: item.name })}
-                disabled={deleting === item.id}
-              >
-                {deleting === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
+              <div className="flex gap-1">
+                <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit">
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteTarget({ id: item.id, name: item.name })}
+                  disabled={deleting === item.id}
+                >
+                  {deleting === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -181,6 +220,16 @@ function TaxonomySection({
         confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
         onConfirm={() => deleteTarget && remove(deleteTarget.id)}
       />
+      <EditItemDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+        title={`Edit ${label.toLowerCase()}`}
+        label="Name"
+        value={editName}
+        onChange={setEditName}
+        onSave={saveEdit}
+        saving={savingEdit}
+      />
     </div>
   );
 }
@@ -192,6 +241,9 @@ function BoardsSection() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editTarget, setEditTarget] = useState<{ id: string; name: string } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -249,6 +301,36 @@ function BoardsSection() {
     }
   };
 
+  const openEdit = (board: BoardRow) => {
+    setEditTarget({ id: board.id, name: board.name });
+    setEditName(board.name);
+  };
+
+  const saveEdit = async () => {
+    if (!editTarget) return;
+    const n = editName.trim();
+    if (!n) return toast.error("Enter a board name");
+    setSavingEdit(true);
+    try {
+      const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(editTarget.id)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: n }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { board?: BoardRow; error?: string };
+      if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Update failed");
+      setBoards((prev) =>
+        prev.map((b) => (b.id === editTarget.id ? { ...b, name: n } : b)).sort((a, c) => a.name.localeCompare(c.name)),
+      );
+      toast.success("Board updated");
+      setEditTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
@@ -281,16 +363,21 @@ function BoardsSection() {
           {boards.map((b) => (
             <li key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="font-medium">{b.name}</span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
-                disabled={deleting === b.id}
-              >
-                {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
+              <div className="flex gap-1">
+                <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setDeleteTarget({ id: b.id, name: b.name })}
+                  disabled={deleting === b.id}
+                >
+                  {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -308,6 +395,16 @@ function BoardsSection() {
         }
         confirming={Boolean(deleteTarget && deleting === deleteTarget.id)}
         onConfirm={() => deleteTarget && remove(deleteTarget.id)}
+      />
+      <EditItemDialog
+        open={Boolean(editTarget)}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+        title="Edit board"
+        label="Board name"
+        value={editName}
+        onChange={setEditName}
+        onSave={saveEdit}
+        saving={savingEdit}
       />
     </div>
   );
@@ -343,10 +440,12 @@ export default function AdminSettings() {
           <TabsList className="flex flex-wrap h-auto gap-1">
             <TabsTrigger value="connection">Connection</TabsTrigger>
             <TabsTrigger value="gemini">Gemini API</TabsTrigger>
+            <TabsTrigger value="prompts">AI Prompts</TabsTrigger>
             <TabsTrigger value="subjects">Subjects</TabsTrigger>
             <TabsTrigger value="systems">Systems</TabsTrigger>
             <TabsTrigger value="chapters">Chapters</TabsTrigger>
             <TabsTrigger value="topics">Topics</TabsTrigger>
+            <TabsTrigger value="concepts">Concepts</TabsTrigger>
             <TabsTrigger value="boards">Boards</TabsTrigger>
           </TabsList>
           <TabsContent value="connection" className="mt-4">
@@ -354,6 +453,9 @@ export default function AdminSettings() {
           </TabsContent>
           <TabsContent value="gemini" className="mt-4">
             <GeminiKeysPanel />
+          </TabsContent>
+          <TabsContent value="prompts" className="mt-4">
+            <ExtractQuestionsPromptPanel />
           </TabsContent>
           <TabsContent value="subjects" className="mt-4">
             <TaxonomySection level="subjects" label="Subject" />
@@ -366,6 +468,9 @@ export default function AdminSettings() {
           </TabsContent>
           <TabsContent value="topics" className="mt-4">
             <TaxonomySection level="topics" label="Topic" parentLevel="chapters" parentLabel="Parent chapter" />
+          </TabsContent>
+          <TabsContent value="concepts" className="mt-4">
+            <ConceptsPanel />
           </TabsContent>
           <TabsContent value="boards" className="mt-4">
             <BoardsSection />
