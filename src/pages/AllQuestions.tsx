@@ -26,9 +26,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-type TfItem = { id?: string; statement: string; correct: "true" | "false" };
+type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
-type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number };
+type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
 
 type QuestionRow = {
   id: string;
@@ -57,6 +57,8 @@ export default function AllQuestions() {
   const [editSystem, setEditSystem] = useState("");
   const [editChapter, setEditChapter] = useState("");
   const [editTopic, setEditTopic] = useState("");
+  const [editMcqItems, setEditMcqItems] = useState<TfItem[]>([]);
+  const [editSbaExplanations, setEditSbaExplanations] = useState<string[]>(["", "", "", "", ""]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
@@ -175,12 +177,27 @@ export default function AllQuestions() {
     setEditSystem(row.system);
     setEditChapter(row.chapter);
     setEditTopic(row.topic);
+    setEditMcqItems(
+      (row.mcq?.trueFalse ?? []).map((t) => ({
+        ...t,
+        explanation: t.explanation ?? "",
+      })),
+    );
+    const expls = ["", "", "", "", ""];
+    (row.sba?.optionExplanations ?? []).forEach((e, i) => {
+      if (i < 5) expls[i] = e ?? "";
+    });
+    setEditSbaExplanations(expls);
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
     setSavingEdit(true);
     try {
+      const payload =
+        editTarget.questionMode === "mcq"
+          ? { ...editTarget.mcq, stem: editStem, trueFalse: editMcqItems }
+          : { ...editTarget.sba, stem: editStem, optionExplanations: editSbaExplanations };
       const resp = await fetch(apiUrl(`/api/questions/${editTarget.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -194,7 +211,8 @@ export default function AllQuestions() {
           status: editTarget.metadata?.status,
           difficulty: editTarget.metadata?.difficulty,
           marks: editTarget.marks,
-          payload: editTarget.questionMode === "mcq" ? editTarget.mcq : editTarget.sba,
+          question_mode: editTarget.questionMode,
+          payload,
         }),
       });
       const data = await resp.json().catch(() => ({}));
@@ -209,8 +227,14 @@ export default function AllQuestions() {
                 system: editSystem.trim(),
                 chapter: editChapter.trim(),
                 topic: editTopic.trim(),
-                mcq: r.mcq ? { ...r.mcq, stem: editStem } : null,
-                sba: r.sba ? { ...r.sba, stem: editStem } : null,
+                mcq:
+                  r.questionMode === "mcq"
+                    ? { ...(r.mcq ?? {}), stem: editStem, trueFalse: editMcqItems }
+                    : null,
+                sba:
+                  r.questionMode === "sba"
+                    ? { ...(r.sba ?? {}), stem: editStem, optionExplanations: editSbaExplanations }
+                    : null,
               }
             : r,
         ),
@@ -449,6 +473,52 @@ export default function AllQuestions() {
                 <Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} />
               </div>
             </div>
+            {editTarget?.questionMode === "mcq" && editMcqItems.length > 0 ? (
+              <div className="space-y-3 border-t pt-3">
+                <Label className="text-sm font-medium">Statement explanations</Label>
+                {editMcqItems.map((item, i) => (
+                  <div key={item.id ?? i} className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Statement {i + 1} ({item.correct === "true" ? "TRUE" : "FALSE"})
+                    </Label>
+                    <Textarea
+                      value={item.explanation ?? ""}
+                      onChange={(e) =>
+                        setEditMcqItems((prev) =>
+                          prev.map((t, j) => (j === i ? { ...t, explanation: e.target.value } : t)),
+                        )
+                      }
+                      rows={2}
+                      className="resize-y text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {editTarget?.questionMode === "sba" ? (
+              <div className="space-y-3 border-t pt-3">
+                <Label className="text-sm font-medium">Option explanations</Label>
+                {editSbaExplanations.map((expl, i) => {
+                  const label = String.fromCharCode(97 + i);
+                  const isCorrect = editTarget.sba?.correctIndex === i;
+                  return (
+                    <div key={i} className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">
+                        Option {label}: {isCorrect ? "Why correct" : "Why wrong"}
+                      </Label>
+                      <Textarea
+                        value={expl}
+                        onChange={(e) =>
+                          setEditSbaExplanations((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
+                        }
+                        rows={2}
+                        className="resize-y text-sm"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>

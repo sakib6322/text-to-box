@@ -68,7 +68,10 @@ type TfItem = {
   statement: string;
   /** correct answer for this True/False sub-question */
   correct: "true" | "false";
+  explanation: string;
 };
+
+const emptySbaExplanations = (): [string, string, string, string, string] => ["", "", "", "", ""];
 
 type QuestionMode = "mcq" | "sba" | null;
 type DraftQuestion = {
@@ -91,7 +94,7 @@ type DraftQuestion = {
     marks: number;
   };
   mcq: { stem: string; trueFalse: TfItem[] } | null;
-  sba: { stem: string; options: string[]; correctIndex: number } | null;
+  sba: { stem: string; options: string[]; correctIndex: number; optionExplanations: string[] } | null;
   sourcePointId: string | null;
   match?: SuggestionMatch | null;
 };
@@ -112,6 +115,53 @@ function matchPath(m: SuggestionMatch): string {
     .map((x) => (x ?? "").trim())
     .filter(Boolean)
     .join(" → ");
+}
+
+type GeneratedExplanationResult = {
+  question_index: number;
+  question_mode: "mcq" | "sba";
+  explanations?: string[];
+  option_explanations?: string[];
+};
+
+function mergeExplanationResults(drafts: DraftQuestion[], results: GeneratedExplanationResult[]): DraftQuestion[] {
+  const byIdx = new Map(results.map((r) => [r.question_index, r]));
+  return drafts.map((draft, i) => {
+    const gen = byIdx.get(i);
+    if (!gen) return draft;
+    if (draft.questionMode === "mcq" && draft.mcq && Array.isArray(gen.explanations)) {
+      return {
+        ...draft,
+        mcq: {
+          ...draft.mcq,
+          trueFalse: draft.mcq.trueFalse.map((row, si) => ({
+            ...row,
+            explanation: gen.explanations?.[si]?.trim() || row.explanation || "",
+          })),
+        },
+      };
+    }
+    if (draft.questionMode === "sba" && draft.sba && Array.isArray(gen.option_explanations)) {
+      const expls = emptySbaExplanations();
+      for (let j = 0; j < 5; j++) expls[j] = gen.option_explanations[j]?.trim() ?? "";
+      return { ...draft, sba: { ...draft.sba, optionExplanations: [...expls] } };
+    }
+    return draft;
+  });
+}
+
+async function fetchGeneratedExplanations(drafts: DraftQuestion[], concept?: string): Promise<DraftQuestion[]> {
+  const resp = await fetch(apiUrl("/api/generate-question-explanations"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ questions: drafts, concept: concept?.trim() || undefined }),
+  });
+  const j = (await resp.json().catch(() => ({}))) as {
+    results?: GeneratedExplanationResult[];
+    error?: string;
+  };
+  if (!resp.ok) throw new Error(j.error ?? "Explanation generation failed");
+  return mergeExplanationResults(drafts, j.results ?? []);
 }
 
 async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
@@ -270,9 +320,11 @@ export default function CreateQuestionAI() {
 
   const [sbaStem, setSbaStem] = useState("");
   const [sbaOptions, setSbaOptions] = useState(["", "", "", "", ""]);
+  const [sbaOptionExplanations, setSbaOptionExplanations] = useState<[string, string, string, string, string]>(emptySbaExplanations());
   const [sbaCorrect, setSbaCorrect] = useState<0 | 1 | 2 | 3 | 4>(0);
 
   const [saving, setSaving] = useState(false);
+  const [generatingExplanations, setGeneratingExplanations] = useState(false);
   const [queuedQuestions, setQueuedQuestions] = useState<DraftQuestion[]>([]);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [extractedQuestionSummary, setExtractedQuestionSummary] = useState<string | null>(null);
@@ -375,12 +427,19 @@ export default function CreateQuestionAI() {
     }
     if (q.questionMode === "mcq" && q.mcq) {
       setMcqStem(q.mcq.stem);
-      setTfItems(q.mcq.trueFalse.length ? q.mcq.trueFalse : [{ id: mkId(), statement: "", correct: "true" }]);
+      setTfItems(
+        q.mcq.trueFalse.length
+          ? q.mcq.trueFalse.map((r) => ({ ...r, explanation: r.explanation ?? "" }))
+          : [{ id: mkId(), statement: "", correct: "true", explanation: "" }],
+      );
     } else if (q.questionMode === "sba" && q.sba) {
       setSbaStem(q.sba.stem);
       const opts: [string, string, string, string, string] = ["", "", "", "", ""];
       for (let i = 0; i < 5; i++) opts[i] = q.sba.options[i] ?? "";
       setSbaOptions(opts);
+      const expls = emptySbaExplanations();
+      for (let i = 0; i < 5; i++) expls[i] = q.sba.optionExplanations?.[i] ?? "";
+      setSbaOptionExplanations(expls);
       setSbaCorrect(q.sba.correctIndex as 0 | 1 | 2 | 3 | 4);
     }
   };
@@ -405,6 +464,7 @@ export default function CreateQuestionAI() {
             id: mkId(),
             statement: row.text,
             correct: row.correct,
+            explanation: "",
           })),
         },
         sba: null,
@@ -432,6 +492,7 @@ export default function CreateQuestionAI() {
         stem: q.stem,
         options: opts,
         correctIndex: (q.sba_correct_index ?? 0) as 0 | 1 | 2 | 3 | 4,
+        optionExplanations: [...emptySbaExplanations()],
       },
       sourcePointId: null,
     };
@@ -458,6 +519,15 @@ export default function CreateQuestionAI() {
       });
     } catch {
       /* non-blocking — questions still load without match scores */
+    }
+
+    setGeneratingExplanations(true);
+    try {
+      drafts = await fetchGeneratedExplanations(drafts, conceptOverride ?? conceptTitle);
+    } catch (e) {
+      toast.warning(e instanceof Error ? e.message : "Could not auto-generate explanations");
+    } finally {
+      setGeneratingExplanations(false);
     }
 
     setQueuedQuestions(drafts);
@@ -618,7 +688,7 @@ export default function CreateQuestionAI() {
   };
 
   const addTfQuestion = () => {
-    setTfItems((rows) => [...rows, { id: mkId(), statement: "", correct: "true" }]);
+    setTfItems((rows) => [...rows, { id: mkId(), statement: "", correct: "true", explanation: "" }]);
   };
 
   const setTf = (i: number, patch: Partial<TfItem>) => {
@@ -627,6 +697,10 @@ export default function CreateQuestionAI() {
 
   const setSbaOption = (i: number, v: string) => {
     setSbaOptions((opts) => opts.map((o, j) => (j === i ? v : o)) as [string, string, string, string, string]);
+  };
+
+  const setSbaOptionExplanation = (i: number, v: string) => {
+    setSbaOptionExplanations((opts) => opts.map((o, j) => (j === i ? v : o)) as [string, string, string, string, string]);
   };
 
   const resetForm = () => {
@@ -642,6 +716,7 @@ export default function CreateQuestionAI() {
     setTfItems([]);
     setSbaStem("");
     setSbaOptions(["", "", "", "", ""]);
+    setSbaOptionExplanations(emptySbaExplanations());
     setSbaCorrect(0);
     setQuestionMode(null);
     setResult(null);
@@ -652,6 +727,26 @@ export default function CreateQuestionAI() {
     setSourceText("");
     setConceptTitle("");
     setTaxonomy(emptyTaxonomySelection());
+  };
+
+  const generateExplanationsAi = async () => {
+    if (!questionMode) return toast.error("Select MCQ or SBA first");
+    const stem = questionMode === "mcq" ? mcqStem.trim() : sbaStem.trim();
+    if (!stem) return toast.error("Enter question stem first");
+    setGeneratingExplanations(true);
+    try {
+      if (queuedQuestions.length > 0) updateActiveDraftFromForm();
+      const targets = queuedQuestions.length > 0 ? questionsForSave() : [buildCurrentDraftFromForm()];
+      const updated = await fetchGeneratedExplanations(targets, conceptTitle);
+      setQueuedQuestions(updated.length > 1 || queuedQuestions.length > 0 ? updated : queuedQuestions);
+      const active = updated[activeQuestionIndex] ?? updated[0];
+      if (active) loadQuestionIntoForm(active);
+      toast.success("Explanations generated by AI");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Explanation generation failed");
+    } finally {
+      setGeneratingExplanations(false);
+    }
   };
 
   const saveQuestion = async () => {
@@ -707,7 +802,10 @@ export default function CreateQuestionAI() {
         marks: Number(marks) || 0,
       },
       mcq: mode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
-      sba: mode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
+      sba:
+        mode === "sba"
+          ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect, optionExplanations: [...sbaOptionExplanations] }
+          : null,
       sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
     };
     setQuestionMode(mode);
@@ -741,7 +839,15 @@ export default function CreateQuestionAI() {
       concept: conceptTitle,
       metadata: buildMetadata(),
       mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
-      sba: questionMode === "sba" ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect } : null,
+      sba:
+        questionMode === "sba"
+          ? {
+              stem: sbaStem,
+              options: sbaOptions,
+              correctIndex: sbaCorrect,
+              optionExplanations: [...sbaOptionExplanations],
+            }
+          : null,
       sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
     };
   };
@@ -860,7 +966,7 @@ export default function CreateQuestionAI() {
               type="button"
               onClick={() => {
                 setQuestionMode("mcq");
-                setTfItems((rows) => (rows.length > 0 ? rows : [{ id: mkId(), statement: "", correct: "true" }]));
+                setTfItems((rows) => (rows.length > 0 ? rows : [{ id: mkId(), statement: "", correct: "true", explanation: "" }]));
               }}
               className={cn(
                 "w-full rounded-lg border p-3 text-left transition",
@@ -1016,6 +1122,24 @@ export default function CreateQuestionAI() {
           </div>
         ) : null}
 
+        {questionMode ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={generateExplanationsAi}
+              disabled={generatingExplanations || extracting}
+            >
+              {generatingExplanations ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              Generate explanations (AI)
+            </Button>
+            <span className="text-xs text-muted-foreground">
+              Auto-fills why correct / why wrong for each statement or option
+            </span>
+          </div>
+        ) : null}
+
         {questionMode === "mcq" ? (
           <div className="mt-8 space-y-4 border-t pt-6">
             <div className="text-sm font-medium text-primary">MCQ</div>
@@ -1054,6 +1178,16 @@ export default function CreateQuestionAI() {
                       </Select>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label>{row.correct === "true" ? "Why this is TRUE" : "Why this is FALSE"}</Label>
+                    <Textarea
+                      value={row.explanation ?? ""}
+                      onChange={(e) => setTf(i, { explanation: e.target.value })}
+                      rows={2}
+                      className="resize-y"
+                      placeholder="Explain why this statement is true or false…"
+                    />
+                  </div>
                 </Card>
               ))}
             </div>
@@ -1084,6 +1218,27 @@ export default function CreateQuestionAI() {
                   />
                 </div>
               ))}
+            </div>
+            <div className="space-y-3">
+              <Label>Explanations (per option)</Label>
+              {sbaOptions.map((opt, i) => {
+                const label = String.fromCharCode(97 + i);
+                const isCorrect = sbaCorrect === i;
+                return (
+                  <div key={`expl-${i}`} className="space-y-1.5 rounded-md border p-3">
+                    <Label className="text-xs">
+                      Option {label}: {isCorrect ? "Why this is correct" : "Why this is wrong"}
+                    </Label>
+                    <Textarea
+                      value={sbaOptionExplanations[i] ?? ""}
+                      onChange={(e) => setSbaOptionExplanation(i, e.target.value)}
+                      rows={2}
+                      className="resize-y"
+                      placeholder={isCorrect ? "Explain why this is the best answer…" : "Explain why this option is incorrect…"}
+                    />
+                  </div>
+                );
+              })}
             </div>
             <div className="space-y-2">
               <Label>Correct option *</Label>

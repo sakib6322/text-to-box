@@ -318,6 +318,44 @@ function toPgVector(values) {
   return `[${normalized.join(",")}]`;
 }
 
+function buildExplanationEmbedText(questionMode, mcq, sba) {
+  if (questionMode === "mcq" && mcq && Array.isArray(mcq.trueFalse)) {
+    const parts = mcq.trueFalse
+      .map((row, i) => {
+        const expl = typeof row?.explanation === "string" ? row.explanation.trim() : "";
+        if (!expl) return null;
+        const stmt = typeof row?.statement === "string" ? row.statement.trim() : "";
+        const ans = row?.correct === "false" ? "FALSE" : "TRUE";
+        return `Statement ${i + 1} (${ans}): ${stmt}\nExplanation: ${expl}`;
+      })
+      .filter(Boolean);
+    return parts.join("\n\n");
+  }
+  if (questionMode === "sba" && sba && Array.isArray(sba.options)) {
+    const correctIdx = Number(sba.correctIndex ?? 0);
+    const expls = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
+    const parts = sba.options
+      .map((opt, i) => {
+        const expl = typeof expls[i] === "string" ? expls[i].trim() : "";
+        if (!expl) return null;
+        const label = String.fromCharCode(97 + i);
+        const role = i === correctIdx ? "CORRECT" : "WRONG";
+        const text = typeof opt === "string" ? opt.trim() : "";
+        return `Option ${label} (${role}): ${text}\nExplanation: ${expl}`;
+      })
+      .filter(Boolean);
+    return parts.join("\n\n");
+  }
+  return "";
+}
+
+async function embedExplanationRotating(db, questionMode, mcq, sba) {
+  const text = buildExplanationEmbedText(questionMode, mcq, sba);
+  if (!text.trim()) return null;
+  const emb = await embedTextRotating(db, text);
+  return toPgVector(emb);
+}
+
 async function scoreMatchesWithGemini(apiKey, sourceText, candidates) {
   if (!Array.isArray(candidates) || candidates.length === 0) return {};
   const modelName = process.env.MATCH_AI_MODEL || process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
@@ -621,6 +659,185 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
     });
 
     return res.json({ questions });
+  } catch (e) {
+    console.error(e);
+    if (isLeakedOrBlockedKeyError(e)) {
+      return res.status(403).json({
+        error: "All Gemini API keys are blocked or invalid. Add new keys in Settings → Gemini API.",
+      });
+    }
+    if (isQuotaError(e)) {
+      return res.status(429).json({
+        error: "AI quota exceeded on all configured keys. Add more keys in Settings → Gemini API or wait and retry.",
+      });
+    }
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/generate-question-explanations", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await hasGeminiKeys(db))) {
+      return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
+    }
+
+    const rawList = Array.isArray(req.body?.questions) ? req.body.questions : req.body?.question ? [req.body.question] : [];
+    const questions = rawList
+      .map((q, idx) => {
+        const mode = q?.questionMode === "mcq" || q?.questionMode === "sba" ? q.questionMode : null;
+        if (!mode) return null;
+        if (mode === "mcq") {
+          const stem = typeof q?.mcq?.stem === "string" ? q.mcq.stem.trim() : "";
+          const statements = Array.isArray(q?.mcq?.trueFalse)
+            ? q.mcq.trueFalse
+                .map((row) => ({
+                  text: typeof row?.statement === "string" ? row.statement.trim() : "",
+                  correct: normalizeTfAnswer(row?.correct),
+                }))
+                .filter((row) => row.text)
+            : [];
+          if (!stem || statements.length === 0) return null;
+          return { question_index: idx, question_mode: "mcq", stem, statements };
+        }
+        const stem = typeof q?.sba?.stem === "string" ? q.sba.stem.trim() : "";
+        const options = Array.isArray(q?.sba?.options)
+          ? q.sba.options.map((o) => (typeof o === "string" ? o.trim() : "")).slice(0, 5)
+          : [];
+        if (!stem || options.filter(Boolean).length === 0) return null;
+        let correctIndex = Number(q?.sba?.correctIndex ?? q?.sba?.correct_index ?? 0);
+        if (!Number.isInteger(correctIndex) || correctIndex < 0) correctIndex = 0;
+        if (correctIndex > 4) correctIndex = 4;
+        return { question_index: idx, question_mode: "sba", stem, options, correct_index: correctIndex };
+      })
+      .filter(Boolean);
+
+    if (questions.length === 0) {
+      return res.status(400).json({ error: "At least one valid MCQ or SBA question with stem and options is required" });
+    }
+
+    const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
+    const concept = typeof req.body?.concept === "string" ? req.body.concept.trim() : "";
+
+    const responseSchema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        results: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              question_index: { type: SchemaType.NUMBER },
+              mcq_explanations: {
+                type: SchemaType.ARRAY,
+                items: {
+                  type: SchemaType.OBJECT,
+                  properties: {
+                    statement_index: { type: SchemaType.NUMBER },
+                    explanation: { type: SchemaType.STRING },
+                  },
+                  required: ["statement_index", "explanation"],
+                },
+              },
+              option_explanations: {
+                type: SchemaType.ARRAY,
+                items: { type: SchemaType.STRING },
+              },
+            },
+            required: ["question_index"],
+          },
+        },
+      },
+      required: ["results"],
+    };
+
+    const questionsBlock = questions
+      .map((q) => {
+        if (q.question_mode === "mcq") {
+          const lines = q.statements
+            .map((s, i) => `  ${i}. [${s.correct.toUpperCase()}] ${s.text}`)
+            .join("\n");
+          return `Question #${q.question_index} (MCQ T/F)\nStem: ${q.stem}\nStatements:\n${lines}`;
+        }
+        const opts = q.options
+          .map((o, i) => {
+            const label = String.fromCharCode(97 + i);
+            const mark = i === q.correct_index ? " ← CORRECT" : "";
+            return `  ${label}) ${o || "—"}${mark}`;
+          })
+          .join("\n");
+        return `Question #${q.question_index} (SBA)\nStem: ${q.stem}\nOptions:\n${opts}`;
+      })
+      .join("\n\n");
+
+    const prompt = `You are a medical exam educator. For each question below, write concise explanations in the same language as the question (English or Bangla/Banglish as appropriate).
+
+MCQ (True/False statements): For EVERY statement, explain WHY it is TRUE or FALSE according to the marked answer. One explanation per statement_index.
+
+SBA: Provide exactly 5 option_explanations (index 0=a … 4=e). For the CORRECT option explain why it is the best answer. For each WRONG option explain why it is incorrect.
+
+Be medically accurate, exam-oriented, and specific. Do not repeat the option text verbatim without reasoning.${concept ? `\n\nConcept context: ${concept}` : ""}
+
+QUESTIONS:
+${questionsBlock}`;
+
+    const generationConfig = {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema,
+    };
+
+    const parsed = await withGeminiKeyRotation(db, async (apiKey) => {
+      const genAI = new GoogleGenerativeAI(apiKey);
+      const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig,
+      });
+      const text = result?.response?.text?.() ?? "";
+      return parseGeminiJson(text);
+    });
+
+    const results = Array.isArray(parsed?.results) ? parsed.results : [];
+    const byIndex = new Map();
+    for (const row of results) {
+      const qi = Number(row?.question_index);
+      if (!Number.isInteger(qi) || qi < 0) continue;
+      const entry = { question_index: qi };
+      if (Array.isArray(row?.mcq_explanations)) {
+        entry.mcq_explanations = row.mcq_explanations
+          .map((x) => ({
+            statement_index: Number(x?.statement_index),
+            explanation: sanitizeModelText(x?.explanation),
+          }))
+          .filter((x) => Number.isInteger(x.statement_index) && x.statement_index >= 0 && x.explanation);
+      }
+      if (Array.isArray(row?.option_explanations)) {
+        entry.option_explanations = row.option_explanations
+          .slice(0, 5)
+          .map((x) => sanitizeModelText(x));
+        while (entry.option_explanations.length < 5) entry.option_explanations.push("");
+      }
+      byIndex.set(qi, entry);
+    }
+
+    return res.json({
+      results: questions.map((q) => {
+        const gen = byIndex.get(q.question_index);
+        if (q.question_mode === "mcq") {
+          const explanations = (q.statements ?? []).map(() => "");
+          for (const item of gen?.mcq_explanations ?? []) {
+            if (item.statement_index < explanations.length) {
+              explanations[item.statement_index] = item.explanation;
+            }
+          }
+          return { question_index: q.question_index, question_mode: "mcq", explanations };
+        }
+        const option_explanations = gen?.option_explanations ?? ["", "", "", "", ""];
+        return { question_index: q.question_index, question_mode: "sba", option_explanations };
+      }),
+    });
   } catch (e) {
     console.error(e);
     if (isLeakedOrBlockedKeyError(e)) {
@@ -1502,7 +1719,10 @@ app.post("/api/save-question", async (req, res) => {
           .filter((q) => q && (q.questionMode === "mcq" || q.questionMode === "sba"))
           .map(async (q) => {
             const stem = q.questionMode === "mcq" ? q?.mcq?.stem : q?.sba?.stem;
+            const mcq = q.mcq ?? null;
+            const sba = q.sba ?? null;
             const emb = await embedTextRotating(db, stem ?? "");
+            const explanationEmbedding = await embedExplanationRotating(db, q.questionMode, mcq, sba);
             return {
               subject: q.subject ?? null,
               system: q.system ?? null,
@@ -1512,10 +1732,11 @@ app.post("/api/save-question", async (req, res) => {
               concept: q.concept ?? null,
               questionMode: q.questionMode,
               metadata: q.metadata ?? {},
-              mcq: q.mcq ?? null,
-              sba: q.sba ?? null,
+              mcq,
+              sba,
               sourcePointId: q.sourcePointId ?? null,
               embedding: toPgVector(emb),
+              explanationEmbedding,
             };
           }),
       )
@@ -1547,6 +1768,7 @@ app.post("/api/save-question", async (req, res) => {
       stem: q.questionMode === "mcq" ? q.mcq?.stem ?? "" : q.sba?.stem ?? "",
       payload: q.questionMode === "mcq" ? q.mcq : q.sba,
       embedding: q.embedding,
+      explanation_embedding: q.explanationEmbedding,
       status: q.metadata?.status ?? "published",
       difficulty: q.metadata?.difficulty ?? "medium",
       marks: Number(q.metadata?.marks ?? 1),
@@ -1559,7 +1781,14 @@ app.post("/api/save-question", async (req, res) => {
     const { data: inserted, error: qErr } = await db.from("questions").insert(questionsToInsert).select("id");
     if (qErr) return res.status(500).json({ error: qErr.message });
 
-    return res.json({ ok: true, paper_id: paper.id, count: inserted?.length ?? 0, ids: (inserted ?? []).map((q) => q.id) });
+    const explanationEmbeddingsSaved = normalized.filter((q) => q.explanationEmbedding != null).length;
+    return res.json({
+      ok: true,
+      paper_id: paper.id,
+      count: inserted?.length ?? 0,
+      ids: (inserted ?? []).map((q) => q.id),
+      explanation_embeddings_saved: explanationEmbeddingsSaved,
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -1654,12 +1883,22 @@ app.patch("/api/questions/:id", async (req, res) => {
     if (body.marks != null) patch.marks = Number(body.marks) || 1;
 
     const stem = typeof body.stem === "string" ? body.stem.trim() : null;
+    const payload = body.payload && typeof body.payload === "object" ? body.payload : null;
+    const questionMode = typeof body.question_mode === "string" ? body.question_mode : null;
+
     if (stem) {
       patch.stem = stem;
       const emb = await embedTextRotating(db, stem);
       patch.embedding = toPgVector(emb);
-      if (body.payload && typeof body.payload === "object") {
-        patch.payload = { ...body.payload, stem };
+    }
+
+    if (payload) {
+      patch.payload = stem ? { ...payload, stem } : payload;
+      const mode = questionMode === "mcq" || questionMode === "sba" ? questionMode : null;
+      if (mode) {
+        const mcq = mode === "mcq" ? patch.payload : null;
+        const sba = mode === "sba" ? patch.payload : null;
+        patch.explanation_embedding = await embedExplanationRotating(db, mode, mcq, sba);
       }
     }
 

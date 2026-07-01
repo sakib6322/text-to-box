@@ -1,8 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 
-type TfItem = { id?: string; statement: string; correct: "true" | "false" };
+type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
-type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number };
+type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
 
 type Props = {
   questionMode: "mcq" | "sba";
@@ -33,6 +33,9 @@ export function QuestionPaperCard({
 }: Props) {
   const taxonomy = [subject, system, chapter, topic].filter(Boolean).join(" · ");
   const stem = questionMode === "mcq" ? mcq?.stem : sba?.stem;
+
+  const mcqHasExplanations = (mcq?.trueFalse ?? []).some((item) => (item.explanation ?? "").trim());
+  const sbaHasExplanations = (sba?.optionExplanations ?? []).some((e) => (e ?? "").trim());
 
   return (
     <article className="question-paper bg-white text-neutral-900 border border-neutral-300 shadow-sm rounded-sm p-5 sm:p-6 print:shadow-none print:border-neutral-400">
@@ -92,6 +95,43 @@ export function QuestionPaperCard({
             );
           })}
         </ol>
+      ) : null}
+
+      {questionMode === "mcq" && mcqHasExplanations ? (
+        <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
+          {(mcq?.trueFalse ?? []).map((item, i) => {
+            const expl = (item.explanation ?? "").trim();
+            if (!expl) return null;
+            return (
+              <div key={item.id ?? i} className="text-[10px] leading-snug text-neutral-700">
+                <span className="font-medium text-neutral-800">
+                  {i + 1}. ({item.correct === "true" ? "T" : "F"}):
+                </span>{" "}
+                {expl}
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {questionMode === "sba" && sbaHasExplanations ? (
+        <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
+          {(sba?.options ?? []).map((opt, i) => {
+            const expl = (sba?.optionExplanations?.[i] ?? "").trim();
+            if (!expl) return null;
+            const isCorrect = sba?.correctIndex === i;
+            return (
+              <div key={i} className="text-[10px] leading-snug text-neutral-700">
+                <span className="font-medium text-neutral-800">
+                  {optionLabel(i)} ({isCorrect ? "correct" : "wrong"}):
+                </span>{" "}
+                {expl}
+              </div>
+            );
+          })}
+        </div>
       ) : null}
     </article>
   );
