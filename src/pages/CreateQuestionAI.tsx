@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Loader2, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -244,7 +244,10 @@ export default function CreateQuestionAI() {
   const [enableBijoyPaste, setEnableBijoyPaste] = useState(false);
   const [enableHelper, setEnableHelper] = useState(true);
 
+  const fileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [extracting, setExtracting] = useState(false);
   const [result, setResult] = useState<ExtractResult | null>(null);
@@ -467,6 +470,34 @@ export default function CreateQuestionAI() {
     if (mcqCount) parts.push(`${mcqCount} MCQ`);
     if (sbaCount) parts.push(`${sbaCount} SBA`);
     setExtractedQuestionSummary(parts.join(", "));
+  };
+
+  const onPickImage = (f: File) => {
+    if (!f.type.startsWith("image/")) {
+      toast.error("Please choose an image file");
+      return;
+    }
+    setImageFile(f);
+    const reader = new FileReader();
+    reader.onload = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(f);
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (f) onPickImage(f);
   };
 
   const handleExtract = async () => {
@@ -757,25 +788,52 @@ export default function CreateQuestionAI() {
           <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-6">
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={enableBijoyPaste} onCheckedChange={(v) => setEnableBijoyPaste(Boolean(v))} />
-              Enable Bijoy Paste
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <Checkbox checked={enableHelper} onCheckedChange={(v) => setEnableHelper(Boolean(v))} />
-              Enable Helper
-            </label>
+        <div className="mt-4 flex flex-wrap items-center gap-6">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={enableBijoyPaste} onCheckedChange={(v) => setEnableBijoyPaste(Boolean(v))} />
+            Enable Bijoy Paste
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox checked={enableHelper} onCheckedChange={(v) => setEnableHelper(Boolean(v))} />
+            Enable Helper
+          </label>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div className="space-y-2">
+            <Label>Book page image</Label>
+            <div
+              role="button"
+              tabIndex={0}
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+              onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
+              className={[
+                "rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors max-w-md",
+                dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
+              ].join(" ")}
+            >
+              <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">ছবি ড্র্যাগ করুন বা ক্লিক করুন</p>
+              <p className="text-xs text-muted-foreground mt-1">JPG, PNG…</p>
+              <Input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => e.target.files?.[0] && onPickImage(e.target.files[0])}
+              />
+            </div>
+            {imagePreview ? (
+              <div className="max-w-md rounded-md overflow-hidden border">
+                <img src={imagePreview} alt="Upload preview" className="w-full" />
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              type="file"
-              accept="image/*"
-              className="max-w-[220px] cursor-pointer"
-              onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-            />
             <Button onClick={handleExtract} disabled={(!imageFile && !sourceText.trim()) || extracting} type="button">
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {extracting ? "Extracting…" : "Extract concept"}
