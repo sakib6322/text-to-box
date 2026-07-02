@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptDetailPreview } from "@/components/ConceptDetailPreview";
 import type { ConceptDetail } from "@/lib/conceptDetail";
-import { Loader2 } from "lucide-react";
+import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
+import { Download, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 type Props = {
   open: boolean;
@@ -23,6 +25,7 @@ type Props = {
   onDetailChange?: (detail: ConceptDetail) => void;
   onSave?: (detail: ConceptDetail) => Promise<void>;
   saving?: boolean;
+  showDownloadPdf?: boolean;
 };
 
 export function ConceptDetailsDialog({
@@ -36,8 +39,10 @@ export function ConceptDetailsDialog({
   onDetailChange,
   onSave,
   saving = false,
+  showDownloadPdf = true,
 }: Props) {
   const [draft, setDraft] = useState<ConceptDetail>(detail);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     if (open) setDraft(detail);
@@ -53,13 +58,43 @@ export function ConceptDetailsDialog({
     await onSave(draft);
   };
 
+  const handleDownloadPdf = () => {
+    const payload = editable ? draft : detail;
+    setDownloadingPdf(true);
+    try {
+      downloadConceptDetailPdf(conceptName, payload, keyPoints);
+      toast.success("PDF downloaded");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "PDF download failed");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={editable ? "max-w-6xl max-h-[90vh] overflow-hidden flex flex-col" : "max-w-3xl max-h-[85vh] overflow-y-auto"}
       >
-        <DialogHeader>
-          <DialogTitle>Concept: {conceptName || "Untitled"}</DialogTitle>
+        <DialogHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
+          <DialogTitle className="pr-2">Concept: {conceptName || "Untitled"}</DialogTitle>
+          {showDownloadPdf && !loading ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0"
+              onClick={handleDownloadPdf}
+              disabled={downloadingPdf}
+            >
+              {downloadingPdf ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Download className="mr-2 h-4 w-4" />
+              )}
+              Download PDF
+            </Button>
+          ) : null}
         </DialogHeader>
 
         {loading ? (
