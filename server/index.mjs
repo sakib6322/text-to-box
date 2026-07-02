@@ -349,6 +349,62 @@ function buildExplanationEmbedText(questionMode, mcq, sba) {
   return "";
 }
 
+function normalizeDetailTable(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const title = typeof raw.title === "string" ? sanitizeModelText(raw.title) : "";
+  const headers = Array.isArray(raw.headers)
+    ? raw.headers.filter((h) => typeof h === "string").map((h) => sanitizeModelText(h)).filter(Boolean)
+    : [];
+  const rows = Array.isArray(raw.rows)
+    ? raw.rows
+        .map((row) => {
+          const cells = Array.isArray(row?.cells)
+            ? row.cells.filter((c) => typeof c === "string").map((c) => sanitizeModelText(c)).filter(Boolean)
+            : Array.isArray(row)
+              ? row.filter((c) => typeof c === "string").map((c) => sanitizeModelText(c)).filter(Boolean)
+              : [];
+          return cells.length ? { cells } : null;
+        })
+        .filter(Boolean)
+    : [];
+  if (!title && headers.length === 0 && rows.length === 0) return null;
+  return { title: title || null, headers, rows };
+}
+
+function buildConceptDetailEmbedText(summary, paragraphs, table) {
+  const parts = [];
+  if (typeof summary === "string" && summary.trim()) parts.push(summary.trim());
+  if (Array.isArray(paragraphs)) {
+    for (const p of paragraphs) {
+      if (typeof p === "string" && p.trim()) parts.push(p.trim());
+    }
+  }
+  if (table?.title) parts.push(table.title);
+  if (Array.isArray(table?.headers) && table.headers.length) parts.push(table.headers.join(" | "));
+  for (const row of table?.rows ?? []) {
+    if (Array.isArray(row?.cells) && row.cells.length) parts.push(row.cells.join(" | "));
+  }
+  return parts.join("\n\n");
+}
+
+async function fetchBoardNamesByConceptIds(db, conceptIds) {
+  if (!conceptIds.length) return new Map();
+  const { data } = await db
+    .from("concept_boards")
+    .select("concept_id, boards(id, name)")
+    .in("concept_id", conceptIds);
+  const map = new Map();
+  for (const row of data ?? []) {
+    const cid = row.concept_id;
+    const name = row?.boards?.name;
+    if (!cid || typeof name !== "string" || !name.trim()) continue;
+    const list = map.get(cid) ?? [];
+    if (!list.includes(name)) list.push(name);
+    map.set(cid, list);
+  }
+  return map;
+}
+
 async function embedExplanationRotating(db, questionMode, mcq, sba) {
   const text = buildExplanationEmbedText(questionMode, mcq, sba);
   if (!text.trim()) return null;
@@ -448,8 +504,35 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
           description: "List of exam-friendly, high-yield points or stems extracted from the text.",
           items: { type: SchemaType.STRING },
         },
+        detail_summary: {
+          type: SchemaType.STRING,
+          description: "One bold-style definition sentence summarizing the concept (same-to-same from source).",
+        },
+        detail_paragraphs: {
+          type: SchemaType.ARRAY,
+          description: "Teaching paragraphs or bullet-style detail blocks from the source, kept close to original wording.",
+          items: { type: SchemaType.STRING },
+        },
+        detail_table: {
+          type: SchemaType.OBJECT,
+          description: "Structured table if the source contains one (e.g. Mediator | Source | Action).",
+          properties: {
+            title: { type: SchemaType.STRING },
+            headers: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+            rows: {
+              type: SchemaType.ARRAY,
+              items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  cells: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                },
+                required: ["cells"],
+              },
+            },
+          },
+        },
       },
-      required: ["concept_name", "verbatim_text", "high_yield_points"],
+      required: ["concept_name", "verbatim_text", "high_yield_points", "detail_summary", "detail_paragraphs"],
     };
 
     const generationConfig = {
@@ -461,6 +544,9 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     const prompt =
       "You are an expert Medical Professor. Analyze the uploaded medical textbook image and/or given source text.\n" +
       "First extract verbatim_text as close to the original wording as possible (plain text, no HTML).\n" +
+      "Extract detail_summary as the main one-line definition (same-to-same wording when possible).\n" +
+      "Extract detail_paragraphs as the teaching bullet paragraphs from the source (same-to-same, not rewritten as key points).\n" +
+      "If the source has a comparison/classification table, populate detail_table with title, headers, and rows (cells per column).\n" +
       "For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.\n" +
       "Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.\n" +
       "Return the output STRICTLY matching the JSON schema. Do not include any extra text.";
@@ -468,7 +554,14 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
     if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
 
-    const { concept_name, verbatim_text, high_yield_points } = await withGeminiKeyRotation(db, async (apiKey) => {
+    const {
+      concept_name,
+      verbatim_text,
+      high_yield_points,
+      detail_summary,
+      detail_paragraphs,
+      detail_table,
+    } = await withGeminiKeyRotation(db, async (apiKey) => {
       const genAI = new GoogleGenerativeAI(apiKey);
       const result = await generateWithFallback(genAI, modelName, fallbackModelName, {
         contents: [{ role: "user", parts }],
@@ -487,10 +580,26 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
               .map((x) => sanitizeModelText(x))
               .filter(Boolean)
           : [],
+        detail_summary:
+          typeof parsed?.detail_summary === "string" ? sanitizeModelText(parsed.detail_summary) : "",
+        detail_paragraphs: Array.isArray(parsed?.detail_paragraphs)
+          ? parsed.detail_paragraphs
+              .filter((x) => typeof x === "string")
+              .map((x) => sanitizeModelText(x))
+              .filter(Boolean)
+          : [],
+        detail_table: normalizeDetailTable(parsed?.detail_table),
       };
     });
 
-    return res.json({ concept_name, verbatim_text, high_yield_points });
+    return res.json({
+      concept_name,
+      verbatim_text,
+      high_yield_points,
+      detail_summary,
+      detail_paragraphs,
+      detail_table,
+    });
   } catch (e) {
     console.error(e);
     if (isLeakedOrBlockedKeyError(e)) {
@@ -1106,12 +1215,51 @@ app.get("/api/concepts", async (req, res) => {
   }
 });
 
+app.get("/api/concepts/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+
+    const { data: concept, error } = await db
+      .from("concepts")
+      .select(
+        "id, title, subject, system, chapter, topic, topic_id, detail_summary, detail_paragraphs, detail_table, raw_extraction, created_at",
+      )
+      .eq("id", id)
+      .maybeSingle();
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    if (!concept) return res.status(404).json({ error: "Concept not found" });
+
+    const { data: keyPoints, error: kpErr } = await db
+      .from("key_points")
+      .select("id, content, position")
+      .eq("concept_id", id)
+      .order("position", { ascending: true });
+    if (kpErr) return res.status(500).json({ error: formatSupabaseError(kpErr) });
+
+    return res.json({ concept, key_points: keyPoints ?? [] });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.patch("/api/concepts/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
+
+    const { data: existing, error: loadErr } = await db
+      .from("concepts")
+      .select("id, title, detail_summary, detail_paragraphs, detail_table, raw_extraction")
+      .eq("id", id)
+      .maybeSingle();
+    if (loadErr) return res.status(500).json({ error: formatSupabaseError(loadErr) });
+    if (!existing) return res.status(404).json({ error: "Concept not found" });
 
     const patch = { updated_at: new Date().toISOString() };
     if (typeof req.body?.title === "string") {
@@ -1125,17 +1273,55 @@ app.patch("/api/concepts/:id", async (req, res) => {
     if (typeof req.body?.topic === "string") patch.topic = req.body.topic.trim() || null;
     if (typeof req.body?.topic_id === "string") patch.topic_id = req.body.topic_id.trim() || null;
 
+    let detailUpdated = false;
+    if (typeof req.body?.detail_summary === "string") {
+      patch.detail_summary = sanitizeModelText(req.body.detail_summary) || null;
+      detailUpdated = true;
+    }
+    if (Array.isArray(req.body?.detail_paragraphs)) {
+      patch.detail_paragraphs = req.body.detail_paragraphs
+        .filter((p) => typeof p === "string")
+        .map((p) => sanitizeModelText(p))
+        .filter(Boolean);
+      detailUpdated = true;
+    }
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "detail_table")) {
+      patch.detail_table = normalizeDetailTable(req.body.detail_table);
+      detailUpdated = true;
+    }
+
+    if (detailUpdated) {
+      const summary =
+        patch.detail_summary !== undefined ? patch.detail_summary : existing.detail_summary;
+      const paragraphs =
+        patch.detail_paragraphs !== undefined ? patch.detail_paragraphs : existing.detail_paragraphs ?? [];
+      const table =
+        patch.detail_table !== undefined ? patch.detail_table : existing.detail_table;
+      const embedText = buildConceptDetailEmbedText(summary, paragraphs, table);
+      const detailEmbedding = embedText ? await embedTextRotating(db, embedText) : null;
+      patch.detail_embedding = toPgVector(detailEmbedding);
+      const raw = existing.raw_extraction && typeof existing.raw_extraction === "object" ? existing.raw_extraction : {};
+      patch.raw_extraction = {
+        ...raw,
+        detail_summary: summary,
+        detail_paragraphs: paragraphs,
+        detail_table: table,
+      };
+    }
+
     if (Object.keys(patch).length <= 1) return res.status(400).json({ error: "No fields to update" });
 
     const { data, error } = await db
       .from("concepts")
       .update(patch)
       .eq("id", id)
-      .select("id, title, subject, system, chapter, topic, topic_id, created_at");
+      .select(
+        "id, title, subject, system, chapter, topic, topic_id, detail_summary, detail_paragraphs, detail_table, created_at",
+      );
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });
     const concept = Array.isArray(data) ? data[0] : null;
     if (!concept) return res.status(404).json({ error: "Concept not found" });
-    return res.json({ concept });
+    return res.json({ concept, detail_embedding_saved: detailUpdated });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -1566,11 +1752,11 @@ app.post("/api/match-key-points", async (req, res) => {
       if (error) return res.status(500).json({ error: error.message });
 
       const conceptIds = Array.from(new Set((matches ?? []).map((m) => m.concept_id).filter(Boolean)));
-      const { data: conceptRows } = await db
-        .from("concepts")
-        .select("id, title, subject, system, chapter, topic")
-        .in("id", conceptIds);
-      const conceptById = new Map((conceptRows ?? []).map((c) => [c.id, c]));
+      const [conceptResult, boardsByConcept] = await Promise.all([
+        db.from("concepts").select("id, title, subject, system, chapter, topic").in("id", conceptIds),
+        fetchBoardNamesByConceptIds(db, conceptIds),
+      ]);
+      const conceptById = new Map((conceptResult.data ?? []).map((c) => [c.id, c]));
 
       const enrichedMatches = (matches ?? []).map((m) => {
         const c = conceptById.get(m.concept_id);
@@ -1583,6 +1769,7 @@ app.post("/api/match-key-points", async (req, res) => {
           concept_system: c?.system ?? null,
           concept_chapter: c?.chapter ?? null,
           concept_topic: c?.topic ?? null,
+          board_names: boardsByConcept.get(m.concept_id) ?? [],
           increment_count: m.increment_count,
           vector_similarity: m.similarity,
         };
@@ -1613,6 +1800,7 @@ app.post("/api/match-key-points", async (req, res) => {
             concept_system: m.concept_system,
             concept_chapter: m.concept_chapter,
             concept_topic: m.concept_topic,
+            board_names: m.board_names ?? [],
             increment_count: m.increment_count,
             similarity: finalPct / 100,
             percentage: finalPct,
@@ -1651,6 +1839,18 @@ app.post("/api/save-concept", async (req, res) => {
     if (!conceptName) return res.status(400).json({ error: "concept_name required" });
     if (points.length === 0) return res.status(400).json({ error: "high_yield_points required" });
 
+    const detailSummary =
+      typeof body?.detail_summary === "string" ? sanitizeModelText(body.detail_summary) : null;
+    const detailParagraphs = Array.isArray(body?.detail_paragraphs)
+      ? body.detail_paragraphs
+          .filter((p) => typeof p === "string")
+          .map((p) => sanitizeModelText(p))
+          .filter(Boolean)
+      : [];
+    const detailTable = normalizeDetailTable(body?.detail_table);
+    const detailEmbedText = buildConceptDetailEmbedText(detailSummary, detailParagraphs, detailTable);
+    const detailEmbedding = detailEmbedText ? await embedTextRotating(db, detailEmbedText) : null;
+
     const { data: concept, error: cErr } = await db
       .from("concepts")
       .insert({
@@ -1661,9 +1861,16 @@ app.post("/api/save-concept", async (req, res) => {
         chapter,
         topic,
         topic_id: topicId,
+        detail_summary: detailSummary,
+        detail_paragraphs: detailParagraphs,
+        detail_table: detailTable,
+        detail_embedding: toPgVector(detailEmbedding),
         raw_extraction: {
           concept_name: conceptName,
           high_yield_points: points,
+          detail_summary: detailSummary,
+          detail_paragraphs: detailParagraphs,
+          detail_table: detailTable,
         },
         source_image_path: null,
       })
@@ -1674,7 +1881,7 @@ app.post("/api/save-concept", async (req, res) => {
     const saveBoardIds = Array.isArray(body?.board_ids)
       ? body.board_ids.filter((id) => typeof id === "string" && id.trim())
       : [];
-    await linkConceptBoards(db, concept.id, saveBoardIds);
+    if (saveBoardIds.length) await linkConceptBoards(db, concept.id, saveBoardIds);
 
     const keyPointRows = await Promise.all(
       points.map(async (content, idx) => {
@@ -1699,6 +1906,7 @@ app.post("/api/save-concept", async (req, res) => {
       count: insertedKp?.length ?? 0,
       embeddings_saved: embeddingsSaved,
       embeddings_missing: embeddingsMissing,
+      detail_embedding_saved: detailEmbedding != null,
     });
   } catch (e) {
     console.error(e);
@@ -1807,6 +2015,7 @@ app.get("/api/questions", async (req, res) => {
     const system = String(req.query.system ?? "").trim();
     const chapter = String(req.query.chapter ?? "").trim();
     const topic = String(req.query.topic ?? "").trim();
+    const concept = String(req.query.concept ?? "").trim();
 
     let query = db
       .from("questions")
@@ -1820,6 +2029,7 @@ app.get("/api/questions", async (req, res) => {
     if (system) query = query.eq("system", system);
     if (chapter) query = query.eq("chapter", chapter);
     if (topic) query = query.eq("topic", topic);
+    if (concept) query = query.eq("concept", concept);
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });

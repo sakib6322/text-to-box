@@ -30,6 +30,8 @@ type TfItem = { id?: string; statement: string; correct: "true" | "false"; expla
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
 type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
 
+type ConceptOption = { id: string; title: string | null };
+
 type QuestionRow = {
   id: string;
   createdAt: string;
@@ -73,6 +75,9 @@ export default function AllQuestions() {
   const [filterSystem, setFilterSystem] = useState("all");
   const [filterChapter, setFilterChapter] = useState("all");
   const [filterTopic, setFilterTopic] = useState("all");
+  const [filterConcept, setFilterConcept] = useState("all");
+  const [conceptOptions, setConceptOptions] = useState<ConceptOption[]>([]);
+  const [loadingConcepts, setLoadingConcepts] = useState(false);
 
   useEffect(() => {
     fetchTaxonomy("subjects")
@@ -125,6 +130,40 @@ export default function AllQuestions() {
       .catch(() => setTopics([]));
   }, [filterChapter, chapters]);
 
+  useEffect(() => {
+    setFilterConcept("all");
+  }, [filterSubject, filterSystem, filterChapter, filterTopic]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingConcepts(true);
+      try {
+        const params = new URLSearchParams();
+        if (filterSubject !== "all") params.set("subject", filterSubject);
+        if (filterSystem !== "all") params.set("system", filterSystem);
+        if (filterChapter !== "all") params.set("chapter", filterChapter);
+        if (filterTopic !== "all") params.set("topic", filterTopic);
+        const qs = params.toString();
+        const r = await fetch(apiUrl(`/api/concepts${qs ? `?${qs}` : ""}`));
+        const j = (await r.json().catch(() => ({}))) as { concepts?: ConceptOption[]; error?: string };
+        if (cancelled) return;
+        if (!r.ok) {
+          setConceptOptions([]);
+          return;
+        }
+        setConceptOptions(Array.isArray(j.concepts) ? j.concepts : []);
+      } catch {
+        if (!cancelled) setConceptOptions([]);
+      } finally {
+        if (!cancelled) setLoadingConcepts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [filterSubject, filterSystem, filterChapter, filterTopic]);
+
   const load = async () => {
     setLoading(true);
     try {
@@ -137,6 +176,7 @@ export default function AllQuestions() {
       if (filterSystem !== "all") qs.set("system", filterSystem);
       if (filterChapter !== "all") qs.set("chapter", filterChapter);
       if (filterTopic !== "all") qs.set("topic", filterTopic);
+      if (filterConcept !== "all") qs.set("concept", filterConcept);
       const resp = await fetch(apiUrl(`/api/questions?${qs.toString()}`));
       const data = await resp.json();
       if (!resp.ok) throw new Error(data?.error ?? "Load failed");
@@ -151,7 +191,7 @@ export default function AllQuestions() {
   useEffect(() => {
     const timer = setTimeout(load, 250);
     return () => clearTimeout(timer);
-  }, [search, type, status, difficulty, filterSubject, filterSystem, filterChapter, filterTopic]);
+  }, [search, type, status, difficulty, filterSubject, filterSystem, filterChapter, filterTopic, filterConcept]);
 
   const remove = async (id: string) => {
     setDeletingId(id);
@@ -297,7 +337,7 @@ export default function AllQuestions() {
             </SelectContent>
           </Select>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
           <Select
             value={filterSubject}
             onValueChange={(v) => {
@@ -305,6 +345,7 @@ export default function AllQuestions() {
               setFilterSystem("all");
               setFilterChapter("all");
               setFilterTopic("all");
+              setFilterConcept("all");
             }}
           >
             <SelectTrigger>
@@ -325,6 +366,7 @@ export default function AllQuestions() {
               setFilterSystem(v);
               setFilterChapter("all");
               setFilterTopic("all");
+              setFilterConcept("all");
             }}
             disabled={filterSubject === "all"}
           >
@@ -345,6 +387,7 @@ export default function AllQuestions() {
             onValueChange={(v) => {
               setFilterChapter(v);
               setFilterTopic("all");
+              setFilterConcept("all");
             }}
             disabled={filterSystem === "all"}
           >
@@ -360,7 +403,14 @@ export default function AllQuestions() {
               ))}
             </SelectContent>
           </Select>
-          <Select value={filterTopic} onValueChange={setFilterTopic} disabled={filterChapter === "all"}>
+          <Select
+            value={filterTopic}
+            onValueChange={(v) => {
+              setFilterTopic(v);
+              setFilterConcept("all");
+            }}
+            disabled={filterChapter === "all"}
+          >
             <SelectTrigger>
               <SelectValue placeholder="Topic" />
             </SelectTrigger>
@@ -371,6 +421,22 @@ export default function AllQuestions() {
                   {t.name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterConcept} onValueChange={setFilterConcept} disabled={loadingConcepts}>
+            <SelectTrigger>
+              <SelectValue placeholder={loadingConcepts ? "Loading…" : "Concept"} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All concepts</SelectItem>
+              {conceptOptions.map((c) => {
+                const title = (c.title ?? "").trim() || "Untitled concept";
+                return (
+                  <SelectItem key={c.id} value={title}>
+                    {title}
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>

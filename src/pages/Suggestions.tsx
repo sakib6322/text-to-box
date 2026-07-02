@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Pencil, RotateCcw, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Pencil, RotateCcw, Trash2, TrendingUp } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { emptyConceptDetail, fetchConceptById, type ConceptDetail } from "@/lib/conceptDetail";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +80,13 @@ const Suggestions = () => {
   const [editConceptTitle, setEditConceptTitle] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsConceptName, setDetailsConceptName] = useState("");
+  const [detailsConceptId, setDetailsConceptId] = useState<string | null>(null);
+  const [detailsConceptDetail, setDetailsConceptDetail] = useState<ConceptDetail>(emptyConceptDetail());
+  const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
+  const [savingConceptDetail, setSavingConceptDetail] = useState(false);
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
   const [systems, setSystems] = useState<TaxonomyItem[]>([]);
@@ -250,6 +259,50 @@ const Suggestions = () => {
     setEditTarget(row);
     setEditContent(row.content);
     setEditConceptTitle((row.concepts?.title ?? "").trim());
+  };
+
+  const openConceptDetails = async (row: Row) => {
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+    setDetailsConceptId(row.concept_id);
+    setDetailsConceptName((row.concepts?.title ?? "").trim());
+    setDetailsConceptDetail(emptyConceptDetail());
+    setDetailsKeyPoints([]);
+    try {
+      const loaded = await fetchConceptById(row.concept_id);
+      setDetailsConceptName(loaded.conceptName);
+      setDetailsConceptDetail(loaded.detail);
+      setDetailsKeyPoints(loaded.keyPoints);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load concept details");
+      setDetailsOpen(false);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const saveConceptDetail = async (detail: ConceptDetail) => {
+    if (!detailsConceptId) return;
+    setSavingConceptDetail(true);
+    try {
+      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(detailsConceptId)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          detail_summary: detail.summary || null,
+          detail_paragraphs: detail.paragraphs,
+          detail_table: detail.table,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Save failed");
+      setDetailsConceptDetail(detail);
+      toast.success("Concept detail saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setSavingConceptDetail(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -553,15 +606,19 @@ const Suggestions = () => {
                       </div>
                     ) : null}
                   </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(r)}>
+                  <div className="flex gap-2 flex-wrap">
+                    <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={() => openConceptDetails(r)}>
+                      <BookOpen className="h-4 w-4 mr-1" />
+                      Details
+                    </Button>
+                    <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={() => openEdit(r)}>
                       <Pencil className="h-4 w-4 mr-1" />
                       Edit
                     </Button>
                     <Button
                       variant="destructive"
                       size="sm"
-                      className="flex-1"
+                      className="flex-1 min-w-[5.5rem]"
                       onClick={() => setDeleteTarget(r)}
                       disabled={deleting === r.id}
                     >
@@ -623,6 +680,19 @@ const Suggestions = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConceptDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        conceptName={detailsConceptName}
+        detail={detailsConceptDetail}
+        keyPoints={detailsKeyPoints}
+        loading={detailsLoading}
+        editable
+        onDetailChange={setDetailsConceptDetail}
+        onSave={saveConceptDetail}
+        saving={savingConceptDetail}
+      />
     </div>
   );
 };

@@ -1,20 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { ConceptDetailCard } from "@/components/ConceptDetailCard";
+import { ConceptSuggestionsPanel } from "@/components/ConceptSuggestionsPanel";
+import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import {
+  buildSuggestionLines,
+  emptyConceptDetail,
+  parseDetailTable,
+  type ConceptDetail,
+  type SuggestionMatch,
+} from "@/lib/conceptDetail";
 
 type KeyPoint = { content: string };
-type BoardOption = { id: string; name: string };
 
 const toErrorMessage = (error: unknown) => (error instanceof Error ? error.message : "Unknown error");
 
@@ -55,42 +63,73 @@ async function compressImage(file: File, maxWidth = 1600, quality = 0.82): Promi
   return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
 }
 
+async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
+  const bestByText = new Map<string, SuggestionMatch | null>();
+  const list = texts.filter((t) => t.trim());
+  if (!list.length) return bestByText;
+
+  const resp = await fetch(apiUrl("/api/match-key-points"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ texts: list.slice(0, 40), threshold: 0.55, count: 1 }),
+  });
+
+  type Match = {
+    id: string;
+    percentage?: number;
+    similarity?: number;
+    concept_title?: string | null;
+    board_names?: string[];
+    ai_percentage?: number | null;
+  };
+  type MatchResult = { text: string; matches: Match[] };
+
+  const j = (await resp.json().catch(() => ({}))) as { results?: MatchResult[]; error?: string };
+  if (!resp.ok) throw new Error(j.error ?? "Match failed");
+
+  for (const r of j.results ?? []) {
+    if (typeof r?.text !== "string") continue;
+    const best = Array.isArray(r.matches) && r.matches.length ? r.matches[0] : null;
+    if (!best?.id) {
+      bestByText.set(r.text, null);
+      continue;
+    }
+    const pct =
+      typeof best.ai_percentage === "number"
+        ? Math.round(best.ai_percentage)
+        : typeof best.percentage === "number"
+          ? Math.round(best.percentage)
+          : typeof best.similarity === "number"
+            ? Math.round(best.similarity * 100)
+            : 0;
+    bestByText.set(r.text, {
+      keyPointId: best.id,
+      percentage: pct,
+      conceptTitle: best.concept_title ?? null,
+      boardNames: Array.isArray(best.board_names) ? best.board_names.filter(Boolean) : [],
+    });
+  }
+  return bestByText;
+}
+
 const Index = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const [taxonomy, setTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection());
-  const [boardOptions, setBoardOptions] = useState<BoardOption[]>([]);
-  const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [conceptName, setConceptName] = useState("");
   const [sourceText, setSourceText] = useState("");
+  const [conceptDetail, setConceptDetail] = useState<ConceptDetail>(emptyConceptDetail());
   const [points, setPoints] = useState<KeyPoint[]>([emptyKeyPoint()]);
+  const [suggestionLines, setSuggestionLines] = useState<string[]>([]);
+  const [suggestionMatches, setSuggestionMatches] = useState<Map<string, SuggestionMatch | null>>(new Map());
   const [deletePointIndex, setDeletePointIndex] = useState<number | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const r = await fetch(apiUrl("/api/boards"));
-        const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
-        if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
-        setBoardOptions(j.boards.map((b) => ({ id: b.id, name: b.name })));
-      } catch {
-        /* boards optional until settings configured */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const toggleBoard = (id: string) => {
-    setSelectedBoardIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
 
   const requireTaxonomy = () => {
     if (!taxonomy.subjectId || !taxonomy.systemId || !taxonomy.chapterId || !taxonomy.topicId) {
@@ -128,6 +167,26 @@ const Index = () => {
     if (f) onPick(f);
   };
 
+  const runSuggestionMatch = async (lines: string[]) => {
+    if (!lines.length) {
+      setSuggestionLines([]);
+      setSuggestionMatches(new Map());
+      return;
+    }
+    setMatching(true);
+    try {
+      const matches = await fetchSuggestionMatches(lines);
+      setSuggestionLines(lines);
+      setSuggestionMatches(matches);
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "Suggestion matching failed");
+      setSuggestionLines(lines);
+      setSuggestionMatches(new Map());
+    } finally {
+      setMatching(false);
+    }
+  };
+
   const handleExtract = async () => {
     if (!imageFile && !sourceText.trim()) {
       return toast.error("Upload an image or paste source text");
@@ -145,12 +204,33 @@ const Index = () => {
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
-      setConceptName(typeof data.concept_name === "string" ? data.concept_name : "");
+      const name = typeof data.concept_name === "string" ? data.concept_name : "";
+      setConceptName(name);
+
       const extractedPoints = Array.isArray(data.high_yield_points)
         ? data.high_yield_points.map((content: string) => ({ content }))
         : [];
       setPoints(extractedPoints.length ? extractedPoints : [emptyKeyPoint()]);
-      toast.success(`Concept auto-filled · ${extractedPoints.length} key points extracted`);
+
+      const detail: ConceptDetail = {
+        summary: typeof data.detail_summary === "string" ? data.detail_summary : "",
+        paragraphs: Array.isArray(data.detail_paragraphs)
+          ? data.detail_paragraphs.filter((p: unknown): p is string => typeof p === "string")
+          : [],
+        table: parseDetailTable(data.detail_table),
+        verbatimText: typeof data.verbatim_text === "string" ? data.verbatim_text : "",
+      };
+      setConceptDetail(detail);
+
+      const lines = buildSuggestionLines(
+        detail.table,
+        extractedPoints.map((p) => p.content),
+      );
+      await runSuggestionMatch(lines);
+
+      toast.success(
+        `Extracted concept · ${extractedPoints.length} key points · ${lines.length} suggestion line(s)`,
+      );
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Extraction failed");
     } finally {
@@ -172,8 +252,10 @@ const Index = () => {
     setImagePreview(null);
     setConceptName("");
     setSourceText("");
+    setConceptDetail(emptyConceptDetail());
+    setSuggestionLines([]);
+    setSuggestionMatches(new Map());
     setTaxonomy(emptyTaxonomySelection());
-    setSelectedBoardIds([]);
     setPoints([emptyKeyPoint()]);
     setDragOver(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -196,23 +278,30 @@ const Index = () => {
           chapter: taxonomy.chapterName,
           topic: taxonomy.topicName,
           topic_id: taxonomy.topicId,
-          board_ids: selectedBoardIds,
           high_yield_points: points.map((p) => p.content),
+          detail_summary: conceptDetail.summary || null,
+          detail_paragraphs: conceptDetail.paragraphs,
+          detail_table: conceptDetail.table,
         }),
       });
-      const data = await resp.json().catch(() => ({})) as {
+      const data = (await resp.json().catch(() => ({}))) as {
         error?: string;
         count?: number;
         embeddings_saved?: number;
         embeddings_missing?: number;
+        detail_embedding_saved?: boolean;
       };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
 
       const saved = data?.count ?? points.length;
       const embSaved = data?.embeddings_saved;
       const embMissing = data?.embeddings_missing;
+      const detailVec = data?.detail_embedding_saved;
+
       if (typeof embMissing === "number" && embMissing > 0) {
         toast.warning(`Saved ${saved} points but ${embMissing} embedding(s) failed — check Gemini API keys`);
+      } else if (detailVec && typeof embSaved === "number") {
+        toast.success(`Saved concept with ${embSaved} key-point vectors + detail vector`);
       } else if (typeof embSaved === "number") {
         toast.success(`Saved ${saved} points with ${embSaved} vector embedding(s)`);
       } else {
@@ -236,6 +325,8 @@ const Index = () => {
     return parts.length ? parts.join(" → ") : null;
   }, [taxonomy]);
 
+  const keyPointTexts = useMemo(() => points.map((p) => p.content.trim()).filter(Boolean), [points]);
+
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="border-b">
@@ -243,7 +334,7 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Medical Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
-              Upload a book page → AI extracts exam-oriented key points → verify → save line-by-line vectors (no similarity match).
+              Upload a book page → AI extracts concept detail, table, key points → match suggestions with board tags.
             </p>
           </div>
           <Button asChild variant="outline" className="shrink-0">
@@ -258,8 +349,8 @@ const Index = () => {
             <div>
               <h2 className="text-sm font-semibold">AI Extract</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Image <strong>অথবা</strong> source text দিয়ে extract করুন। AI শুধু <strong>Concept</strong> ও key
-                points বের করবে। Extract না করলেও ডান পাশের ফর্মে ম্যানুয়ালি লিখতে পারবেন।
+                Image <strong>অথবা</strong> source text দিয়ে extract করুন। Concept detail, table, key points ও
+                suggestions match একসাথে আসবে।
               </p>
             </div>
 
@@ -322,28 +413,12 @@ const Index = () => {
             <div>
               <h2 className="text-sm font-semibold">Classification</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Settings থেকে taxonomy ও boards লোড হয়। Concept ও key points সব সময় এখানে লিখতে/এডিট করতে পারবেন।
+                Taxonomy select করুন। Board tags এখন প্রতিটি suggestion match-এ দেখাবে — home page-এ global board
+                checkbox নেই।
               </p>
             </div>
 
             <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
-
-            <div className="space-y-2">
-              <Label>Boards</Label>
-              <p className="text-xs text-muted-foreground">Admin → Settings থেকে board যোগ করুন।</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border p-3 min-h-[2.5rem]">
-                {boardOptions.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">No boards yet.</span>
-                ) : (
-                  boardOptions.map((b) => (
-                    <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                      <Checkbox checked={selectedBoardIds.includes(b.id)} onCheckedChange={() => toggleBoard(b.id)} />
-                      {b.name}
-                    </label>
-                  ))
-                )}
-              </div>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="concept-name">Concept *</Label>
@@ -362,6 +437,14 @@ const Index = () => {
               </p>
             ) : null}
           </Card>
+
+          <ConceptDetailCard
+            conceptName={conceptName}
+            detail={conceptDetail}
+            onOpenDetails={() => setDetailsOpen(true)}
+          />
+
+          <ConceptSuggestionsPanel lines={suggestionLines} matches={suggestionMatches} loading={matching} />
 
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-semibold">Key points</h2>
@@ -407,6 +490,16 @@ const Index = () => {
           </div>
         </section>
       </main>
+
+      <ConceptDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        conceptName={conceptName}
+        detail={conceptDetail}
+        keyPoints={keyPointTexts}
+        editable
+        onDetailChange={setConceptDetail}
+      />
 
       <ConfirmDeleteDialog
         open={deletePointIndex !== null}
