@@ -1674,32 +1674,6 @@ app.post("/api/approve-point", async (req, res) => {
     }
     await linkConceptBoards(db, point.concept_id, boardIds);
 
-    const { data: conceptRow } = await db
-      .from("concepts")
-      .select("title, subject, system, chapter, topic")
-      .eq("id", point.concept_id)
-      .single();
-    const emb = await embedTextRotating(db, question_text);
-    const embedding = toPgVector(emb);
-
-    const { error: qErr } = await db.from("questions").insert({
-      paper_id: null,
-      source_point_id: point.id,
-      question_mode: "mcq",
-      stem: question_text,
-      payload: { auto_approved_from_suggestion: true },
-      embedding,
-      status: "published",
-      difficulty: "medium",
-      marks: 1,
-      subject: conceptRow?.subject ?? null,
-      system: conceptRow?.system ?? null,
-      chapter: conceptRow?.chapter ?? null,
-      topic: conceptRow?.topic ?? null,
-      concept: conceptRow?.title ?? null,
-    });
-    if (qErr) return res.status(500).json({ error: qErr.message });
-
     if (!createdNewPoint) {
       const { error: incErr } = await db
         .from("key_points")
@@ -1711,8 +1685,8 @@ app.post("/api/approve-point", async (req, res) => {
     return res.json({
       ok: true,
       point_id: targetId,
-      incremented: true,
-      saved_question: true,
+      incremented: !createdNewPoint,
+      saved_question: false,
       created_new_point: createdNewPoint,
     });
   } catch (e) {

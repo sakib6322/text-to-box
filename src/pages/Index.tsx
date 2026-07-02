@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, htmlToPlainText } from "@/components/RichTextEditor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -188,7 +189,7 @@ const Index = () => {
   };
 
   const handleExtract = async () => {
-    if (!imageFile && !sourceText.trim()) {
+    if (!imageFile && !htmlToPlainText(sourceText)) {
       return toast.error("Upload an image or paste source text");
     }
     setExtracting(true);
@@ -198,7 +199,7 @@ const Index = () => {
         const compressed = await compressImage(imageFile);
         formData.append("image", compressed);
       }
-      if (sourceText.trim()) formData.append("input_text", sourceText.trim());
+      if (htmlToPlainText(sourceText)) formData.append("input_text", htmlToPlainText(sourceText));
 
       const resp = await fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData });
       const data = await resp.json().catch(() => ({}));
@@ -387,19 +388,17 @@ const Index = () => {
 
             <div className="space-y-2">
               <Label htmlFor="source-text">Source text</Label>
-              <Textarea
-                id="source-text"
+              <RichTextEditor
                 value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
-                rows={5}
-                className="resize-y"
-                placeholder="Textbook notes বা paragraph paste করুন…"
+                onChange={setSourceText}
+                placeholder="Textbook notes paste here... or type..."
+                minHeight="160px"
               />
             </div>
 
             <Button
               onClick={handleExtract}
-              disabled={(!imageFile && !sourceText.trim()) || extracting}
+              disabled={(!imageFile && !htmlToPlainText(sourceText)) || extracting}
               className="w-full"
             >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -413,8 +412,7 @@ const Index = () => {
             <div>
               <h2 className="text-sm font-semibold">Classification</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Taxonomy select করুন। Board tags এখন প্রতিটি suggestion match-এ দেখাবে — home page-এ global board
-                checkbox নেই।
+                Taxonomy select করুন। Board tags এখন প্রতিটি suggestion match-এ দেখাবে।
               </p>
             </div>
 

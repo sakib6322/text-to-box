@@ -23,6 +23,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { emptyConceptDetail, fetchConceptById, type ConceptDetail } from "@/lib/conceptDetail";
 
 type ExtractResult = {
   concept_name: string;
@@ -42,12 +44,14 @@ type ExtractedQuestion = {
 
 type SuggestionMatch = {
   key_point_id: string;
+  concept_id?: string | null;
   similarity: number;
   concept_title: string | null;
   concept_subject?: string | null;
   concept_system?: string | null;
   concept_chapter?: string | null;
   concept_topic?: string | null;
+  board_names?: string[];
   ai_percentage?: number | null;
   ai_reason?: string | null;
   vector_percentage?: number;
@@ -59,6 +63,8 @@ type ApprovedPoint = {
   approved: boolean;
   saving?: boolean;
   approveError?: string | null;
+  match?: SuggestionMatch | null;
+  matching?: boolean;
 };
 
 type BoardOption = { id: string; name: string };
@@ -97,6 +103,9 @@ type DraftQuestion = {
   sba: { stem: string; options: string[]; correctIndex: number; optionExplanations: string[] } | null;
   sourcePointId: string | null;
   match?: SuggestionMatch | null;
+  matchApproved?: boolean;
+  matchApproving?: boolean;
+  matchApproveError?: string | null;
 };
 
 const mkId = () =>
@@ -176,12 +185,14 @@ async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, Sugg
   });
   type Match = {
     id: string;
+    concept_id?: string | null;
     similarity: number;
     concept_title: string | null;
     concept_subject?: string | null;
     concept_system?: string | null;
     concept_chapter?: string | null;
     concept_topic?: string | null;
+    board_names?: string[];
     ai_percentage?: number;
     ai_reason?: string | null;
     vector_percentage?: number;
@@ -199,12 +210,14 @@ async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, Sugg
     }
     bestByText.set(r.text, {
       key_point_id: best.id,
+      concept_id: best.concept_id ?? null,
       similarity: best.similarity,
       concept_title: best.concept_title ?? null,
       concept_subject: best.concept_subject ?? null,
       concept_system: best.concept_system ?? null,
       concept_chapter: best.concept_chapter ?? null,
       concept_topic: best.concept_topic ?? null,
+      board_names: Array.isArray(best.board_names) ? best.board_names.filter(Boolean) : [],
       ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
       ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
       vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
@@ -213,33 +226,109 @@ async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, Sugg
   return bestByText;
 }
 
-function SuggestionMatchPanel({ match }: { match: SuggestionMatch | null | undefined }) {
+function SuggestionMatchPanel({
+  match,
+  matchApproved,
+  matchApproving,
+  matchApproveError,
+  selectedBoardNames,
+  onApprove,
+  onViewConcept,
+  allowApproveWithoutMatch = false,
+}: {
+  match: SuggestionMatch | null | undefined;
+  matchApproved?: boolean;
+  matchApproving?: boolean;
+  matchApproveError?: string | null;
+  selectedBoardNames?: string[];
+  onApprove?: () => void;
+  onViewConcept?: () => void;
+  allowApproveWithoutMatch?: boolean;
+}) {
   if (!match) {
-    return <p className="text-xs text-muted-foreground">No matching suggestion in database yet.</p>;
+    return (
+      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
+        <p>No matching suggestion in database yet.</p>
+        {selectedBoardNames?.length ? (
+          <div className="flex flex-wrap gap-1">
+            {selectedBoardNames.map((b) => (
+              <Badge key={b} variant="outline" className="text-[10px] text-red-600 border-red-300 bg-red-50">
+                {b}
+              </Badge>
+            ))}
+          </div>
+        ) : null}
+        {onApprove && !matchApproved && allowApproveWithoutMatch ? (
+          <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
+            {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+            Approve as new suggestion
+          </Button>
+        ) : null}
+        {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
+      </div>
+    );
   }
   const path = matchPath(match);
+  const boards = [
+    ...new Set([...(match.board_names ?? []), ...(selectedBoardNames ?? [])].filter(Boolean)),
+  ];
   return (
-    <div className="rounded-md border bg-muted/30 p-2 text-xs text-muted-foreground">
-      <span className="font-medium text-foreground">Suggestion match:</span> {matchPct(match)}%
+    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <span className="font-medium text-foreground">Suggestion match:</span> {matchPct(match)}%
+          {matchApproved ? (
+            <Badge variant="secondary" className="ml-2 text-[10px]">
+              Approved
+            </Badge>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {onViewConcept && match.concept_id ? (
+            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onViewConcept}>
+              Concept details
+            </Button>
+          ) : null}
+          {onApprove && !matchApproved ? (
+            <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
+              {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              {allowApproveWithoutMatch ? "Approve" : "Approve match"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
       {path ? (
-        <>
-          {" "}
-          · <span className="text-foreground">{path}</span>
-        </>
+        <p>
+          <span className="font-medium text-foreground">Path:</span> {path}
+        </p>
+      ) : null}
+      {boards.length ? (
+        <div className="flex flex-wrap gap-1">
+          {boards.map((b) => (
+            <Badge key={b} variant="outline" className="text-[10px] text-red-600 border-red-300 bg-red-50">
+              {b}
+            </Badge>
+          ))}
+        </div>
       ) : null}
       {typeof match.vector_percentage === "number" ? (
-        <>
-          <br />
+        <p>
           <span className="font-medium text-foreground">Vector score:</span> {Math.round(match.vector_percentage)}%
-        </>
+        </p>
       ) : null}
-      <br />
-      <span className="font-mono">Key point ID: {match.key_point_id}</span>
+      <p className="font-mono">Key point ID: {match.key_point_id}</p>
       {match.ai_reason ? (
-        <>
-          <br />
+        <p>
           <span className="font-medium text-foreground">Analysis:</span> {match.ai_reason}
-        </>
+        </p>
+      ) : null}
+      {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
+      {!matchApproved && onApprove ? (
+        <p className="text-[11px]">
+          {allowApproveWithoutMatch
+            ? "Approve to save as suggestion with selected boards (not as a question)."
+            : "Approve this match to link the suggestion and apply selected boards before saving."}
+        </p>
       ) : null}
     </div>
   );
@@ -327,6 +416,11 @@ export default function CreateQuestionAI() {
   const [generatingExplanations, setGeneratingExplanations] = useState(false);
   const [queuedQuestions, setQueuedQuestions] = useState<DraftQuestion[]>([]);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  const [conceptDetailsOpen, setConceptDetailsOpen] = useState(false);
+  const [conceptDetailsLoading, setConceptDetailsLoading] = useState(false);
+  const [conceptDetailsName, setConceptDetailsName] = useState("");
+  const [conceptDetailsData, setConceptDetailsData] = useState<ConceptDetail>(emptyConceptDetail());
+  const [conceptDetailsKeyPoints, setConceptDetailsKeyPoints] = useState<string[]>([]);
   const [extractedQuestionSummary, setExtractedQuestionSummary] = useState<string | null>(null);
   const [deleteQuestionTarget, setDeleteQuestionTarget] = useState<DraftQuestion | null>(null);
 
@@ -514,7 +608,10 @@ export default function CreateQuestionAI() {
         return {
           ...q,
           match,
-          sourcePointId: match?.key_point_id ?? null,
+          matchApproved: false,
+          matchApproving: false,
+          matchApproveError: null,
+          sourcePointId: null,
         };
       });
     } catch {
@@ -570,6 +667,31 @@ export default function CreateQuestionAI() {
     if (f) onPickImage(f);
   };
 
+  const applyExtractedPoints = async (texts: string[]) => {
+    const initial: ApprovedPoint[] = texts.map((text) => ({
+      point_id: mkId(),
+      text,
+      approved: false,
+      approveError: null,
+      match: null,
+      matching: true,
+    }));
+    setPoints(initial);
+
+    try {
+      const bestByText = await fetchSuggestionMatches(texts);
+      setPoints((prev) =>
+        prev.map((p) => ({
+          ...p,
+          match: bestByText.get(p.text.trim()) ?? null,
+          matching: false,
+        })),
+      );
+    } catch {
+      setPoints((prev) => prev.map((p) => ({ ...p, matching: false })));
+    }
+  };
+
   const handleExtract = async () => {
     if (!imageFile && !sourceText.trim()) return toast.error("Please upload image or paste text");
     setExtracting(true);
@@ -620,14 +742,7 @@ export default function CreateQuestionAI() {
         : [];
 
       setResult(extracted);
-      setPoints(
-        extracted.high_yield_points.map((text) => ({
-          point_id: mkId(),
-          text,
-          approved: false,
-          approveError: null,
-        })),
-      );
+      void applyExtractedPoints(extracted.high_yield_points);
       applyAutofillFromExtract(extracted);
       await applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       const questionMsg =
@@ -647,20 +762,22 @@ export default function CreateQuestionAI() {
     if (!p) return;
     if (!requireTaxonomy()) return;
     const t = taxonomyNames();
+    const text = p.text.trim();
+    if (!text) return toast.error("Point text is required");
     setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, approveError: null } : x)));
     try {
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          matched_key_point_id: null,
+          matched_key_point_id: p.match?.key_point_id ?? null,
           concept: conceptTitle,
           subject: t.subject,
           system: t.system,
           chapter: t.chapter,
           topic: t.topic,
           topic_id: t.topicId,
-          question_text: p.text,
+          question_text: text,
           board_ids: selectedBoardIds,
         }),
       });
@@ -675,15 +792,113 @@ export default function CreateQuestionAI() {
                 approved: true,
                 saving: false,
                 approveError: null,
+                point_id: typeof data?.point_id === "string" ? data.point_id : x.point_id,
               }
             : x,
         ),
       );
-      toast.success(data.created_new_point ? "Approved and added as new suggestion point" : "Approved and saved");
+      toast.success(
+        data.created_new_point
+          ? "Added as new suggestion (with boards if selected)"
+          : "Suggestion approved — linked with selected boards",
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Approval failed";
       toast.error(msg);
       setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: false, approveError: msg } : x)));
+    }
+  };
+
+  const refreshPointMatch = async (idx: number) => {
+    const p = points[idx];
+    if (!p?.text.trim()) return;
+    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, matching: true } : x)));
+    try {
+      const bestByText = await fetchSuggestionMatches([p.text.trim()]);
+      const match = bestByText.get(p.text.trim()) ?? null;
+      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, match, matching: false } : x)));
+    } catch {
+      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, matching: false } : x)));
+    }
+  };
+
+  const openMatchConceptDetails = async (match: SuggestionMatch) => {
+    if (!match.concept_id) {
+      toast.error("No concept linked to this match");
+      return;
+    }
+    setConceptDetailsOpen(true);
+    setConceptDetailsLoading(true);
+    setConceptDetailsName(match.concept_title ?? "");
+    setConceptDetailsData(emptyConceptDetail());
+    setConceptDetailsKeyPoints([]);
+    try {
+      const loaded = await fetchConceptById(match.concept_id);
+      setConceptDetailsName(loaded.conceptName);
+      setConceptDetailsData(loaded.detail);
+      setConceptDetailsKeyPoints(loaded.keyPoints);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load concept");
+      setConceptDetailsOpen(false);
+    } finally {
+      setConceptDetailsLoading(false);
+    }
+  };
+
+  const approveQuestionMatch = async (index: number) => {
+    const q = index === activeQuestionIndex ? buildCurrentDraftFromForm() : queuedQuestions[index];
+    if (!q?.match?.key_point_id) return;
+    if (!requireTaxonomy()) return;
+    const t = taxonomyNames();
+    const stem = questionStem(q);
+    if (!stem) return toast.error("Question stem is required to approve match");
+
+    setQueuedQuestions((prev) =>
+      prev.map((item, i) =>
+        i === index ? { ...item, matchApproving: true, matchApproveError: null } : item,
+      ),
+    );
+    try {
+      const resp = await fetch(apiUrl("/api/approve-point"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          matched_key_point_id: q.match!.key_point_id,
+          concept: q.concept || conceptTitle,
+          subject: t.subject,
+          system: t.system,
+          chapter: t.chapter,
+          topic: t.topic,
+          topic_id: t.topicId,
+          question_text: stem,
+          board_ids: selectedBoardIds,
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as { error?: string; point_id?: string };
+      if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Approval failed");
+
+      setQueuedQuestions((prev) =>
+        prev.map((item, i) =>
+          i === index
+            ? {
+                ...item,
+                matchApproved: true,
+                matchApproving: false,
+                matchApproveError: null,
+                sourcePointId: data.point_id ?? q.match!.key_point_id,
+              }
+            : item,
+        ),
+      );
+      toast.success("Match approved — boards linked to suggestion");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Approval failed";
+      setQueuedQuestions((prev) =>
+        prev.map((item, i) =>
+          i === index ? { ...item, matchApproving: false, matchApproveError: msg } : item,
+        ),
+      );
+      toast.error(msg);
     }
   };
 
@@ -752,9 +967,13 @@ export default function CreateQuestionAI() {
   const saveQuestion = async () => {
     if (!questionMode) return toast.error("Select a question type");
     if (!requireTaxonomy()) return;
+    const toSave = questionsForSave();
+    const pendingMatch = toSave.find((q) => q.match && !q.matchApproved);
+    if (pendingMatch) {
+      return toast.error("Approve suggestion match for each question before saving");
+    }
     setSaving(true);
     try {
-      const toSave = questionsForSave();
       const payload = {
         source: {
           text: sourceText.trim() || null,
@@ -828,8 +1047,9 @@ export default function CreateQuestionAI() {
 
   const buildCurrentDraftFromForm = (): DraftQuestion => {
     const t = taxonomyNames();
+    const existing = queuedQuestions[activeQuestionIndex];
     return {
-      id: queuedQuestions[activeQuestionIndex]?.id ?? mkId(),
+      id: existing?.id ?? mkId(),
       questionMode: questionMode as "mcq" | "sba",
       subject: t.subject,
       system: t.system,
@@ -848,7 +1068,11 @@ export default function CreateQuestionAI() {
               optionExplanations: [...sbaOptionExplanations],
             }
           : null,
-      sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
+      sourcePointId: existing?.sourcePointId ?? points.find((p) => p.approved)?.point_id ?? null,
+      match: existing?.match ?? null,
+      matchApproved: existing?.matchApproved ?? false,
+      matchApproving: existing?.matchApproving ?? false,
+      matchApproveError: existing?.matchApproveError ?? null,
     };
   };
 
@@ -863,8 +1087,13 @@ export default function CreateQuestionAI() {
     if (queuedQuestions.length === 0) return [current];
     return queuedQuestions.map((q, i) => {
       const draft = i === activeQuestionIndex ? current : q;
-      const matchId = draft.match?.key_point_id ?? draft.sourcePointId;
-      return { ...draft, sourcePointId: matchId ?? null };
+      const sourcePointId =
+        draft.matchApproved && draft.match?.key_point_id
+          ? draft.sourcePointId ?? draft.match.key_point_id
+          : draft.match
+            ? null
+            : draft.sourcePointId;
+      return { ...draft, sourcePointId, metadata: { ...draft.metadata, boards: selectedBoardNames } };
     });
   };
 
@@ -1001,39 +1230,47 @@ export default function CreateQuestionAI() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
-                  <div className="text-xs text-muted-foreground">Approve each line to store as a suggestion (vector only, no match).</div>
+                  <div className="text-xs text-muted-foreground">
+                    Match against suggestions (subject → system → chapter → topic → concept → board), then approve each line.
+                    Only MCQ/SBA questions go to All Questions — not these points.
+                  </div>
                 </div>
                 <Badge variant="outline">
                   {points.filter((p) => p.approved).length}/{points.length} approved
                 </Badge>
               </div>
-              <div className="max-h-[280px] space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
                 {points.map((p, idx) => (
-                  <Card key={p.point_id} className="p-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <Textarea
-                          value={p.text}
-                          onChange={(e) => setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, text: e.target.value } : x)))}
-                          rows={2}
-                          className="resize-none"
-                        />
-                        <div className="mt-1 text-xs text-muted-foreground font-mono">{p.point_id.slice(0, 10)}…</div>
+                  <Card key={p.point_id} className="p-3 space-y-2">
+                    <Textarea
+                      value={p.text}
+                      onChange={(e) => {
+                        const text = e.target.value;
+                        setPoints((ps) =>
+                          ps.map((x, i) => (i === idx ? { ...x, text, match: null, matching: false } : x)),
+                        );
+                      }}
+                      onBlur={() => void refreshPointMatch(idx)}
+                      rows={2}
+                      className="resize-none"
+                    />
+                    {p.matching ? (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Matching suggestions…
                       </div>
-                      <Button
-                        type="button"
-                        onClick={() => approvePoint(idx)}
-                        disabled={p.approved || p.saving}
-                        className="shrink-0"
-                        size="sm"
-                      >
-                        {p.saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        {p.approved ? "Approved" : "Approve"}
-                      </Button>
-                    </div>
-                    {p.approveError ? (
-                      <p className="text-xs text-destructive">{p.approveError}</p>
-                    ) : null}
+                    ) : (
+                      <SuggestionMatchPanel
+                        match={p.match}
+                        matchApproved={p.approved}
+                        matchApproving={p.saving}
+                        matchApproveError={p.approveError}
+                        selectedBoardNames={selectedBoardNames}
+                        onApprove={() => approvePoint(idx)}
+                        onViewConcept={p.match ? () => void openMatchConceptDetails(p.match!) : undefined}
+                        allowApproveWithoutMatch
+                      />
+                    )}
                   </Card>
                 ))}
               </div>
@@ -1112,13 +1349,24 @@ export default function CreateQuestionAI() {
           <p className="mt-4 text-xs text-muted-foreground">
             Detected from image (verbatim): <span className="font-medium text-foreground">{extractedQuestionSummary}</span>
             {queuedQuestions.length > 1 ? ` · ${queuedQuestions.length} questions in paper — select below to edit each` : null}
-            {queuedQuestions.some((q) => q.match) ? " · suggestion match % shown per question" : null}
+            {queuedQuestions.some((q) => q.match) ? " · approve each match before save" : null}
           </p>
         ) : null}
 
         {queuedQuestions[activeQuestionIndex]?.match ? (
           <div className="mt-4">
-            <SuggestionMatchPanel match={queuedQuestions[activeQuestionIndex]?.match} />
+            <SuggestionMatchPanel
+              match={queuedQuestions[activeQuestionIndex]?.match}
+              matchApproved={queuedQuestions[activeQuestionIndex]?.matchApproved}
+              matchApproving={queuedQuestions[activeQuestionIndex]?.matchApproving}
+              matchApproveError={queuedQuestions[activeQuestionIndex]?.matchApproveError}
+              selectedBoardNames={selectedBoardNames}
+              onApprove={() => approveQuestionMatch(activeQuestionIndex)}
+              onViewConcept={() => {
+                const m = queuedQuestions[activeQuestionIndex]?.match;
+                if (m) void openMatchConceptDetails(m);
+              }}
+            />
           </div>
         ) : null}
 
@@ -1303,6 +1551,7 @@ export default function CreateQuestionAI() {
                     {q.match ? (
                       <Badge variant="outline" className="ml-2 font-normal">
                         {matchPct(q.match)}% match
+                        {q.matchApproved ? " ✓" : ""}
                       </Badge>
                     ) : null}
                   </div>
@@ -1347,6 +1596,15 @@ export default function CreateQuestionAI() {
           setQueuedQuestions((prev) => prev.filter((item) => item.id !== deleteQuestionTarget.id));
           setDeleteQuestionTarget(null);
         }}
+      />
+
+      <ConceptDetailsDialog
+        open={conceptDetailsOpen}
+        onOpenChange={setConceptDetailsOpen}
+        conceptName={conceptDetailsName}
+        detail={conceptDetailsData}
+        keyPoints={conceptDetailsKeyPoints}
+        loading={conceptDetailsLoading}
       />
     </div>
   );
