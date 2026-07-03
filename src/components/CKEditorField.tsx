@@ -27,6 +27,7 @@ type Props = {
   placeholder?: string;
   className?: string;
   minHeight?: string;
+  variant?: "default" | "compact";
 };
 
 const baseConfig = {
@@ -90,16 +91,62 @@ const baseConfig = {
   },
 };
 
-export function CKEditorField({ value, onChange, placeholder, className, minHeight = "180px" }: Props) {
+const compactConfig = {
+  licenseKey: "GPL" as const,
+  plugins: [
+    Essentials,
+    Bold,
+    Italic,
+    Underline,
+    Strikethrough,
+    Paragraph,
+    Heading,
+    Link,
+    List,
+    Alignment,
+    Undo,
+  ],
+  toolbar: {
+    items: [
+      "undo",
+      "redo",
+      "|",
+      "heading",
+      "|",
+      "bold",
+      "italic",
+      "underline",
+      "|",
+      "bulletedList",
+      "numberedList",
+      "|",
+      "alignment",
+      "|",
+      "link",
+    ],
+    shouldNotGroupWhenFull: true,
+  },
+  heading: baseConfig.heading,
+  link: baseConfig.link,
+};
+
+export function CKEditorField({
+  value,
+  onChange,
+  placeholder,
+  className,
+  minHeight = "180px",
+  variant = "default",
+}: Props) {
   const editorRef = useRef<ClassicEditor | null>(null);
   const lastEmitted = useRef(value);
 
   const config = useMemo(
     () => ({
-      ...baseConfig,
+      ...(variant === "compact" ? compactConfig : baseConfig),
       placeholder,
     }),
-    [placeholder],
+    [placeholder, variant],
   );
 
   useEffect(() => {
@@ -113,7 +160,11 @@ export function CKEditorField({ value, onChange, placeholder, className, minHeig
 
   return (
     <div
-      className={cn("ckeditor-field rounded-md border bg-background overflow-hidden", className)}
+      className={cn(
+        "ckeditor-field rounded-md border bg-background overflow-hidden",
+        variant === "compact" && "ckeditor-field--compact",
+        className,
+      )}
       style={{ "--ck-editor-min-height": minHeight } as React.CSSProperties}
     >
       <CKEditor

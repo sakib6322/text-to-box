@@ -298,3 +298,26 @@
   box-shadow: 0 0 0 1px hsl(var(--ring));
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+
+.ckeditor-field--compact .ck.ck-toolbar {
+  padding: 0.15rem 0.25rem;
+}
+
+.ckeditor-field--compact .ck.ck-toolbar .ck-toolbar__items {
+  gap: 0.125rem;
+}
+
+.ckeditor-field--compact .ck.ck-button {
+  min-height: 1.75rem;
+  min-width: 1.75rem;
+}
+
+.concept-detail-table th,
+.concept-detail-table td {
+  border-right: 1px solid hsl(var(--border));
+}
+
+.concept-detail-table th:last-child,
+.concept-detail-table td:last-child {
+  border-right: none;
+}

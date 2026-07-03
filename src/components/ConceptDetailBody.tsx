@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CKEditorField } from "@/components/CKEditorField";
+import { CKEditorPopoverField } from "@/components/CKEditorPopoverField";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import {
   Table,
@@ -199,25 +200,25 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
             <p className="font-semibold">{table.title}</p>
           ) : null}
 
-          <div className="rounded-md border overflow-hidden">
-            <Table>
+          <div className="rounded-md border overflow-x-auto">
+            <Table className="table-fixed w-full border-collapse concept-detail-table">
               <TableHeader>
                 <TableRow className={editable ? "" : "bg-amber-100/80 hover:bg-amber-100/80"}>
                   {headers.map((h, i) => (
-                    <TableHead key={i} className="text-foreground font-semibold">
+                    <TableHead key={i} className="text-foreground font-semibold h-auto px-1.5 py-1.5">
                       {editable ? (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5">
                           <Input
                             value={h}
                             onChange={(e) => updateHeader(i, e.target.value)}
-                            className="h-8 text-xs font-semibold flex-1 min-w-0"
+                            className="h-7 text-xs font-semibold flex-1 min-w-0 px-1.5"
                           />
                           {headers.length > 1 ? (
                             <Button
                               type="button"
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 shrink-0"
+                              className="h-7 w-7 shrink-0"
                               onClick={() => removeColumn(i)}
                               aria-label="Remove column"
                             >
@@ -230,29 +231,36 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
                       )}
                     </TableHead>
                   ))}
-                  {editable ? <TableHead className="w-10" /> : null}
+                  {editable ? <TableHead className="w-8 px-0.5" /> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(table.rows ?? []).map((row, ri) => (
                   <TableRow key={ri}>
                     {headers.map((_, ci) => (
-                      <TableCell key={ci} className="align-top whitespace-pre-wrap">
+                      <TableCell key={ci} className="align-top px-1.5 py-1 whitespace-normal">
                         {editable ? (
-                          <CKEditorField
+                          <CKEditorPopoverField
                             value={row.cells?.[ci] ?? ""}
                             onChange={(value) => updateCell(ri, ci, value)}
-                            minHeight="100px"
+                            placeholder="Format…"
                           />
                         ) : (
-                          <RichHtmlContent content={row.cells?.[ci] ?? ""} />
+                          <RichHtmlContent content={row.cells?.[ci] ?? ""} className="text-xs" />
                         )}
                       </TableCell>
                     ))}
                     {editable ? (
-                      <TableCell className="align-top">
-                        <Button type="button" variant="ghost" size="icon" onClick={() => removeRow(ri)} aria-label="Remove row">
-                          <Trash2 className="h-4 w-4" />
+                      <TableCell className="align-top px-0.5 py-1 w-8">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => removeRow(ri)}
+                          aria-label="Remove row"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </TableCell>
                     ) : null}
