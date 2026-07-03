@@ -1,7 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { CKEditorField } from "@/components/CKEditorField";
+import { RichHtmlContent } from "@/components/RichHtmlContent";
 import {
   Table,
   TableBody,
@@ -79,6 +80,29 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
     patchTable({ ...t, rows: rows.length ? rows : [{ cells: Array.from({ length: defaultHeaders(t).length }, () => "") }] });
   };
 
+  const addColumn = () => {
+    const t = ensureTable(detail);
+    const cols = defaultHeaders(t);
+    const nextHeaders = [...cols, `Column ${cols.length + 1}`];
+    const rows = (t.rows ?? []).map((row) => ({
+      cells: [...(row.cells ?? []), ""],
+    }));
+    patchTable({ ...t, headers: nextHeaders, rows });
+  };
+
+  const removeColumn = (colIndex: number) => {
+    const t = ensureTable(detail);
+    const cols = defaultHeaders(t);
+    if (cols.length <= 1) return;
+    const nextHeaders = cols.filter((_, i) => i !== colIndex);
+    const rows = (t.rows ?? []).map((row) => ({
+      cells: (row.cells ?? []).filter((_, i) => i !== colIndex),
+    }));
+    patchTable({ ...t, headers: nextHeaders, rows });
+  };
+
+  const deleteTable = () => patch({ table: null });
+
   const addParagraph = () => patch({ paragraphs: [...detail.paragraphs, ""] });
 
   const updateParagraph = (index: number, value: string) => {
@@ -102,15 +126,15 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
       {editable ? (
         <div className="space-y-2">
           <Label>Summary</Label>
-          <Textarea
+          <CKEditorField
             value={detail.summary}
-            onChange={(e) => patch({ summary: e.target.value })}
-            rows={2}
+            onChange={(summary) => patch({ summary })}
             placeholder="One-line concept definition…"
+            minHeight="120px"
           />
         </div>
       ) : detail.summary ? (
-        <p className="font-semibold">{detail.summary}</p>
+        <RichHtmlContent content={detail.summary} className="font-semibold" />
       ) : null}
 
       {(editable || detail.paragraphs.length > 0) && (
@@ -119,14 +143,15 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
           {editable ? (
             <div className="space-y-2">
               {detail.paragraphs.map((p, i) => (
-                <div key={i} className="flex gap-2">
-                  <Textarea
-                    value={p}
-                    onChange={(e) => updateParagraph(i, e.target.value)}
-                    rows={3}
-                    className="flex-1"
-                    placeholder={`Paragraph ${i + 1}…`}
-                  />
+                <div key={i} className="flex gap-2 items-start">
+                  <div className="flex-1 min-w-0">
+                    <CKEditorField
+                      value={p}
+                      onChange={(value) => updateParagraph(i, value)}
+                      placeholder={`Paragraph ${i + 1}…`}
+                      minHeight="140px"
+                    />
+                  </div>
                   <Button type="button" variant="ghost" size="icon" onClick={() => removeParagraph(i)} aria-label="Remove paragraph">
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -138,7 +163,7 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
               </Button>
             </div>
           ) : (
-            detail.paragraphs.map((p, i) => <p key={i}>{p}</p>)
+            detail.paragraphs.map((p, i) => <RichHtmlContent key={i} content={p} className="mb-3" />)
           )}
         </div>
       )}
@@ -152,6 +177,15 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
 
       {hasTable && table ? (
         <div className="space-y-2">
+          {editable ? (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Label>Table</Label>
+              <Button type="button" variant="destructive" size="sm" onClick={deleteTable}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete table
+              </Button>
+            </div>
+          ) : null}
           {editable ? (
             <div className="space-y-2">
               <Label>Table title</Label>
@@ -172,11 +206,25 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
                   {headers.map((h, i) => (
                     <TableHead key={i} className="text-foreground font-semibold">
                       {editable ? (
-                        <Input
-                          value={h}
-                          onChange={(e) => updateHeader(i, e.target.value)}
-                          className="h-8 text-xs font-semibold"
-                        />
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={h}
+                            onChange={(e) => updateHeader(i, e.target.value)}
+                            className="h-8 text-xs font-semibold flex-1 min-w-0"
+                          />
+                          {headers.length > 1 ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              onClick={() => removeColumn(i)}
+                              aria-label="Remove column"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : (
                         h
                       )}
@@ -191,14 +239,13 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
                     {headers.map((_, ci) => (
                       <TableCell key={ci} className="align-top whitespace-pre-wrap">
                         {editable ? (
-                          <Textarea
+                          <CKEditorField
                             value={row.cells?.[ci] ?? ""}
-                            onChange={(e) => updateCell(ri, ci, e.target.value)}
-                            rows={2}
-                            className="min-h-[2.5rem] resize-y text-sm"
+                            onChange={(value) => updateCell(ri, ci, value)}
+                            minHeight="100px"
                           />
                         ) : (
-                          row.cells?.[ci] ?? ""
+                          <RichHtmlContent content={row.cells?.[ci] ?? ""} />
                         )}
                       </TableCell>
                     ))}
@@ -215,10 +262,16 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
             </Table>
           </div>
           {editable ? (
-            <Button type="button" variant="outline" size="sm" onClick={addRow}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add row
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={addRow}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add row
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={addColumn}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add column
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : null}

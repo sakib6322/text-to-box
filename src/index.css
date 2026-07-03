@@ -262,3 +262,39 @@
     transform: none;
   }
 }
+
+/* CKEditor 5 — match app theme */
+.ckeditor-field {
+  width: 100%;
+}
+
+.ckeditor-field .ck.ck-editor {
+  border: none;
+  width: 100%;
+}
+
+.ckeditor-field .ck.ck-editor__main {
+  width: 100%;
+}
+
+.ckeditor-field .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable) {
+  min-height: var(--ck-editor-min-height, 180px);
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.ckeditor-field .ck.ck-toolbar {
+  background: hsl(var(--muted));
+  border-color: hsl(var(--border));
+  flex-wrap: wrap;
+}
+
+.ckeditor-field .ck.ck-toolbar .ck-toolbar__items {
+  flex-wrap: wrap;
+}
+
+.ckeditor-field .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 1px hsl(var(--ring));
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}

@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ConceptDetail } from "@/lib/conceptDetail";
+import { htmlToPlainText } from "@/lib/htmlContent";
 
 function sanitizeFilename(name: string): string {
   return name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "concept";
@@ -42,7 +43,7 @@ export function downloadConceptDetailPdf(
   if (detail.summary.trim()) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    const summaryLines = doc.splitTextToSize(detail.summary.trim(), pageWidth - margin * 2);
+    const summaryLines = doc.splitTextToSize(htmlToPlainText(detail.summary), pageWidth - margin * 2);
     y = ensureSpace(doc, y, summaryLines.length * 6 + 4, margin);
     doc.text(summaryLines, margin, y);
     y += summaryLines.length * 6 + 6;
@@ -58,8 +59,9 @@ export function downloadConceptDetailPdf(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     for (const paragraph of detail.paragraphs) {
-      if (!paragraph.trim()) continue;
-      const lines = doc.splitTextToSize(`• ${paragraph.trim()}`, pageWidth - margin * 2);
+      const text = htmlToPlainText(paragraph);
+      if (!text) continue;
+      const lines = doc.splitTextToSize(`• ${text}`, pageWidth - margin * 2);
       y = ensureSpace(doc, y, lines.length * 5 + 3, margin);
       doc.text(lines, margin, y);
       y += lines.length * 5 + 4;
@@ -82,7 +84,7 @@ export function downloadConceptDetailPdf(
       : Array.from({ length: table.rows[0]?.cells?.length ?? 3 }, (_, i) => `Column ${i + 1}`);
     const body = table.rows.map((row) => {
       const cells = row.cells ?? [];
-      return headers.map((_, i) => cells[i] ?? "");
+      return headers.map((_, i) => htmlToPlainText(cells[i] ?? ""));
     });
 
     autoTable(doc, {

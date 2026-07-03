@@ -371,18 +371,34 @@ function normalizeDetailTable(raw) {
   return { title: title || null, headers, rows };
 }
 
+function stripHtml(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  return value
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function buildConceptDetailEmbedText(summary, paragraphs, table) {
   const parts = [];
-  if (typeof summary === "string" && summary.trim()) parts.push(summary.trim());
+  const summaryText = stripHtml(summary);
+  if (summaryText) parts.push(summaryText);
   if (Array.isArray(paragraphs)) {
     for (const p of paragraphs) {
-      if (typeof p === "string" && p.trim()) parts.push(p.trim());
+      const text = stripHtml(p);
+      if (text) parts.push(text);
     }
   }
-  if (table?.title) parts.push(table.title);
-  if (Array.isArray(table?.headers) && table.headers.length) parts.push(table.headers.join(" | "));
+  if (table?.title) parts.push(stripHtml(table.title) || table.title.trim());
+  if (Array.isArray(table?.headers) && table.headers.length) {
+    parts.push(table.headers.map((h) => stripHtml(h) || h).join(" | "));
+  }
   for (const row of table?.rows ?? []) {
-    if (Array.isArray(row?.cells) && row.cells.length) parts.push(row.cells.join(" | "));
+    if (Array.isArray(row?.cells) && row.cells.length) {
+      parts.push(row.cells.map((c) => stripHtml(c) || c).join(" | "));
+    }
   }
   return parts.join("\n\n");
 }

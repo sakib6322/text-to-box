@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { RichTextEditor, htmlToPlainText } from "@/components/RichTextEditor";
+import { CKEditorField } from "@/components/CKEditorField";
+import { RichHtmlContent } from "@/components/RichHtmlContent";
+import { htmlToPlainText, isHtmlEmpty } from "@/lib/htmlContent";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
@@ -131,6 +133,7 @@ const Index = () => {
   const [suggestionLines, setSuggestionLines] = useState<string[]>([]);
   const [suggestionMatches, setSuggestionMatches] = useState<Map<string, SuggestionMatch | null>>(new Map());
   const [deletePointIndex, setDeletePointIndex] = useState<number | null>(null);
+  const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
 
   const requireTaxonomy = () => {
     if (!taxonomy.subjectId || !taxonomy.systemId || !taxonomy.chapterId || !taxonomy.topicId) {
@@ -189,7 +192,7 @@ const Index = () => {
   };
 
   const handleExtract = async () => {
-    if (!imageFile && !htmlToPlainText(sourceText)) {
+    if (!imageFile && isHtmlEmpty(sourceText)) {
       return toast.error("Upload an image or paste source text");
     }
     setExtracting(true);
@@ -344,7 +347,31 @@ const Index = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 grid lg:grid-cols-[380px_1fr] gap-8">
+      <main className="container mx-auto px-4 py-8 space-y-8">
+        {sourceEditorOpen ? (
+          <Card className="p-4 space-y-3 w-full animate-in fade-in slide-in-from-top-2 duration-300">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold">Source text editor</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Heading, bold, underline, list, table — সব ফরমেট এখানে সম্পাদনা করুন
+                </p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setSourceEditorOpen(false)}>
+                Close
+              </Button>
+            </div>
+            <CKEditorField
+              value={sourceText}
+              onChange={setSourceText}
+              placeholder="Textbook notes লিখুন — heading, bold, underline, list…"
+              minHeight="360px"
+              className="w-full"
+            />
+          </Card>
+        ) : null}
+
+        <div className="grid lg:grid-cols-[380px_1fr] gap-8">
         <section className="space-y-4">
           <Card className="p-4 space-y-4">
             <div>
@@ -387,18 +414,40 @@ const Index = () => {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="source-text">Source text</Label>
-              <RichTextEditor
-                value={sourceText}
-                onChange={setSourceText}
-                placeholder="Textbook notes paste here... or type..."
-                minHeight="160px"
-              />
+              <div className="flex items-center justify-between gap-2">
+                <Label>Source text</Label>
+                <Button
+                  type="button"
+                  variant={sourceEditorOpen ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSourceEditorOpen((open) => !open)}
+                >
+                  Textbox
+                </Button>
+              </div>
+              {sourceEditorOpen ? (
+                <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3 text-center">
+                  Editor উপরে full width-এ খোলা আছে
+                </p>
+              ) : !isHtmlEmpty(sourceText) ? (
+                <button
+                  type="button"
+                  onClick={() => setSourceEditorOpen(true)}
+                  className="w-full rounded-md border bg-muted/20 p-3 text-left transition hover:bg-muted/40"
+                >
+                  <RichHtmlContent content={sourceText} />
+                  <span className="mt-2 block text-xs text-primary">Textbox ক্লিক করে সম্পাদনা করুন</span>
+                </button>
+              ) : (
+                <p className="text-xs text-muted-foreground rounded-md border border-dashed p-4 text-center">
+                  Textbox বাটনে ক্লিক করলে CKEditor 5 editor খুলবে
+                </p>
+              )}
             </div>
 
             <Button
               onClick={handleExtract}
-              disabled={(!imageFile && !htmlToPlainText(sourceText)) || extracting}
+              disabled={(!imageFile && isHtmlEmpty(sourceText)) || extracting}
               className="w-full"
             >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -487,6 +536,7 @@ const Index = () => {
             </Button>
           </div>
         </section>
+        </div>
       </main>
 
       <ConceptDetailsDialog
