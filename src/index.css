@@ -108,45 +108,21 @@
 
 @layer components {
   .app-mesh-bg {
-    position: relative;
     min-height: 100%;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(ellipse 90% 60% at 0% -5%, hsl(var(--glow-cyan) / 0.14), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 0%, hsl(var(--glow-violet) / 0.12), transparent 50%),
-      radial-gradient(ellipse 50% 40% at 50% 100%, hsl(var(--brand-emerald) / 0.08), transparent 45%);
-    background-attachment: fixed;
-    animation: mesh-drift 18s ease-in-out infinite alternate;
-  }
-
-  .app-mesh-bg::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.4;
-    background: linear-gradient(
-      125deg,
-      hsl(var(--glow-cyan) / 0.06) 0%,
-      transparent 40%,
-      hsl(var(--glow-violet) / 0.06) 70%,
-      transparent 100%
-    );
-    background-size: 200% 200%;
-    animation: gradient-flow 12s ease infinite;
+      radial-gradient(ellipse 80% 50% at 0% 0%, hsl(var(--glow-cyan) / 0.05), transparent 52%),
+      radial-gradient(ellipse 60% 45% at 100% 100%, hsl(var(--glow-violet) / 0.04), transparent 48%);
   }
 
   .app-mesh-content {
     position: relative;
-    z-index: 1;
   }
 
   .app-header-bar {
-    @apply border-b backdrop-blur-md;
-    background: hsl(var(--background) / 0.72);
+    @apply border-b;
+    background: hsl(var(--background));
     border-color: hsl(var(--border) / 0.8);
-    animation: slide-down 0.45s ease-out;
   }
 
   .page-title {
@@ -155,7 +131,6 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
-    animation: title-shimmer 6s ease-in-out infinite;
   }
 
   .page-title-static {
@@ -163,56 +138,43 @@
   }
 
   .glass-card {
-    @apply rounded-xl border shadow-sm backdrop-blur-sm transition-all duration-300;
-    background: hsl(var(--card) / 0.85);
+    @apply rounded-xl border shadow-sm transition-colors duration-200;
+    background: hsl(var(--card));
     border-color: hsl(var(--border) / 0.9);
   }
 
   .glass-card:hover {
-    border-color: hsl(var(--primary) / 0.35);
-    box-shadow:
-      0 4px 24px -4px hsl(var(--primary) / 0.12),
-      0 8px 32px -8px hsl(var(--accent) / 0.08);
-    transform: translateY(-1px);
+    border-color: hsl(var(--primary) / 0.28);
+    box-shadow: 0 2px 12px -4px hsl(var(--primary) / 0.1);
   }
 
   .filter-card {
     @apply glass-card p-4;
-    animation: fade-up 0.5s ease-out both;
+  }
+
+  .filter-grid-mobile {
+    @apply grid grid-cols-3 gap-2 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .filter-grid-mobile > * label {
+    @apply text-[10px] leading-tight sm:text-xs;
+  }
+
+  .filter-grid-mobile button[role="combobox"] {
+    @apply h-8 min-h-8 text-xs px-2;
   }
 
   .suggestion-card {
     @apply glass-card p-4 h-full space-y-2;
-    animation: fade-up 0.45s ease-out both;
   }
 
   .btn-gradient {
-    @apply relative overflow-hidden text-primary-foreground shadow-md transition-all duration-300;
+    @apply relative overflow-hidden text-primary-foreground shadow-md transition-shadow duration-200;
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
   }
 
   .btn-gradient:hover {
     @apply shadow-lg;
-    filter: brightness(1.06);
-    transform: translateY(-1px);
-  }
-
-  .btn-gradient::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      105deg,
-      transparent 40%,
-      hsl(0 0% 100% / 0.2) 50%,
-      transparent 60%
-    );
-    transform: translateX(-100%);
-    transition: transform 0.6s ease;
-  }
-
-  .btn-gradient:hover::after {
-    transform: translateX(100%);
   }
 
   .sidebar-brand {
@@ -220,15 +182,7 @@
   }
 
   .sidebar-brand-title {
-    @apply text-sm font-bold tracking-wide;
-    background: linear-gradient(90deg, hsl(var(--sidebar-primary)), hsl(258 72% 68%));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-
-  .badge-glow {
-    animation: pulse-soft 2.5s ease-in-out infinite;
+    @apply text-sm font-bold tracking-wide text-sidebar-primary;
   }
 }
 
@@ -248,18 +202,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .app-mesh-bg,
-  .app-mesh-bg::before,
-  .page-title,
-  .badge-glow,
-  .filter-card,
-  .suggestion-card {
-    animation: none !important;
-  }
-
-  .glass-card:hover,
-  .btn-gradient:hover {
-    transform: none;
+  html {
+    scroll-behavior: auto;
   }
 }
 

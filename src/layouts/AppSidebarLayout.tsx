@@ -15,9 +15,7 @@ export default function AppSidebarLayout() {
         <header className="app-header-bar flex h-14 items-center gap-2 px-4">
           <SidebarTrigger className="text-primary" />
           <Separator orientation="vertical" className="h-5" />
-          <div className="text-sm font-medium bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            Question Bank
-          </div>
+          <div className="text-sm font-medium text-primary">Question Bank</div>
         </header>
         <div className="app-mesh-content flex-1 p-4 md:p-6">
           <Outlet />

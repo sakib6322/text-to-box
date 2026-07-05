@@ -430,7 +430,7 @@ const Suggestions = () => {
             </Button>
           </div>
           <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search text…" />
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="filter-grid-mobile">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Subject</Label>
               <Select
@@ -564,7 +564,7 @@ const Suggestions = () => {
           <Card className="p-12 text-center text-muted-foreground border-dashed">No matching suggestions found.</Card>
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredRows.map((r, i) => {
+            {filteredRows.map((r) => {
               const tax = compactTaxonomy(r.concepts);
               const title = (r.concepts?.title ?? "").trim();
               const boardNames = (r.concepts?.concept_boards ?? [])
@@ -572,14 +572,10 @@ const Suggestions = () => {
                 .filter((n): n is string => Boolean(n?.trim()));
               const boardMention = boardFilter !== "all" ? mentionForBoard(r, boardFilter) : null;
               return (
-                <Card
-                  key={r.id}
-                  className="suggestion-card"
-                  style={{ animationDelay: `${Math.min(i * 0.04, 0.4)}s` }}
-                >
+                <Card key={r.id} className="suggestion-card">
                   <div className="w-full text-left">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <Badge className="tabular-nums gap-1 badge-glow bg-primary/90 text-primary-foreground border-0">
+                      <Badge className="tabular-nums gap-1 bg-primary/90 text-primary-foreground border-0">
                         <TrendingUp className="h-3 w-3" />
                         {r.increment_count}
                       </Badge>

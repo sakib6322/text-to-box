@@ -298,7 +298,7 @@ export default function AllQuestions() {
       </div>
 
       <Card className="filter-card print:hidden">
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="filter-grid-mobile lg:grid-cols-4">
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -337,7 +337,7 @@ export default function AllQuestions() {
             </SelectContent>
           </Select>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-3 filter-grid-mobile lg:grid-cols-5">
           <Select
             value={filterSubject}
             onValueChange={(v) => {
