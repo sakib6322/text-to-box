@@ -1231,6 +1231,82 @@ app.get("/api/concepts", async (req, res) => {
   }
 });
 
+app.get("/api/concepts/lookup", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const title = String(req.query.title ?? "").trim();
+    if (!title) return res.status(400).json({ error: "title required" });
+    const subject = String(req.query.subject ?? "").trim();
+    const system = String(req.query.system ?? "").trim();
+    const chapter = String(req.query.chapter ?? "").trim();
+    const topic = String(req.query.topic ?? "").trim();
+
+    const selectCols =
+      "id, title, subject, system, chapter, topic, topic_id, detail_summary, detail_paragraphs, detail_table, raw_extraction, created_at";
+
+    const loadKeyPoints = async (conceptId) => {
+      const { data: keyPoints, error: kpErr } = await db
+        .from("key_points")
+        .select("id, content, position")
+        .eq("concept_id", conceptId)
+        .order("position", { ascending: true });
+      if (kpErr) throw new Error(kpErr.message);
+      return keyPoints ?? [];
+    };
+
+    const pickBest = (rows) => {
+      if (!rows?.length) return null;
+      const normalized = title.toLowerCase();
+      const exact = rows.find((r) => (r.title ?? "").trim().toLowerCase() === normalized);
+      if (exact) return exact;
+      if (subject) {
+        const byTaxonomy = rows.find((r) => (r.subject ?? "").trim().toLowerCase() === subject.toLowerCase());
+        if (byTaxonomy) return byTaxonomy;
+      }
+      return rows[0];
+    };
+
+    let { data: exactRows, error } = await db.from("concepts").select(selectCols).ilike("title", title).limit(5);
+    if (error && /detail_summary|detail_paragraphs|detail_table|column/i.test(error.message)) {
+      ({ data: exactRows, error } = await db.from("concepts").select("id, title, subject, system, chapter, topic, topic_id, raw_extraction, created_at").ilike("title", title).limit(5));
+    }
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+
+    let concept = pickBest(exactRows);
+    if (!concept) {
+      let fuzzyQuery = db.from("concepts").select(selectCols).ilike("title", `%${title}%`).limit(20);
+      if (subject) fuzzyQuery = fuzzyQuery.eq("subject", subject);
+      if (system) fuzzyQuery = fuzzyQuery.eq("system", system);
+      if (chapter) fuzzyQuery = fuzzyQuery.eq("chapter", chapter);
+      if (topic) fuzzyQuery = fuzzyQuery.eq("topic", topic);
+      let { data: fuzzyRows, error: fuzzyErr } = await fuzzyQuery;
+      if (fuzzyErr && /detail_summary|detail_paragraphs|detail_table|column/i.test(fuzzyErr.message)) {
+        let fallbackQuery = db
+          .from("concepts")
+          .select("id, title, subject, system, chapter, topic, topic_id, raw_extraction, created_at")
+          .ilike("title", `%${title}%`)
+          .limit(20);
+        if (subject) fallbackQuery = fallbackQuery.eq("subject", subject);
+        if (system) fallbackQuery = fallbackQuery.eq("system", system);
+        if (chapter) fallbackQuery = fallbackQuery.eq("chapter", chapter);
+        if (topic) fallbackQuery = fallbackQuery.eq("topic", topic);
+        ({ data: fuzzyRows, error: fuzzyErr } = await fallbackQuery);
+      }
+      if (fuzzyErr) return res.status(500).json({ error: formatSupabaseError(fuzzyErr) });
+      concept = pickBest(fuzzyRows);
+    }
+
+    if (!concept) return res.status(404).json({ error: "Concept not found" });
+
+    const key_points = await loadKeyPoints(concept.id);
+    return res.json({ concept, key_points });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.get("/api/concepts/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
@@ -2108,6 +2184,566 @@ app.patch("/api/questions/:id", async (req, res) => {
     if (error) return res.status(500).json({ error: error.message });
     if (!data?.length) return res.status(404).json({ error: "Question not found" });
     return res.json({ ok: true, id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+// ─── Exams ───────────────────────────────────────────────────────────────────
+
+function resolveExamStatus(exam) {
+  const now = Date.now();
+  const start = exam.scheduled_start ? new Date(exam.scheduled_start).getTime() : null;
+  const end = exam.scheduled_end ? new Date(exam.scheduled_end).getTime() : null;
+  if (exam.status === "cancelled" || exam.status === "draft") return exam.status;
+  if (start && now < start) return "scheduled";
+  if (end && now > end) return "completed";
+  if (start && end && now >= start && now <= end) return "active";
+  if (start && !end && now >= start) return "active";
+  return exam.status ?? "draft";
+}
+
+function computeScheduledEnd(scheduledStart, durationMinutes, scheduledEnd) {
+  const duration = Math.max(1, Number(durationMinutes) || 60);
+  if (scheduledStart) {
+    const startMs = new Date(scheduledStart).getTime();
+    if (!Number.isNaN(startMs)) {
+      return new Date(startMs + duration * 60 * 1000).toISOString();
+    }
+  }
+  return scheduledEnd || null;
+}
+
+function formatQuestionRow(q) {
+  const mode = q.question_mode;
+  return {
+    id: q.id,
+    questionMode: mode,
+    subject: q.subject ?? "",
+    system: q.system ?? "",
+    chapter: q.chapter ?? "",
+    topic: q.topic ?? "",
+    concept: q.concept ?? "",
+    marks: Number(q.marks ?? 1),
+    metadata: { status: q.status ?? "", difficulty: q.difficulty ?? "" },
+    mcq: mode === "mcq" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+    sba: mode === "sba" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+  };
+}
+
+function gradeAnswer(question, answer) {
+  const mode = question.question_mode;
+  const payload = question.payload && typeof question.payload === "object" ? question.payload : {};
+  const marks = Number(question.marks ?? 1);
+  if (mode === "mcq") {
+    const statements = Array.isArray(payload.trueFalse) ? payload.trueFalse : [];
+    const studentAnswers = Array.isArray(answer?.answers) ? answer.answers : [];
+    if (!statements.length) return { isCorrect: false, marksEarned: 0 };
+    const allCorrect = statements.every((stmt, i) => {
+      const sid = stmt.id ?? String(i);
+      const student =
+        studentAnswers.find((a) => a?.id === sid || a?.id === stmt.id) ?? studentAnswers[i];
+      const expected = stmt.correct === "true" ? "true" : "false";
+      const given = student?.value === "true" ? "true" : student?.value === "false" ? "false" : "";
+      return given === expected;
+    });
+    return { isCorrect: allCorrect, marksEarned: allCorrect ? marks : 0 };
+  }
+  if (mode === "sba") {
+    const correctIndex = Number(payload.correctIndex);
+    const selected = Number(answer?.selectedIndex);
+    const isCorrect = !Number.isNaN(correctIndex) && selected === correctIndex;
+    return { isCorrect, marksEarned: isCorrect ? marks : 0 };
+  }
+  return { isCorrect: false, marksEarned: 0 };
+}
+
+async function loadExamQuestions(db, examId) {
+  const { data: links, error } = await db
+    .from("exam_questions")
+    .select("id, position, marks, question_id, questions(*)")
+    .eq("exam_id", examId)
+    .order("position", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (links ?? []).map((row) => ({
+    linkId: row.id,
+    position: row.position,
+    marks: Number(row.marks ?? 1),
+    question: row.questions ? formatQuestionRow(row.questions) : null,
+  }));
+}
+
+async function syncExamTotalMarks(db, examId) {
+  const { data, error } = await db.from("exam_questions").select("marks").eq("exam_id", examId);
+  if (error) throw new Error(error.message);
+  const total = (data ?? []).reduce((sum, r) => sum + Number(r.marks ?? 0), 0);
+  await db.from("exams").update({ total_marks: total, updated_at: new Date().toISOString() }).eq("id", examId);
+  return total;
+}
+
+function formatExamSummary(exam, questionCount = 0) {
+  return {
+    id: exam.id,
+    title: exam.title,
+    description: exam.description ?? "",
+    durationMinutes: exam.duration_minutes,
+    totalMarks: Number(exam.total_marks ?? 0),
+    scheduledStart: exam.scheduled_start,
+    scheduledEnd: exam.scheduled_end,
+    status: resolveExamStatus(exam),
+    questionCount,
+    createdBy: exam.created_by ?? "",
+    createdAt: exam.created_at,
+    updatedAt: exam.updated_at,
+  };
+}
+
+app.get("/api/exams", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const { data, error } = await db.from("exams").select("*").order("created_at", { ascending: false });
+    if (error) return res.status(500).json({ error: error.message });
+    const ids = (data ?? []).map((e) => e.id);
+    const counts = new Map();
+    if (ids.length) {
+      const { data: eq } = await db.from("exam_questions").select("exam_id").in("exam_id", ids);
+      for (const row of eq ?? []) counts.set(row.exam_id, (counts.get(row.exam_id) ?? 0) + 1);
+    }
+    return res.json({
+      exams: (data ?? []).map((e) => formatExamSummary(e, counts.get(e.id) ?? 0)),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.get("/api/exams/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    const { data: exam, error } = await db.from("exams").select("*").eq("id", id).maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+    const questions = await loadExamQuestions(db, id);
+    return res.json({
+      exam: formatExamSummary(exam, questions.length),
+      questions: questions.filter((q) => q.question).map((q) => ({ ...q.question, position: q.position, examMarks: q.marks })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/exams", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const body = req.body ?? {};
+    const title = String(body.title ?? "").trim();
+    if (!title) return res.status(400).json({ error: "title required" });
+    const durationMinutes = Math.max(1, Number(body.durationMinutes ?? body.duration_minutes ?? 60));
+    const description = typeof body.description === "string" ? body.description.trim() : "";
+    const scheduledStart = body.scheduledStart ?? body.scheduled_start ?? null;
+    const scheduledEndInput = body.scheduledEnd ?? body.scheduled_end ?? null;
+    const scheduledEnd = computeScheduledEnd(scheduledStart, durationMinutes, scheduledEndInput);
+    const createdBy = typeof body.createdBy === "string" ? body.createdBy.trim() : "";
+    const questionIds = Array.isArray(body.questionIds) ? body.questionIds.filter(Boolean) : [];
+
+    let status = "draft";
+    if (scheduledStart) status = "scheduled";
+
+    const embedText = [title, description].filter(Boolean).join("\n");
+    const titleEmbedding = embedText ? toPgVector(await embedTextRotating(db, embedText)) : null;
+
+    const { data: exam, error } = await db
+      .from("exams")
+      .insert({
+        title,
+        description: description || null,
+        duration_minutes: durationMinutes,
+        scheduled_start: scheduledStart || null,
+        scheduled_end: scheduledEnd || null,
+        status,
+        created_by: createdBy || null,
+        title_embedding: titleEmbedding,
+      })
+      .select("*")
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+
+    if (questionIds.length) {
+      const { data: qs } = await db.from("questions").select("id, marks").in("id", questionIds);
+      const markById = new Map((qs ?? []).map((q) => [q.id, Number(q.marks ?? 1)]));
+      const rows = questionIds.map((qid, i) => ({
+        exam_id: exam.id,
+        question_id: qid,
+        position: i,
+        marks: markById.get(qid) ?? 1,
+      }));
+      const { error: linkErr } = await db.from("exam_questions").insert(rows);
+      if (linkErr) return res.status(500).json({ error: linkErr.message });
+      await syncExamTotalMarks(db, exam.id);
+    }
+
+    const questions = await loadExamQuestions(db, exam.id);
+    return res.json({
+      exam: formatExamSummary(exam, questions.length),
+      questions: questions.filter((q) => q.question).map((q) => ({ ...q.question, position: q.position, examMarks: q.marks })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.patch("/api/exams/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const id = String(req.params.id ?? "").trim();
+    const body = req.body ?? {};
+    const patch = { updated_at: new Date().toISOString() };
+
+    if (typeof body.title === "string" && body.title.trim()) patch.title = body.title.trim();
+    if (typeof body.description === "string") patch.description = body.description.trim() || null;
+    if (body.durationMinutes != null || body.duration_minutes != null) {
+      patch.duration_minutes = Math.max(1, Number(body.durationMinutes ?? body.duration_minutes));
+    }
+    if (body.scheduledStart !== undefined) patch.scheduled_start = body.scheduledStart || null;
+    if (body.scheduledEnd !== undefined) patch.scheduled_end = body.scheduledEnd || null;
+
+    const { data: existingExam } = await db.from("exams").select("scheduled_start, scheduled_end, duration_minutes").eq("id", id).maybeSingle();
+    const nextStart = patch.scheduled_start !== undefined ? patch.scheduled_start : existingExam?.scheduled_start ?? null;
+    const nextDuration =
+      patch.duration_minutes != null ? patch.duration_minutes : Number(existingExam?.duration_minutes ?? 60);
+    if (nextStart || (patch.duration_minutes != null && existingExam?.scheduled_start)) {
+      const startForCalc = nextStart ?? existingExam?.scheduled_start ?? null;
+      if (startForCalc) {
+        patch.scheduled_end = computeScheduledEnd(startForCalc, nextDuration, null);
+      }
+    }
+    if (typeof body.status === "string") patch.status = body.status;
+
+    if (patch.title || patch.description !== undefined) {
+      const { data: existing } = await db.from("exams").select("title, description").eq("id", id).maybeSingle();
+      const embedText = [patch.title ?? existing?.title, patch.description ?? existing?.description]
+        .filter(Boolean)
+        .join("\n");
+      if (embedText) patch.title_embedding = toPgVector(await embedTextRotating(db, embedText));
+    }
+
+    if (patch.scheduled_start) patch.status = "scheduled";
+
+    const { data: exam, error } = await db.from("exams").update(patch).eq("id", id).select("*").maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+
+    if (Array.isArray(body.questionIds)) {
+      await db.from("exam_questions").delete().eq("exam_id", id);
+      const questionIds = body.questionIds.filter(Boolean);
+      if (questionIds.length) {
+        const { data: qs } = await db.from("questions").select("id, marks").in("id", questionIds);
+        const markById = new Map((qs ?? []).map((q) => [q.id, Number(q.marks ?? 1)]));
+        const rows = questionIds.map((qid, i) => ({
+          exam_id: id,
+          question_id: qid,
+          position: i,
+          marks: markById.get(qid) ?? 1,
+        }));
+        await db.from("exam_questions").insert(rows);
+      }
+      await syncExamTotalMarks(db, id);
+    }
+
+    const questions = await loadExamQuestions(db, id);
+    const { data: refreshed } = await db.from("exams").select("*").eq("id", id).single();
+    return res.json({
+      exam: formatExamSummary(refreshed ?? exam, questions.length),
+      questions: questions.filter((q) => q.question).map((q) => ({ ...q.question, position: q.position, examMarks: q.marks })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.delete("/api/exams/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const { error } = await db.from("exams").delete().eq("id", req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.get("/api/my-exams", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const email = String(req.query.email ?? "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const { data: exams, error } = await db.from("exams").select("*").order("scheduled_start", { ascending: false, nullsFirst: false });
+    if (error) return res.status(500).json({ error: error.message });
+
+    const { data: attempts } = await db
+      .from("exam_attempts")
+      .select("*")
+      .eq("user_email", email)
+      .order("created_at", { ascending: false });
+
+    const attemptByExam = new Map();
+    for (const a of attempts ?? []) {
+      if (!attemptByExam.has(a.exam_id)) attemptByExam.set(a.exam_id, a);
+    }
+
+    const result = (exams ?? [])
+      .map((exam) => {
+        const status = resolveExamStatus(exam);
+        const attempt = attemptByExam.get(exam.id) ?? null;
+        return {
+          ...formatExamSummary(exam),
+          liveStatus: status,
+          canStart: status === "active" && (!attempt || attempt.status === "in_progress"),
+          attempt: attempt
+            ? {
+                id: attempt.id,
+                status: attempt.status,
+                score: Number(attempt.score),
+                totalMarks: Number(attempt.total_marks),
+                startedAt: attempt.started_at,
+                submittedAt: attempt.submitted_at,
+                endsAt: attempt.ends_at,
+              }
+            : null,
+        };
+      })
+      .filter((e) => e.scheduledStart || e.status !== "draft");
+
+    return res.json({ exams: result });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/exams/:id/start", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const examId = String(req.params.id ?? "").trim();
+    const email = String(req.body?.email ?? "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "email required" });
+
+    const { data: exam, error } = await db.from("exams").select("*").eq("id", examId).maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!exam) return res.status(404).json({ error: "Exam not found" });
+
+    const liveStatus = resolveExamStatus(exam);
+    if (liveStatus !== "active") {
+      return res.status(400).json({ error: `Exam is not active (status: ${liveStatus})` });
+    }
+
+    const { data: existing } = await db
+      .from("exam_attempts")
+      .select("*")
+      .eq("exam_id", examId)
+      .eq("user_email", email)
+      .eq("status", "in_progress")
+      .maybeSingle();
+
+    if (existing) {
+      const questions = await loadExamQuestions(db, examId);
+      return res.json({
+        attempt: {
+          id: existing.id,
+          examId,
+          startedAt: existing.started_at,
+          endsAt: existing.ends_at,
+          status: existing.status,
+        },
+        exam: formatExamSummary(exam, questions.length),
+        questions: questions
+          .filter((q) => q.question)
+          .map((q) => ({ ...q.question, position: q.position, examMarks: q.marks })),
+      });
+    }
+
+    const startedAt = new Date();
+    const endsAt = new Date(startedAt.getTime() + Number(exam.duration_minutes) * 60 * 1000);
+    const questions = await loadExamQuestions(db, examId);
+    const totalMarks = questions.reduce((s, q) => s + Number(q.marks ?? 0), 0);
+
+    const { data: attempt, error: attErr } = await db
+      .from("exam_attempts")
+      .insert({
+        exam_id: examId,
+        user_email: email,
+        started_at: startedAt.toISOString(),
+        ends_at: endsAt.toISOString(),
+        total_marks: totalMarks,
+        status: "in_progress",
+      })
+      .select("*")
+      .single();
+    if (attErr) return res.status(500).json({ error: attErr.message });
+
+    return res.json({
+      attempt: {
+        id: attempt.id,
+        examId,
+        startedAt: attempt.started_at,
+        endsAt: attempt.ends_at,
+        status: attempt.status,
+      },
+      exam: formatExamSummary(exam, questions.length),
+      questions: questions
+        .filter((q) => q.question)
+        .map((q) => ({ ...q.question, position: q.position, examMarks: q.marks })),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/exams/:id/submit", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const examId = String(req.params.id ?? "").trim();
+    const attemptId = String(req.body?.attemptId ?? "").trim();
+    const answers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+    if (!attemptId) return res.status(400).json({ error: "attemptId required" });
+
+    const { data: attempt, error: attErr } = await db
+      .from("exam_attempts")
+      .select("*")
+      .eq("id", attemptId)
+      .eq("exam_id", examId)
+      .maybeSingle();
+    if (attErr) return res.status(500).json({ error: attErr.message });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+    if (attempt.status !== "in_progress") return res.status(400).json({ error: "Attempt already submitted" });
+
+    const now = new Date();
+    const expired = now.getTime() > new Date(attempt.ends_at).getTime();
+    const questions = await loadExamQuestions(db, examId);
+    const questionMap = new Map(
+      questions.filter((q) => q.question).map((q) => [q.question.id, { row: q.question, marks: q.marks }]),
+    );
+
+    let score = 0;
+    const answerRows = [];
+    for (const item of answers) {
+      const qid = String(item?.questionId ?? "").trim();
+      const entry = questionMap.get(qid);
+      if (!entry) continue;
+      const { data: rawQ } = await db.from("questions").select("*").eq("id", qid).maybeSingle();
+      if (!rawQ) continue;
+      const graded = gradeAnswer(rawQ, item.answer ?? {});
+      score += graded.marksEarned;
+      answerRows.push({
+        attempt_id: attemptId,
+        question_id: qid,
+        answer: item.answer ?? {},
+        is_correct: graded.isCorrect,
+        marks_earned: graded.marksEarned,
+      });
+    }
+
+    if (answerRows.length) {
+      await db.from("exam_answers").upsert(answerRows, { onConflict: "attempt_id,question_id" });
+    }
+
+    const finalStatus = expired ? "expired" : "submitted";
+    await db
+      .from("exam_attempts")
+      .update({
+        status: finalStatus,
+        submitted_at: now.toISOString(),
+        score,
+      })
+      .eq("id", attemptId);
+
+    return res.json({
+      ok: true,
+      attemptId,
+      score,
+      totalMarks: Number(attempt.total_marks),
+      status: finalStatus,
+      expired,
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.get("/api/exam-attempts/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const attemptId = String(req.params.id ?? "").trim();
+    const includeKey = String(req.query.include ?? "") === "answers";
+
+    const { data: attempt, error } = await db.from("exam_attempts").select("*").eq("id", attemptId).maybeSingle();
+    if (error) return res.status(500).json({ error: error.message });
+    if (!attempt) return res.status(404).json({ error: "Attempt not found" });
+
+    const { data: exam } = await db.from("exams").select("*").eq("id", attempt.exam_id).maybeSingle();
+    const questions = await loadExamQuestions(db, attempt.exam_id);
+
+    let answerMap = new Map();
+    if (includeKey || attempt.status !== "in_progress") {
+      const { data: ans } = await db.from("exam_answers").select("*").eq("attempt_id", attemptId);
+      answerMap = new Map((ans ?? []).map((a) => [a.question_id, a]));
+    }
+
+    const showSolutions = attempt.status === "submitted" || attempt.status === "expired";
+
+    return res.json({
+      attempt: {
+        id: attempt.id,
+        examId: attempt.exam_id,
+        userEmail: attempt.user_email,
+        startedAt: attempt.started_at,
+        endsAt: attempt.ends_at,
+        submittedAt: attempt.submitted_at,
+        score: Number(attempt.score),
+        totalMarks: Number(attempt.total_marks),
+        status: attempt.status,
+      },
+      exam: exam ? formatExamSummary(exam, questions.length) : null,
+      questions: questions
+        .filter((q) => q.question)
+        .map((q) => {
+          const ans = answerMap.get(q.question.id);
+          const base = { ...q.question, position: q.position, examMarks: q.marks };
+          if (!showSolutions) {
+            return {
+              ...base,
+              studentAnswer: ans?.answer ?? null,
+            };
+          }
+          return {
+            ...base,
+            studentAnswer: ans?.answer ?? null,
+            isCorrect: ans?.is_correct ?? false,
+            marksEarned: Number(ans?.marks_earned ?? 0),
+            showSolutions: true,
+          };
+        }),
+    });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });

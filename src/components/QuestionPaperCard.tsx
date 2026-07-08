@@ -15,6 +15,7 @@ type Props = {
   mcq?: McqPayload | null;
   sba?: SbaPayload | null;
   index?: number;
+  hideAnswers?: boolean;
 };
 
 const optionLabel = (i: number) => String.fromCharCode(97 + i);
@@ -30,6 +31,7 @@ export function QuestionPaperCard({
   mcq,
   sba,
   index,
+  hideAnswers = false,
 }: Props) {
   const taxonomy = [subject, system, chapter, topic].filter(Boolean).join(" · ");
   const stem = questionMode === "mcq" ? mcq?.stem : sba?.stem;
@@ -67,9 +69,11 @@ export function QuestionPaperCard({
             <li key={item.id ?? i} className="flex gap-2 text-[10.5px] leading-[1.5] font-serif text-neutral-800">
               <span className="shrink-0 w-4 tabular-nums text-neutral-500">{i + 1}.</span>
               <span className="flex-1">{item.statement || "—"}</span>
-              <span className="shrink-0 text-[9px] uppercase tracking-wide text-neutral-500 border border-neutral-300 px-1 rounded-sm">
-                {item.correct === "true" ? "T" : "F"}
-              </span>
+              {!hideAnswers ? (
+                <span className="shrink-0 text-[9px] uppercase tracking-wide text-neutral-500 border border-neutral-300 px-1 rounded-sm">
+                  {item.correct === "true" ? "T" : "F"}
+                </span>
+              ) : null}
             </li>
           ))}
         </ol>
@@ -88,7 +92,7 @@ export function QuestionPaperCard({
               >
                 <span className="shrink-0 w-4">{optionLabel(i)}.</span>
                 <span className="flex-1">{opt || "—"}</span>
-                {isCorrect ? (
+                {!hideAnswers && isCorrect ? (
                   <span className="shrink-0 text-[9px] text-emerald-700 border border-emerald-300 px-1 rounded-sm">✓</span>
                 ) : null}
               </li>
@@ -97,7 +101,7 @@ export function QuestionPaperCard({
         </ol>
       ) : null}
 
-      {questionMode === "mcq" && mcqHasExplanations ? (
+      {questionMode === "mcq" && mcqHasExplanations && !hideAnswers ? (
         <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
           <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
           {(mcq?.trueFalse ?? []).map((item, i) => {
@@ -115,7 +119,7 @@ export function QuestionPaperCard({
         </div>
       ) : null}
 
-      {questionMode === "sba" && sbaHasExplanations ? (
+      {questionMode === "sba" && sbaHasExplanations && !hideAnswers ? (
         <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
           <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
           {(sba?.options ?? []).map((opt, i) => {

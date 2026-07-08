@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Trash2, BookOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { fetchConceptByTitle, emptyConceptDetail, type ConceptDetail } from "@/lib/conceptDetail";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
@@ -78,6 +80,11 @@ export default function AllQuestions() {
   const [filterConcept, setFilterConcept] = useState("all");
   const [conceptOptions, setConceptOptions] = useState<ConceptOption[]>([]);
   const [loadingConcepts, setLoadingConcepts] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsName, setDetailsName] = useState("");
+  const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
+  const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
 
   useEffect(() => {
     fetchTaxonomy("subjects")
@@ -228,6 +235,33 @@ export default function AllQuestions() {
       if (i < 5) expls[i] = e ?? "";
     });
     setEditSbaExplanations(expls);
+  };
+
+  const openConceptDetails = async (row: QuestionRow) => {
+    const conceptName = row.concept?.trim();
+    if (!conceptName) {
+      toast.error("No concept on this question");
+      return;
+    }
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+    setDetailsName(conceptName);
+    try {
+      const data = await fetchConceptByTitle(conceptName, {
+        subject: row.subject,
+        system: row.system,
+        chapter: row.chapter,
+        topic: row.topic,
+      });
+      setDetailsConcept(data.detail);
+      setDetailsKeyPoints(data.keyPoints);
+      if (data.conceptName) setDetailsName(data.conceptName);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Concept not found");
+      setDetailsOpen(false);
+    } finally {
+      setDetailsLoading(false);
+    }
   };
 
   const saveEdit = async () => {
@@ -465,6 +499,17 @@ export default function AllQuestions() {
                 sba={r.sba}
               />
               <div className="absolute top-2 right-2 print:hidden flex gap-1 opacity-80 group-hover:opacity-100">
+                {r.concept?.trim() ? (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => openConceptDetails(r)}
+                    aria-label="Concept details"
+                    title="Concept details"
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </Button>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -597,6 +642,17 @@ export default function AllQuestions() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ConceptDetailsDialog
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        conceptName={detailsName}
+        detail={detailsConcept}
+        keyPoints={detailsKeyPoints}
+        loading={detailsLoading}
+        showDownloadPdf
+      />
     </div>
   );
 }
+

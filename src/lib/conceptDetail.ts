@@ -1,3 +1,4 @@
+import { apiUrl } from "@/lib/apiBase";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DetailTable = {
@@ -91,6 +92,103 @@ export function conceptDetailFromApi(data: Record<string, unknown>): ConceptDeta
     paragraphs,
     table,
     verbatimText: verbatimFromRaw,
+  };
+}
+
+export type ConceptLookupFilters = {
+  subject?: string;
+  system?: string;
+  chapter?: string;
+  topic?: string;
+};
+
+function conceptFromLookupResponse(data: {
+  concept?: Record<string, unknown>;
+  key_points?: { content?: string }[];
+}): {
+  conceptId: string | null;
+  conceptName: string;
+  detail: ConceptDetail;
+  keyPoints: string[];
+} {
+  const concept = data.concept ?? {};
+  const conceptId = typeof concept.id === "string" ? concept.id : null;
+  return {
+    conceptId,
+    conceptName: typeof concept.title === "string" ? concept.title : "",
+    detail: conceptDetailFromApi(concept),
+    keyPoints: (data.key_points ?? []).map((kp) => kp.content ?? "").filter(Boolean),
+  };
+}
+
+export async function fetchConceptByTitle(
+  title: string,
+  filters?: ConceptLookupFilters,
+): Promise<{
+  conceptId: string | null;
+  conceptName: string;
+  detail: ConceptDetail;
+  keyPoints: string[];
+}> {
+  const name = title.trim();
+  if (!name) throw new Error("Concept name required");
+
+  try {
+    const params = new URLSearchParams({ title: name });
+    if (filters?.subject?.trim()) params.set("subject", filters.subject.trim());
+    if (filters?.system?.trim()) params.set("system", filters.system.trim());
+    if (filters?.chapter?.trim()) params.set("chapter", filters.chapter.trim());
+    if (filters?.topic?.trim()) params.set("topic", filters.topic.trim());
+    const res = await fetch(apiUrl(`/api/concepts/lookup?${params}`));
+    const data = (await res.json().catch(() => ({}))) as {
+      concept?: Record<string, unknown>;
+      key_points?: { content?: string }[];
+      error?: string;
+    };
+    if (res.ok && data.concept) return conceptFromLookupResponse(data);
+    if (!res.ok && res.status !== 404) throw new Error(data.error ?? "Concept lookup failed");
+  } catch (e) {
+    if (e instanceof Error && !/fetch|network|failed/i.test(e.message)) throw e;
+  }
+
+  let { data: concept, error } = await supabase
+    .from("concepts")
+    .select("id, title, detail_summary, detail_paragraphs, detail_table, raw_extraction")
+    .ilike("title", name)
+    .maybeSingle();
+
+  if (!concept) {
+    ({ data: concept, error } = await supabase
+      .from("concepts")
+      .select("id, title, detail_summary, detail_paragraphs, detail_table, raw_extraction")
+      .ilike("title", `%${name}%`)
+      .limit(1)
+      .maybeSingle());
+  }
+
+  if (error && /detail_summary|detail_paragraphs|detail_table|column/i.test(error.message)) {
+    ({ data: concept, error } = await supabase
+      .from("concepts")
+      .select("id, title, raw_extraction")
+      .ilike("title", name)
+      .maybeSingle());
+  }
+
+  if (error) throw new Error(error.message);
+  if (!concept) throw new Error(`Concept not found: ${name}`);
+
+  const conceptId = typeof concept.id === "string" ? concept.id : null;
+  const { data: keyPoints, error: kpErr } = conceptId
+    ? await supabase.from("key_points").select("content, position").eq("concept_id", conceptId).order("position", { ascending: true })
+    : { data: [], error: null };
+
+  if (kpErr) throw new Error(kpErr.message);
+
+  return {
+    conceptId,
+    conceptName: typeof concept.title === "string" ? concept.title : name,
+    detail: conceptDetailFromApi(concept as Record<string, unknown>),
+    keyPoints: (keyPoints ?? []).map((kp) => kp.content).filter(Boolean),
   };
 }
 

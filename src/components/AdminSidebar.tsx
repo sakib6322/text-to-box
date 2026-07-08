@@ -12,6 +12,7 @@ import {
   Settings,
   Target,
   Users,
+  FileCheck,
 } from "lucide-react";
 import { logout } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -41,6 +42,7 @@ type NavItem = {
 const items: NavItem[] = [
   { label: "Home", to: "/", icon: School },
   { label: "Suggestions", to: "/suggestions", icon: Target },
+  { label: "My exams", to: "/my-exams", icon: FileCheck },
   { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
   {
     label: "Question bank",

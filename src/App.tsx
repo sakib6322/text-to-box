@@ -14,6 +14,11 @@ import CreateQuestionAI from "./pages/CreateQuestionAI.tsx";
 import AdminPlaceholder from "./pages/AdminPlaceholder.tsx";
 import AllQuestions from "./pages/AllQuestions.tsx";
 import AdminSettings from "./pages/AdminSettings.tsx";
+import CreateExam from "./pages/CreateExam.tsx";
+import ExamSchedules from "./pages/ExamSchedules.tsx";
+import MyExams from "./pages/MyExams.tsx";
+import TakeExam from "./pages/TakeExam.tsx";
+import ExamResult from "./pages/ExamResult.tsx";
 
 
 
@@ -37,6 +42,9 @@ const App = () => (
           >
             <Route index element={<Index />} />
             <Route path="suggestions" element={<Suggestions />} />
+            <Route path="my-exams" element={<MyExams />} />
+            <Route path="my-exams/take/:examId" element={<TakeExam />} />
+            <Route path="my-exams/result/:attemptId" element={<ExamResult />} />
           </Route>
           <Route
             path="/admin"
@@ -51,8 +59,8 @@ const App = () => (
             <Route path="academic/subjects" element={<AdminPlaceholder />} />
             <Route path="question-bank/create-ai" element={<CreateQuestionAI />} />
             <Route path="question-bank/questions" element={<AllQuestions />} />
-            <Route path="exam/create" element={<AdminPlaceholder />} />
-            <Route path="exam/schedules" element={<AdminPlaceholder />} />
+            <Route path="exam/create" element={<CreateExam />} />
+            <Route path="exam/schedules" element={<ExamSchedules />} />
             <Route path="practice-sheets" element={<AdminPlaceholder />} />
             <Route path="students" element={<AdminPlaceholder />} />
             <Route path="teachers" element={<AdminPlaceholder />} />
