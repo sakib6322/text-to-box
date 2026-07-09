@@ -21,7 +21,6 @@ import { getSession } from "@/lib/auth";
 import { createExam, fetchExam, updateExam } from "@/lib/exams";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { useHeaderSearch } from "@/components/AppShellContext";
-import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
 type QuestionRow = {
   id: string;
@@ -76,7 +75,6 @@ export default function CreateExam() {
     placeholder: "Search question bank for exam...",
   }), [search]);
   useHeaderSearch(headerSearch);
-  const filtersVisible = useScrollUpVisible();
 
   const loadQuestions = useCallback(async () => {
     setLoadingQuestions(true);
@@ -300,9 +298,7 @@ export default function CreateExam() {
         </div>
       </Card>
 
-      <Card
-        className={`p-4 space-y-3 sticky-filter-card scroll-aware-panel ${filtersVisible ? "" : "hidden-on-scroll-down"}`}
-      >
+      <Card className="p-4 space-y-3 sticky-filter-card">
         <div className="flex flex-wrap gap-2">
           <Select value={typeFilter} onValueChange={setTypeFilter}>
             <SelectTrigger className="w-[120px]">

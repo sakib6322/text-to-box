@@ -26,7 +26,7 @@ export function AppShellHeader({ title, leftSlot }: { title: string; leftSlot?: 
     <header className={`app-header-bar app-shell-header ${visible ? "translate-y-0" : "-translate-y-full"}`}>
       <div className="flex h-14 items-center gap-2 px-4">
         {leftSlot}
-        <div className="text-sm font-medium text-primary shrink-0">{title}</div>
+        <div className="hidden sm:block text-sm font-medium text-primary shrink-0">{title}</div>
         {search ? (
           <div className="relative ml-2 flex-1 max-w-xl">
             <Search className="h-4 w-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
