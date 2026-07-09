@@ -3,6 +3,7 @@ import { SidebarInset, SidebarProvider, SidebarRail, SidebarTrigger } from "@/co
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { Separator } from "@/components/ui/separator";
 import { useSidebarOpen } from "@/hooks/use-sidebar-open";
+import { AppShellHeader } from "@/components/AppShellHeader";
 
 export default function AdminLayout() {
   const [open, setOpen] = useSidebarOpen(true);
@@ -12,11 +13,15 @@ export default function AdminLayout() {
       <AdminSidebar />
       <SidebarRail />
       <SidebarInset className="app-mesh-bg">
-        <header className="app-header-bar flex h-14 items-center gap-2 px-4">
-          <SidebarTrigger className="text-primary" />
-          <Separator orientation="vertical" className="h-5" />
-          <div className="text-sm font-medium text-primary">Admin Panel</div>
-        </header>
+        <AppShellHeader
+          title="Admin Panel"
+          leftSlot={
+            <>
+              <SidebarTrigger className="text-primary" />
+              <Separator orientation="vertical" className="h-5" />
+            </>
+          }
+        />
         <div className="app-mesh-content flex-1 p-4 md:p-6">
           <Outlet />
         </div>

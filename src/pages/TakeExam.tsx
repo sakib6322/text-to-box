@@ -11,6 +11,9 @@ import { getSession } from "@/lib/auth";
 import { startExam, submitExam, type ExamQuestion } from "@/lib/exams";
 import { ExamTimeline } from "@/components/ExamTimeline";
 
+
+
+
 type McqAnswers = Record<string, "true" | "false">;
 type SbaAnswers = Record<string, number>;
 

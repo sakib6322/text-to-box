@@ -19,6 +19,7 @@ import ExamSchedules from "./pages/ExamSchedules.tsx";
 import MyExams from "./pages/MyExams.tsx";
 import TakeExam from "./pages/TakeExam.tsx";
 import ExamResult from "./pages/ExamResult.tsx";
+import { AppShellProvider } from "@/components/AppShellContext";
 
 
 
@@ -27,6 +28,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <AppShellProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -71,6 +73,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </AppShellProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

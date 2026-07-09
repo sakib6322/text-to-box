@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Pencil, Trash2, BookOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { fetchConceptByTitle, emptyConceptDetail, type ConceptDetail } from "@/lib/conceptDetail";
+import { fetchConceptByKeyPointId, fetchConceptByTitle, emptyConceptDetail, type ConceptDetail } from "@/lib/conceptDetail";
+import { useHeaderSearch } from "@/components/AppShellContext";
+import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
@@ -37,6 +39,7 @@ type ConceptOption = { id: string; title: string | null };
 type QuestionRow = {
   id: string;
   createdAt: string;
+  sourcePointId?: string | null;
   subject: string;
   system: string;
   chapter: string;
@@ -85,6 +88,13 @@ export default function AllQuestions() {
   const [detailsName, setDetailsName] = useState("");
   const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
   const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
+  const headerSearch = useMemo(() => ({
+    value: search,
+    onChange: setSearch,
+    placeholder: "Search questions, subject, concept...",
+  }), [search]);
+  useHeaderSearch(headerSearch);
+  const filtersVisible = useScrollUpVisible();
 
   useEffect(() => {
     fetchTaxonomy("subjects")
@@ -171,7 +181,7 @@ export default function AllQuestions() {
     };
   }, [filterSubject, filterSystem, filterChapter, filterTopic]);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const qs = new URLSearchParams();
@@ -193,12 +203,12 @@ export default function AllQuestions() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, type, status, difficulty, filterSubject, filterSystem, filterChapter, filterTopic, filterConcept]);
 
   useEffect(() => {
     const timer = setTimeout(load, 250);
     return () => clearTimeout(timer);
-  }, [search, type, status, difficulty, filterSubject, filterSystem, filterChapter, filterTopic, filterConcept]);
+  }, [load]);
 
   const remove = async (id: string) => {
     setDeletingId(id);
@@ -247,12 +257,14 @@ export default function AllQuestions() {
     setDetailsLoading(true);
     setDetailsName(conceptName);
     try {
-      const data = await fetchConceptByTitle(conceptName, {
-        subject: row.subject,
-        system: row.system,
-        chapter: row.chapter,
-        topic: row.topic,
-      });
+      const data = row.sourcePointId?.trim()
+        ? await fetchConceptByKeyPointId(row.sourcePointId)
+        : await fetchConceptByTitle(conceptName, {
+            subject: row.subject,
+            system: row.system,
+            chapter: row.chapter,
+            topic: row.topic,
+          });
       setDetailsConcept(data.detail);
       setDetailsKeyPoints(data.keyPoints);
       if (data.conceptName) setDetailsName(data.conceptName);
@@ -331,13 +343,12 @@ export default function AllQuestions() {
         <Badge variant="secondary">{resultCount} items</Badge>
       </div>
 
-      <Card className="filter-card print:hidden">
+      <Card
+        className={`filter-card sticky-filter-card scroll-aware-panel print:hidden ${
+          filtersVisible ? "" : "hidden-on-scroll-down"
+        }`}
+      >
         <div className="filter-grid-mobile lg:grid-cols-4">
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search subject / system / chapter / topic / concept"
-          />
           <Select value={type} onValueChange={setType}>
             <SelectTrigger>
               <SelectValue placeholder="Type" />

@@ -152,6 +152,24 @@
     @apply glass-card p-4;
   }
 
+  .sticky-filter-card {
+    @apply sticky z-20 backdrop-blur supports-[backdrop-filter]:bg-background/80;
+    top: 4.25rem;
+  }
+
+  .scroll-aware-panel {
+    @apply transition-transform duration-200;
+  }
+
+  .scroll-aware-panel.hidden-on-scroll-down {
+    @apply -translate-y-[120%];
+  }
+
+  .app-shell-header {
+    @apply sticky top-0 z-40 transition-transform duration-200;
+  }
+
+
   .filter-grid-mobile {
     @apply grid grid-cols-3 gap-2 sm:grid-cols-2 lg:grid-cols-3;
   }

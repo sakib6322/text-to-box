@@ -2085,7 +2085,7 @@ app.get("/api/questions", async (req, res) => {
 
     let query = db
       .from("questions")
-      .select("id, created_at, question_mode, stem, payload, status, difficulty, marks, subject, system, chapter, topic, concept")
+      .select("id, created_at, source_point_id, question_mode, stem, payload, status, difficulty, marks, subject, system, chapter, topic, concept")
       .order("created_at", { ascending: false })
       .limit(300);
     if (type) query = query.eq("question_mode", type);
@@ -2102,6 +2102,7 @@ app.get("/api/questions", async (req, res) => {
     let rows = (data ?? []).map((q) => ({
       id: q.id,
       createdAt: q.created_at,
+      sourcePointId: q.source_point_id ?? null,
       questionMode: q.question_mode,
       subject: q.subject ?? "",
       system: q.system ?? "",
@@ -2219,6 +2220,7 @@ function formatQuestionRow(q) {
   const mode = q.question_mode;
   return {
     id: q.id,
+    sourcePointId: q.source_point_id ?? null,
     questionMode: mode,
     subject: q.subject ?? "",
     system: q.system ?? "",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { BookOpen, Calendar, ChevronRight, Clock, FileText, Loader2, Trophy } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -15,6 +15,7 @@ import { getSession } from "@/lib/auth";
 import { fetchExam, fetchMyExams, formatDuration, formatScheduleRange, type ExamQuestion, type ExamSummary } from "@/lib/exams";
 import { ExamPaperLoading, ExamPaperView } from "@/components/ExamPaperView";
 import { ExamTimeline } from "@/components/ExamTimeline";
+import { useAppShell, useHeaderSearch } from "@/components/AppShellContext";
 
 const liveColors: Record<string, string> = {
   scheduled: "bg-blue-500/15 text-blue-700",
@@ -28,6 +29,15 @@ export default function MyExams() {
   const [paperExam, setPaperExam] = useState<ExamSummary | null>(null);
   const [paperQuestions, setPaperQuestions] = useState<ExamQuestion[]>([]);
   const [paperLoading, setPaperLoading] = useState(false);
+  const [search, setSearch] = useState("");
+  const { pushNotification } = useAppShell();
+  const lastReadyCountRef = useRef<number>(0);
+  const headerSearch = useMemo(() => ({
+    value: search,
+    onChange: setSearch,
+    placeholder: "Search my exams...",
+  }), [search]);
+  useHeaderSearch(headerSearch);
 
   const load = useCallback(async () => {
     const email = getSession()?.email;
@@ -50,6 +60,17 @@ export default function MyExams() {
     const t = setInterval(load, 30_000);
     return () => clearInterval(t);
   }, [load]);
+
+  useEffect(() => {
+    const ready = exams.filter((e) => e.canStart).length;
+    if (ready > 0 && ready !== lastReadyCountRef.current) {
+      pushNotification({
+        title: "Exam ready",
+        message: `${ready} exam এখন attend করা যাবে`,
+      });
+    }
+    lastReadyCountRef.current = ready;
+  }, [exams, pushNotification]);
 
   const openPaper = async (exam: ExamSummary) => {
     setPaperExam(exam);
@@ -83,7 +104,11 @@ export default function MyExams() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {exams.map((exam) => {
+          {exams
+            .filter((exam) =>
+              `${exam.title} ${exam.description}`.toLowerCase().includes(search.trim().toLowerCase()),
+            )
+            .map((exam) => {
             const live = exam.liveStatus ?? exam.status;
             const attempt = exam.attempt;
             const done = attempt?.status === "submitted" || attempt?.status === "expired";
@@ -160,7 +185,7 @@ export default function MyExams() {
                 </div>
               </Card>
             );
-          })}
+            })}
         </div>
       )}
 

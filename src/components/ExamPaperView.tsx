@@ -6,7 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { emptyConceptDetail, fetchConceptByTitle, type ConceptDetail } from "@/lib/conceptDetail";
+import { emptyConceptDetail, fetchConceptByKeyPointId, fetchConceptByTitle, type ConceptDetail } from "@/lib/conceptDetail";
 import type { ExamQuestion } from "@/lib/exams";
 import { toast } from "sonner";
 
@@ -39,12 +39,14 @@ export function ExamPaperView({
     setDetailsLoading(true);
     setDetailsName(q.concept);
     try {
-      const data = await fetchConceptByTitle(q.concept, {
-        subject: q.subject,
-        system: q.system,
-        chapter: q.chapter,
-        topic: q.topic,
-      });
+      const data = q.sourcePointId?.trim()
+        ? await fetchConceptByKeyPointId(q.sourcePointId)
+        : await fetchConceptByTitle(q.concept, {
+            subject: q.subject,
+            system: q.system,
+            chapter: q.chapter,
+            topic: q.topic,
+          });
       setDetailsConcept(data.detail);
       setDetailsKeyPoints(data.keyPoints);
       if (data.conceptName) setDetailsName(data.conceptName);

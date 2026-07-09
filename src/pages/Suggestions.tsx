@@ -23,6 +23,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { useHeaderSearch } from "@/components/AppShellContext";
+import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
 type BoardLink = {
   board_id: string;
@@ -102,6 +104,13 @@ const Suggestions = () => {
   const [topicId, setTopicId] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
   const [conceptFilter, setConceptFilter] = useState("all");
+  const headerSearch = useMemo(() => ({
+    value: search,
+    onChange: setSearch,
+    placeholder: "Search suggestions, concept, taxonomy...",
+  }), [search]);
+  useHeaderSearch(headerSearch);
+  const filtersVisible = useScrollUpVisible();
 
   const subjectName = useMemo(
     () => (subjectId === "all" ? "" : subjects.find((s) => s.id === subjectId)?.name ?? ""),
@@ -415,7 +424,11 @@ const Suggestions = () => {
       </header>
 
       <main className="app-mesh-content container mx-auto px-4 py-8">
-        <Card className="filter-card mb-4 space-y-3">
+        <Card
+          className={`filter-card sticky-filter-card scroll-aware-panel mb-4 space-y-3 ${
+            filtersVisible ? "" : "hidden-on-scroll-down"
+          }`}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <ConnectionStatus compact />
             <Button
@@ -429,7 +442,6 @@ const Suggestions = () => {
               Reset filters
             </Button>
           </div>
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search text…" />
           <div className="filter-grid-mobile">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Subject</Label>

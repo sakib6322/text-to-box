@@ -2,6 +2,7 @@ import { apiUrl } from "@/lib/apiBase";
 
 export type ExamQuestion = {
   id: string;
+  sourcePointId?: string | null;
   questionMode: "mcq" | "sba";
   subject: string;
   system: string;
