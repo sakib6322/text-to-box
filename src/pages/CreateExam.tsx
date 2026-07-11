@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+
+
   Select,
   SelectContent,
   SelectItem,
@@ -34,6 +36,13 @@ type QuestionRow = {
   mcq?: { stem?: string } | null;
   sba?: { stem?: string } | null;
 };
+
+
+
+
+
+
+//ji == second to last
 
 function toLocalInput(iso: string | null): string {
   if (!iso) return "";
@@ -74,7 +83,11 @@ export default function CreateExam() {
     onChange: setSearch,
     placeholder: "Search question bank for exam...",
   }), [search]);
+
   useHeaderSearch(headerSearch);
+  
+
+//ji == first
 
   const loadQuestions = useCallback(async () => {
     setLoadingQuestions(true);

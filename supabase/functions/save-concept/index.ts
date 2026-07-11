@@ -14,6 +14,7 @@ async function embed(text: string, apiKey: string): Promise<number[] | null> {
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: "google/text-embedding-004", input: text }),
   });
+  
   if (!r.ok) {
     console.error("embedding failed", r.status, await r.text());
     return null;
