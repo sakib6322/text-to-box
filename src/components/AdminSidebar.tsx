@@ -41,6 +41,12 @@ type NavItem = {
 };
 
 const userItems: NavItem[] = [
+  { label: "My progress", to: "/study/progress", icon: BarChart3 },
+  { label: "Suggestions", to: "/suggestions", icon: Target },
+  { label: "My exams", to: "/my-exams", icon: FileCheck },
+];
+
+const adminUserItems: NavItem[] = [
   { label: "Home", to: "/", icon: School },
   { label: "Suggestions", to: "/suggestions", icon: Target },
   { label: "My progress", to: "/study/progress", icon: BarChart3 },
@@ -71,7 +77,7 @@ const adminItems: NavItem[] = [
   { label: "Settings", to: "/admin/settings", icon: Settings },
 ];
 
-const items: NavItem[] = [...userItems, ...adminItems];
+const items: NavItem[] = [...adminUserItems, ...adminItems];
 
 function NavDropdown({
   item,

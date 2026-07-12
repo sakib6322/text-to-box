@@ -186,6 +186,14 @@
     @apply glass-card p-4 h-full space-y-2;
   }
 
+  .user-mobile-shell {
+    @apply max-w-lg mx-auto;
+  }
+
+  .user-desktop-shell {
+    @apply max-w-5xl mx-auto;
+  }
+
   .btn-gradient {
     @apply relative overflow-hidden text-primary-foreground shadow-md transition-shadow duration-200;
     background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, BookOpen, Loader2, Pencil, RotateCcw, Trash2, TrendingUp, GraduationCap } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, RotateCcw, GraduationCap } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -18,6 +18,8 @@ import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, typ
 import { isAdmin } from "@/lib/auth";
 import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
 import { Progress } from "@/components/ui/progress";
+import { SuggestionKeyPointCard, mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Dialog,
   DialogContent,
@@ -29,11 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useHeaderSearch } from "@/components/AppShellContext";
 import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
-type BoardLink = {
-  board_id: string;
-  mention_count?: number | null;
-  boards: { id: string; name: string } | null;
-};
+type BoardLink = SuggestionBoardLink;
 
 type ConceptJoin = {
   title: string | null;
@@ -41,7 +39,6 @@ type ConceptJoin = {
   system: string | null;
   chapter: string | null;
   topic: string | null;
-  concept_boards?: BoardLink[] | null;
 } | null;
 
 type Row = {
@@ -51,6 +48,7 @@ type Row = {
   increment_count: number;
   concept_id: string;
   concepts?: ConceptJoin;
+  key_point_boards?: BoardLink[] | null;
 };
 
 type BoardOption = { id: string; name: string };
@@ -62,20 +60,12 @@ function compactTaxonomy(c: ConceptJoin): string {
   return parts.join(" → ");
 }
 
-function mentionForBoard(row: Row, boardId: string): number {
-  const links = row.concepts?.concept_boards ?? [];
-  for (const l of links) {
-    const id = l.boards?.id ?? l.board_id;
-    if (id === boardId) return Number(l.mention_count ?? 1);
-  }
-  return 0;
-}
-
 function norm(s: string | null | undefined) {
   return (s ?? "").trim().toLowerCase();
 }
 
 const Suggestions = () => {
+  const isMobile = useIsMobile();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -143,17 +133,17 @@ const Suggestions = () => {
         language,
         increment_count,
         concept_id,
+        key_point_boards (
+          board_id,
+          mention_count,
+          boards ( id, name )
+        ),
         concepts (
           title,
           subject,
           system,
           chapter,
-          topic,
-          concept_boards (
-            board_id,
-            mention_count,
-            boards ( id, name )
-          )
+          topic
         )
       `,
       )
@@ -363,7 +353,7 @@ const Suggestions = () => {
       if (topicName && norm(c?.topic) !== norm(topicName)) return false;
       if (boardFilter !== "all") {
         const ids = new Set(
-          (c?.concept_boards ?? []).map((l) => l.boards?.id ?? l.board_id).filter(Boolean) as string[],
+          (r.key_point_boards ?? []).map((l) => l.boards?.id ?? l.board_id).filter(Boolean) as string[],
         );
         if (!ids.has(boardFilter)) return false;
       }
@@ -378,8 +368,8 @@ const Suggestions = () => {
 
     if (boardFilter !== "all") {
       return [...list].sort((a, b) => {
-        const ma = mentionForBoard(a, boardFilter);
-        const mb = mentionForBoard(b, boardFilter);
+        const ma = mentionForBoard(a.key_point_boards ?? [], boardFilter);
+        const mb = mentionForBoard(b.key_point_boards ?? [], boardFilter);
         if (mb !== ma) return mb - ma;
         return (b.increment_count || 0) - (a.increment_count || 0);
       });
@@ -387,22 +377,11 @@ const Suggestions = () => {
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
   }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search]);
 
-  const boardOccurrenceInList = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of filteredRows) {
-      for (const l of r.concepts?.concept_boards ?? []) {
-        const name = l.boards?.name?.trim();
-        if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-      }
-    }
-    return counts;
-  }, [filteredRows]);
-
   type ConceptGroup = {
     conceptId: string;
     title: string;
     taxonomy: string;
-    keyPointCount: number;
+    rows: Row[];
   };
 
   const conceptGroups = useMemo(() => {
@@ -411,13 +390,13 @@ const Suggestions = () => {
       if (!r.concept_id) continue;
       const existing = map.get(r.concept_id);
       if (existing) {
-        existing.keyPointCount += 1;
+        existing.rows.push(r);
       } else {
         map.set(r.concept_id, {
           conceptId: r.concept_id,
           title: (r.concepts?.title ?? "").trim() || "Untitled",
           taxonomy: compactTaxonomy(r.concepts),
-          keyPointCount: 1,
+          rows: [r],
         });
       }
     }
@@ -445,13 +424,14 @@ const Suggestions = () => {
     conceptFilter !== "all";
 
   const adminView = isAdmin();
+  const homeLink = adminView ? "/" : "/study/progress";
 
   return (
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
       <header className="app-header-bar border-b">
         <div className="app-mesh-content container mx-auto px-4 py-6 flex items-center gap-4">
           <Button asChild variant="ghost" size="icon" aria-label="Back">
-            <Link to="/">
+            <Link to={homeLink}>
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
@@ -460,7 +440,7 @@ const Suggestions = () => {
             <p className="text-muted-foreground mt-1">
               {adminView
                 ? "Filters use the same Subject → System → Chapter → Topic and Boards as Admin Settings. Suggestions are matched by taxonomy names saved on each concept."
-                : "Concept-wise study and practice — pick a concept to learn key points and build custom practice exams."}
+                : "Concept-wise key points with board mentions — study, practice, and track your progress."}
             </p>
           </div>
         </div>
@@ -622,75 +602,28 @@ const Suggestions = () => {
             {filteredRows.map((r) => {
               const tax = compactTaxonomy(r.concepts);
               const title = (r.concepts?.title ?? "").trim();
-              const boardNames = [...new Set(
-                (r.concepts?.concept_boards ?? [])
-                  .map((l) => l.boards?.name)
-                  .filter((n): n is string => Boolean(n?.trim())),
-              )];
-              const boardMention = boardFilter !== "all" ? mentionForBoard(r, boardFilter) : null;
               return (
-                <Card key={r.id} className="suggestion-card">
-                  <div className="w-full text-left">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <Badge className="tabular-nums gap-1 bg-primary/90 text-primary-foreground border-0">
-                        <TrendingUp className="h-3 w-3" />
-                        {r.increment_count}
-                      </Badge>
-                      <div className="flex flex-wrap gap-1 justify-end">
-                        {boardMention != null && boardMention > 0 ? (
-                          <Badge variant="secondary" className="text-[10px] font-normal tabular-nums">
-                            Board ×{boardMention}
-                          </Badge>
-                        ) : null}
-                        {boardNames.map((n) => {
-                          const cnt = boardOccurrenceInList.get(n) ?? 1;
-                          return (
-                            <Badge key={n} variant="outline" className="text-[10px] font-normal tabular-nums">
-                              {n}{cnt > 1 ? ` ×${cnt}` : ""}
-                            </Badge>
-                          );
-                        })}
-                      </div>
-                    </div>
-                    <p className="text-sm leading-relaxed text-pretty mt-2">{r.content}</p>
-                    {title ? (
-                      <div className="mt-2 space-y-0.5">
-                        <p className="text-sm font-medium text-foreground">{title}</p>
-                        {tax ? <p className="text-[11px] text-muted-foreground leading-snug">{tax}</p> : null}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={() => openConceptDetails(r)}>
-                      <BookOpen className="h-4 w-4 mr-1" />
-                      Details
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={() => openEdit(r)}>
-                      <Pencil className="h-4 w-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      className="flex-1 min-w-[5.5rem]"
-                      onClick={() => setDeleteTarget(r)}
-                      disabled={deleting === r.id}
-                    >
-                      {deleting === r.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                </Card>
+                <SuggestionKeyPointCard
+                  key={r.id}
+                  content={r.content}
+                  incrementCount={r.increment_count}
+                  boardLinks={r.key_point_boards ?? []}
+                  boardFilterId={boardFilter}
+                  conceptTitle={title}
+                  taxonomy={tax}
+                  showActions
+                  deleting={deleting === r.id}
+                  onDetails={() => openConceptDetails(r)}
+                  onEdit={() => openEdit(r)}
+                  onDelete={() => setDeleteTarget(r)}
+                />
               );
             })}
           </div>
         ) : conceptGroups.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
         ) : (
-          <div className="space-y-4 max-w-lg mx-auto">
+          <div className={isMobile ? "space-y-4 max-w-lg mx-auto" : "space-y-6 max-w-5xl mx-auto"}>
             <div className="flex items-center justify-between px-1">
               <p className="text-sm text-muted-foreground">{conceptGroups.length} concept(s)</p>
               <Button asChild variant="ghost" size="sm" className="text-xs h-8">
@@ -702,20 +635,20 @@ const Suggestions = () => {
               const pct = studyCompletionPct(prog);
               const sessionCount = getPracticeSessionsForConcept(g.conceptId).length;
               return (
-                <Card key={g.conceptId} className="p-4 space-y-3 shadow-sm">
-                  <div>
-                    <p className="font-semibold text-base">{g.title}</p>
-                    {g.taxonomy ? <p className="text-[11px] text-muted-foreground mt-1">{g.taxonomy}</p> : null}
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <Badge variant="secondary" className="text-[10px]">{g.keyPointCount} key points</Badge>
+                <Card key={g.conceptId} className={`space-y-4 shadow-sm ${isMobile ? "p-4" : "p-5"}`}>
+                  <div className="space-y-2">
+                    <p className={`font-semibold ${isMobile ? "text-base" : "text-lg"}`}>{g.title}</p>
+                    {g.taxonomy ? <p className="text-[11px] text-muted-foreground">{g.taxonomy}</p> : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Badge variant="secondary" className="text-[10px]">{g.rows.length} key points</Badge>
                       <Badge variant="outline" className="text-[10px] tabular-nums">{pct}% studied</Badge>
                       {sessionCount > 0 ? (
                         <Badge variant="outline" className="text-[10px]">{sessionCount} practice</Badge>
                       ) : null}
                     </div>
-                    <Progress value={pct} className="h-1.5 mt-2" />
+                    <Progress value={pct} className="h-1.5" />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className={`grid gap-2 ${isMobile ? "grid-cols-2" : "grid-cols-2 max-w-md"}`}>
                     <Button asChild className="h-10">
                       <Link to={`/concept/${g.conceptId}/learn`}>
                         <GraduationCap className="h-4 w-4 mr-1.5" /> Study & Practice
@@ -726,6 +659,18 @@ const Suggestions = () => {
                         <BookOpen className="h-4 w-4 mr-1.5" /> Details
                       </Link>
                     </Button>
+                  </div>
+                  <div className={isMobile ? "space-y-2" : "grid sm:grid-cols-2 gap-2"}>
+                    {g.rows.map((r) => (
+                      <SuggestionKeyPointCard
+                        key={r.id}
+                        content={r.content}
+                        incrementCount={r.increment_count}
+                        boardLinks={r.key_point_boards ?? []}
+                        boardFilterId={boardFilter}
+                        compact
+                      />
+                    ))}
                   </div>
                 </Card>
               );

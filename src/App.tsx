@@ -4,7 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Index from "./pages/Index.tsx";
+import RoleBasedHome from "./components/RoleBasedHome.tsx";
 import Suggestions from "./pages/Suggestions.tsx";
 import Login from "./pages/Login.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -46,7 +46,7 @@ const App = () => (
               </ProtectedRoute>
             }
           >
-            <Route index element={<Index />} />
+            <Route index element={<RoleBasedHome />} />
             <Route path="suggestions" element={<Suggestions />} />
             <Route path="my-exams" element={<MyExams />} />
             <Route path="my-exams/take/:examId" element={<TakeExam />} />

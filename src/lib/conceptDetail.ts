@@ -439,16 +439,16 @@ export async function fetchConceptByTitle(
   return result;
 }
 
-export type KeyPointWithBoards = {
-  id?: string;
-  content: string;
-  boardNames?: string[];
+export type BoardLinkDisplay = {
+  name: string;
+  mention_count?: number;
 };
 
 export type KeyPointWithBoards = {
   id?: string;
   content: string;
   boardNames?: string[];
+  boardLinks?: BoardLinkDisplay[];
 };
 
 export type ConceptTaxonomy = {
@@ -472,7 +472,7 @@ export async function fetchConceptByIdWithBoards(conceptId: string): Promise<Con
   const res = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(id)}`));
   const data = (await res.json().catch(() => ({}))) as {
     concept?: Record<string, unknown>;
-    key_points?: { id?: string; content?: string; board_names?: string[] }[];
+    key_points?: { id?: string; content?: string; board_names?: string[]; board_links?: { name?: string; mention_count?: number }[] }[];
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? "Concept not found");
@@ -492,6 +492,11 @@ export async function fetchConceptByIdWithBoards(conceptId: string): Promise<Con
       id: kp.id,
       content: kp.content ?? "",
       boardNames: Array.isArray(kp.board_names) ? kp.board_names.filter(Boolean) : [],
+      boardLinks: Array.isArray(kp.board_links)
+        ? kp.board_links
+            .filter((l) => l?.name?.trim())
+            .map((l) => ({ name: l.name!.trim(), mention_count: Number(l.mention_count ?? 1) }))
+        : undefined,
     })),
   };
 }

@@ -154,26 +154,28 @@ app.get("/api/debug/embeddings-stats", async (_req, res) => {
   }
 });
 
-async function linkConceptBoards(db, conceptId, boardIds) {
+async function linkKeyPointBoards(db, keyPointId, boardIds) {
   const ids = Array.isArray(boardIds) ? boardIds.filter((id) => typeof id === "string" && id.trim()) : [];
-  if (ids.length === 0 || !conceptId) return;
+  if (ids.length === 0 || !keyPointId) return;
   for (const board_id of ids.map((id) => id.trim())) {
     const { data: existing } = await db
-      .from("concept_boards")
+      .from("key_point_boards")
       .select("mention_count")
-      .eq("concept_id", conceptId)
+      .eq("key_point_id", keyPointId)
       .eq("board_id", board_id)
       .maybeSingle();
     if (existing) {
       const { error } = await db
-        .from("concept_boards")
+        .from("key_point_boards")
         .update({ mention_count: Number(existing.mention_count || 0) + 1 })
-        .eq("concept_id", conceptId)
+        .eq("key_point_id", keyPointId)
         .eq("board_id", board_id);
-      if (error) console.error("linkConceptBoards:", error.message);
+      if (error) console.error("linkKeyPointBoards:", error.message);
     } else {
-      const { error } = await db.from("concept_boards").insert({ concept_id: conceptId, board_id, mention_count: 1 });
-      if (error) console.error("linkConceptBoards:", error.message);
+      const { error } = await db
+        .from("key_point_boards")
+        .insert({ key_point_id: keyPointId, board_id, mention_count: 1 });
+      if (error) console.error("linkKeyPointBoards:", error.message);
     }
   }
 }
@@ -209,13 +211,35 @@ function getBearerToken(req) {
   return String(req.body?.token ?? req.query?.token ?? "").trim() || null;
 }
 
-async function enrichKeyPointsWithBoards(db, conceptId, keyPoints) {
-  const boardsByConcept = await fetchBoardNamesByConceptIds(db, [conceptId]);
-  const boardNames = boardsByConcept.get(conceptId) ?? [];
-  return (keyPoints ?? []).map((kp) => ({
-    ...kp,
-    board_names: boardNames,
-  }));
+async function fetchBoardsByKeyPointIds(db, keyPointIds) {
+  if (!keyPointIds.length) return new Map();
+  const { data } = await db
+    .from("key_point_boards")
+    .select("key_point_id, mention_count, boards(id, name)")
+    .in("key_point_id", keyPointIds);
+  const map = new Map();
+  for (const row of data ?? []) {
+    const kpid = row.key_point_id;
+    const name = row?.boards?.name;
+    if (!kpid || typeof name !== "string" || !name.trim()) continue;
+    const list = map.get(kpid) ?? [];
+    list.push({ name: name.trim(), mention_count: Number(row.mention_count ?? 1) });
+    map.set(kpid, list);
+  }
+  return map;
+}
+
+async function enrichKeyPointsWithBoards(db, _conceptId, keyPoints) {
+  const ids = (keyPoints ?? []).map((kp) => kp.id).filter(Boolean);
+  const boardsByKp = await fetchBoardsByKeyPointIds(db, ids);
+  return (keyPoints ?? []).map((kp) => {
+    const links = boardsByKp.get(kp.id) ?? [];
+    return {
+      ...kp,
+      board_names: links.map((l) => l.name),
+      board_links: links,
+    };
+  });
 }
 
 function parseGeminiJson(rawText) {
@@ -1223,6 +1247,111 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
+async function requireAuthUser(req, res, db) {
+  const token = getBearerToken(req);
+  const user = token ? await validateSession(db, token) : null;
+  if (!user) {
+    res.status(401).json({ error: "Not authenticated" });
+    return null;
+  }
+  return user;
+}
+
+app.get("/api/user/progress/study", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await requireAuthUser(req, res, db);
+    if (!user) return;
+    const { data, error } = await db
+      .from("user_study_progress")
+      .select("concept_id, concept_name, studied_key_point_ids, total_key_points, last_studied_at")
+      .eq("user_id", user.id);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ rows: data ?? [] });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.put("/api/user/progress/study", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await requireAuthUser(req, res, db);
+    if (!user) return;
+    const body = req.body ?? {};
+    const conceptId = String(body.concept_id ?? "").trim();
+    if (!conceptId) return res.status(400).json({ error: "concept_id required" });
+    const row = {
+      user_id: user.id,
+      concept_id: conceptId,
+      concept_name: String(body.concept_name ?? ""),
+      studied_key_point_ids: Array.isArray(body.studied_key_point_ids) ? body.studied_key_point_ids : [],
+      total_key_points: Number(body.total_key_points ?? 0),
+      last_studied_at: body.last_studied_at ?? new Date().toISOString(),
+    };
+    const { error } = await db.from("user_study_progress").upsert(row, { onConflict: "user_id,concept_id" });
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.get("/api/user/progress/practice", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await requireAuthUser(req, res, db);
+    if (!user) return;
+    const { data, error } = await db
+      .from("user_practice_sessions")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ rows: data ?? [] });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.put("/api/user/progress/practice", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await requireAuthUser(req, res, db);
+    if (!user) return;
+    const body = req.body ?? {};
+    const id = String(body.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    const row = {
+      id,
+      user_id: user.id,
+      concept_id: String(body.concept_id ?? ""),
+      concept_name: String(body.concept_name ?? ""),
+      title: String(body.title ?? ""),
+      question_ids: Array.isArray(body.question_ids) ? body.question_ids : [],
+      answers: body.answers ?? null,
+      score: body.score != null ? Number(body.score) : null,
+      total: body.total != null ? Number(body.total) : null,
+      created_at: body.created_at ?? new Date().toISOString(),
+      completed_at: body.completed_at ?? null,
+    };
+    const { error } = await db.from("user_practice_sessions").upsert(row, { onConflict: "user_id,id" });
+    if (error) return res.status(500).json({ error: formatSupabaseError(error) });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.get("/api/settings/gemini-keys", async (_req, res) => {
   try {
     const db = requireSupabase(res);
@@ -1906,7 +2035,7 @@ app.post("/api/approve-point", async (req, res) => {
       const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
       if (upErr) return res.status(500).json({ error: upErr.message });
     }
-    await linkConceptBoards(db, point.concept_id, boardIds);
+    await linkKeyPointBoards(db, point.id, boardIds);
 
     if (!createdNewPoint) {
       const { error: incErr } = await db
@@ -2089,8 +2218,6 @@ app.post("/api/save-concept", async (req, res) => {
     const saveBoardIds = Array.isArray(body?.board_ids)
       ? body.board_ids.filter((id) => typeof id === "string" && id.trim())
       : [];
-    if (saveBoardIds.length) await linkConceptBoards(db, concept.id, saveBoardIds);
-
     const keyPointRows = await Promise.all(
       points.map(async (content, idx) => {
         const emb = await embedTextRotating(db, content);
@@ -2107,6 +2234,12 @@ app.post("/api/save-concept", async (req, res) => {
     const embeddingsMissing = keyPointRows.length - embeddingsSaved;
     const { data: insertedKp, error: kpErr } = await db.from("key_points").insert(keyPointRows).select("id");
     if (kpErr) return res.status(500).json({ error: kpErr.message });
+
+    if (saveBoardIds.length && insertedKp?.length) {
+      for (const kp of insertedKp) {
+        if (kp?.id) await linkKeyPointBoards(db, kp.id, saveBoardIds);
+      }
+    }
 
     return res.json({
       ok: true,

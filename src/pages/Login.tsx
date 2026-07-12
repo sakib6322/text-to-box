@@ -23,7 +23,7 @@ export default function Login() {
 
   if (isAuthenticated()) {
     if (from && from !== "/login") return <Navigate to={from} replace />;
-    return <Navigate to={isAdmin() ? "/admin" : "/"} replace />;
+    return <Navigate to={isAdmin() ? "/admin" : "/study/progress"} replace />;
   }
 
   const handleLogin = async (mode: "admin" | "user") => {
@@ -36,7 +36,7 @@ export default function Login() {
           ? from
           : mode === "admin" || session.role === "admin"
             ? "/admin"
-            : "/";
+            : "/study/progress";
       navigate(dest, { replace: true });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Login failed");
