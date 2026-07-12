@@ -972,7 +972,7 @@ export default function CreateQuestionAI() {
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ, ক্লিক, অথবা paste করুন</p>
+              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ, ক্লিক করুন</p>
               <p className="text-xs text-muted-foreground mt-1">Image অথবা PDF</p>
               <Input
                 ref={fileRef}

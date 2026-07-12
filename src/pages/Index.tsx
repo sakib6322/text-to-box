@@ -196,6 +196,7 @@ const Index = () => {
     setImageFile(null);
     setImagePreview(null);
     setIsPdf(false);
+
     setConceptName("");
     setSourceText("");
     setConceptDetail(emptyConceptDetail());
@@ -320,7 +321,7 @@ const Index = () => {
             <div>
               <h2 className="text-sm font-semibold">AI Extract</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Image <strong>অথবা</strong> source text দিয়ে extract করুন। Concept detail, table, key points ও
+                Image, pdf <strong>অথবা</strong> source text দিয়ে extract করুন। Concept detail, table, key points ও
                 suggestions match একসাথে আসবে।
               </p>
             </div>
@@ -340,7 +341,7 @@ const Index = () => {
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ করুন, ক্লিক করুন, অথবা paste করুন</p>
+              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ করুন, ক্লিক করুন।</p>
               <p className="text-xs text-muted-foreground mt-1">Image (JPG, PNG…) অথবা PDF</p>
               <Input
                 ref={fileRef}
