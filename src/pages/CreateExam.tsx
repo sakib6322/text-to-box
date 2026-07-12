@@ -23,6 +23,8 @@ import { getSession } from "@/lib/auth";
 import { createExam, fetchExam, updateExam } from "@/lib/exams";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { useHeaderSearch } from "@/components/AppShellContext";
+import { TaxonomySelects } from "@/components/TaxonomySelects";
+import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 
 type QuestionRow = {
   id: string;
@@ -72,6 +74,9 @@ export default function CreateExam() {
   const [useScheduleWindow, setUseScheduleWindow] = useState(true);
   const [autoScheduleEnd, setAutoScheduleEnd] = useState(true);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [taxonomy, setTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection());
+  const [conceptFilter, setConceptFilter] = useState("all");
+  const [conceptOptions, setConceptOptions] = useState<{ id: string; title: string | null }[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
@@ -94,6 +99,12 @@ export default function CreateExam() {
     try {
       const qs = new URLSearchParams();
       if (typeFilter !== "all") qs.set("type", typeFilter);
+      if (taxonomy.subjectName) qs.set("subject", taxonomy.subjectName);
+      if (taxonomy.systemName) qs.set("system", taxonomy.systemName);
+      if (taxonomy.chapterName) qs.set("chapter", taxonomy.chapterName);
+      if (taxonomy.topicName) qs.set("topic", taxonomy.topicName);
+      const conceptTitle = conceptOptions.find((c) => c.id === conceptFilter)?.title;
+      if (conceptFilter !== "all" && conceptTitle) qs.set("concept", conceptTitle);
       const res = await fetch(apiUrl(`/api/questions?${qs}`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to load questions");
@@ -104,7 +115,31 @@ export default function CreateExam() {
     } finally {
       setLoadingQuestions(false);
     }
-  }, [typeFilter]);
+  }, [typeFilter, taxonomy, conceptFilter, conceptOptions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { supabase } = await import("@/integrations/supabase/client");
+        let q = supabase.from("concepts").select("id, title").order("title").limit(200);
+        if (taxonomy.subjectName) q = q.eq("subject", taxonomy.subjectName);
+        if (taxonomy.systemName) q = q.eq("system", taxonomy.systemName);
+        if (taxonomy.chapterName) q = q.eq("chapter", taxonomy.chapterName);
+        if (taxonomy.topicId) q = q.eq("topic_id", taxonomy.topicId);
+        else if (taxonomy.topicName) q = q.eq("topic", taxonomy.topicName);
+        const { data } = await q;
+        if (!cancelled) setConceptOptions((data ?? []).map((c) => ({ id: c.id, title: c.title })));
+      } catch {
+        if (!cancelled) setConceptOptions([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [taxonomy]);
+
+  useEffect(() => {
+    setConceptFilter("all");
+  }, [taxonomy.subjectId, taxonomy.systemId, taxonomy.chapterId, taxonomy.topicId]);
 
   useEffect(() => {
     loadQuestions();
@@ -312,17 +347,34 @@ export default function CreateExam() {
       </Card>
 
       <Card className="p-4 space-y-3 sticky-filter-card">
-        <div className="flex flex-wrap gap-2">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-[120px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="mcq">MCQ</SelectItem>
-              <SelectItem value="sba">SBA</SelectItem>
-            </SelectContent>
-          </Select>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="mcq">MCQ</SelectItem>
+                <SelectItem value="sba">SBA</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <TaxonomySelects value={taxonomy} onChange={setTaxonomy} />
+          <div className="space-y-1.5 max-w-md">
+            <Label className="text-xs text-muted-foreground">Concept</Label>
+            <Select value={conceptFilter} onValueChange={setConceptFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="All concepts" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All concepts</SelectItem>
+                {conceptOptions.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>{c.title ?? c.id}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {loadingQuestions ? (

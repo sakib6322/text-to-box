@@ -26,7 +26,14 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { fetchConceptByKeyPointId, fetchConceptByTitle, emptyConceptDetail, type ConceptDetail } from "@/lib/conceptDetail";
+import {
+  fetchConceptByKeyPointId,
+  fetchConceptByTitle,
+  fetchConceptByIdWithBoards,
+  emptyConceptDetail,
+  type ConceptDetail,
+  type KeyPointWithBoards,
+} from "@/lib/conceptDetail";
 import { useHeaderSearch } from "@/components/AppShellContext";
 import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
@@ -87,7 +94,7 @@ export default function AllQuestions() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsName, setDetailsName] = useState("");
   const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
-  const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
+  const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const headerSearch = useMemo(() => ({
     value: search,
     onChange: setSearch,
@@ -257,17 +264,30 @@ export default function AllQuestions() {
     setDetailsLoading(true);
     setDetailsName(conceptName);
     try {
-      const data = row.sourcePointId?.trim()
-        ? await fetchConceptByKeyPointId(row.sourcePointId)
-        : await fetchConceptByTitle(conceptName, {
-            subject: row.subject,
-            system: row.system,
-            chapter: row.chapter,
-            topic: row.topic,
-          });
-      setDetailsConcept(data.detail);
-      setDetailsKeyPoints(data.keyPoints);
-      if (data.conceptName) setDetailsName(data.conceptName);
+      if (row.sourcePointId?.trim()) {
+        const data = await fetchConceptByKeyPointId(row.sourcePointId);
+        const withBoards = await fetchConceptByIdWithBoards(data.conceptId);
+        setDetailsConcept(withBoards.detail);
+        setDetailsKeyPoints(withBoards.keyPoints);
+        if (withBoards.conceptName) setDetailsName(withBoards.conceptName);
+      } else {
+        const data = await fetchConceptByTitle(conceptName, {
+          subject: row.subject,
+          system: row.system,
+          chapter: row.chapter,
+          topic: row.topic,
+        });
+        if (data.conceptId) {
+          const withBoards = await fetchConceptByIdWithBoards(data.conceptId);
+          setDetailsConcept(withBoards.detail);
+          setDetailsKeyPoints(withBoards.keyPoints);
+          if (withBoards.conceptName) setDetailsName(withBoards.conceptName);
+        } else {
+          setDetailsConcept(data.detail);
+          setDetailsKeyPoints(data.keyPoints.map((content) => ({ content })));
+          if (data.conceptName) setDetailsName(data.conceptName);
+        }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Concept not found");
       setDetailsOpen(false);

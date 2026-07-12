@@ -8,13 +8,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, BookOpen, Loader2, Pencil, RotateCcw, Trash2, TrendingUp } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Pencil, RotateCcw, Trash2, TrendingUp, GraduationCap } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { emptyConceptDetail, fetchConceptById, type ConceptDetail } from "@/lib/conceptDetail";
+import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import { isAdmin } from "@/lib/auth";
+import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
+import { Progress } from "@/components/ui/progress";
 import {
   Dialog,
   DialogContent,
@@ -87,7 +90,7 @@ const Suggestions = () => {
   const [detailsConceptName, setDetailsConceptName] = useState("");
   const [detailsConceptId, setDetailsConceptId] = useState<string | null>(null);
   const [detailsConceptDetail, setDetailsConceptDetail] = useState<ConceptDetail>(emptyConceptDetail());
-  const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
+  const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [savingConceptDetail, setSavingConceptDetail] = useState(false);
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
@@ -278,7 +281,7 @@ const Suggestions = () => {
     setDetailsConceptDetail(emptyConceptDetail());
     setDetailsKeyPoints([]);
     try {
-      const loaded = await fetchConceptById(row.concept_id);
+      const loaded = await fetchConceptByIdWithBoards(row.concept_id);
       setDetailsConceptName(loaded.conceptName);
       setDetailsConceptDetail(loaded.detail);
       setDetailsKeyPoints(loaded.keyPoints);
@@ -384,6 +387,43 @@ const Suggestions = () => {
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
   }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search]);
 
+  const boardOccurrenceInList = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of filteredRows) {
+      for (const l of r.concepts?.concept_boards ?? []) {
+        const name = l.boards?.name?.trim();
+        if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [filteredRows]);
+
+  type ConceptGroup = {
+    conceptId: string;
+    title: string;
+    taxonomy: string;
+    keyPointCount: number;
+  };
+
+  const conceptGroups = useMemo(() => {
+    const map = new Map<string, ConceptGroup>();
+    for (const r of filteredRows) {
+      if (!r.concept_id) continue;
+      const existing = map.get(r.concept_id);
+      if (existing) {
+        existing.keyPointCount += 1;
+      } else {
+        map.set(r.concept_id, {
+          conceptId: r.concept_id,
+          title: (r.concepts?.title ?? "").trim() || "Untitled",
+          taxonomy: compactTaxonomy(r.concepts),
+          keyPointCount: 1,
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [filteredRows]);
+
   const resetFilters = () => {
     setSearch("");
     setSubjectId("all");
@@ -404,6 +444,8 @@ const Suggestions = () => {
     boardFilter !== "all" ||
     conceptFilter !== "all";
 
+  const adminView = isAdmin();
+
   return (
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
       <header className="app-header-bar border-b">
@@ -416,8 +458,9 @@ const Suggestions = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Suggestions</h1>
             <p className="text-muted-foreground mt-1">
-              Filters use the same Subject → System → Chapter → Topic and Boards as Admin Settings. Suggestions are
-              matched by taxonomy names saved on each concept.
+              {adminView
+                ? "Filters use the same Subject → System → Chapter → Topic and Boards as Admin Settings. Suggestions are matched by taxonomy names saved on each concept."
+                : "Concept-wise study and practice — pick a concept to learn key points and build custom practice exams."}
             </p>
           </div>
         </div>
@@ -574,14 +617,16 @@ const Suggestions = () => {
           </div>
         ) : filteredRows.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No matching suggestions found.</Card>
-        ) : (
+        ) : adminView ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {filteredRows.map((r) => {
               const tax = compactTaxonomy(r.concepts);
               const title = (r.concepts?.title ?? "").trim();
-              const boardNames = (r.concepts?.concept_boards ?? [])
-                .map((l) => l.boards?.name)
-                .filter((n): n is string => Boolean(n?.trim()));
+              const boardNames = [...new Set(
+                (r.concepts?.concept_boards ?? [])
+                  .map((l) => l.boards?.name)
+                  .filter((n): n is string => Boolean(n?.trim())),
+              )];
               const boardMention = boardFilter !== "all" ? mentionForBoard(r, boardFilter) : null;
               return (
                 <Card key={r.id} className="suggestion-card">
@@ -597,13 +642,14 @@ const Suggestions = () => {
                             Board ×{boardMention}
                           </Badge>
                         ) : null}
-                        {boardNames.length
-                          ? boardNames.map((n) => (
-                              <Badge key={n} variant="outline" className="text-[10px] font-normal">
-                                {n}
-                              </Badge>
-                            ))
-                          : null}
+                        {boardNames.map((n) => {
+                          const cnt = boardOccurrenceInList.get(n) ?? 1;
+                          return (
+                            <Badge key={n} variant="outline" className="text-[10px] font-normal tabular-nums">
+                              {n}{cnt > 1 ? ` ×${cnt}` : ""}
+                            </Badge>
+                          );
+                        })}
                       </div>
                     </div>
                     <p className="text-sm leading-relaxed text-pretty mt-2">{r.content}</p>
@@ -635,6 +681,50 @@ const Suggestions = () => {
                       ) : (
                         <Trash2 className="h-4 w-4" />
                       )}
+                    </Button>
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        ) : conceptGroups.length === 0 ? (
+          <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
+        ) : (
+          <div className="space-y-4 max-w-lg mx-auto">
+            <div className="flex items-center justify-between px-1">
+              <p className="text-sm text-muted-foreground">{conceptGroups.length} concept(s)</p>
+              <Button asChild variant="ghost" size="sm" className="text-xs h-8">
+                <Link to="/study/progress">My progress →</Link>
+              </Button>
+            </div>
+            {conceptGroups.map((g) => {
+              const prog = getStudyProgress(g.conceptId);
+              const pct = studyCompletionPct(prog);
+              const sessionCount = getPracticeSessionsForConcept(g.conceptId).length;
+              return (
+                <Card key={g.conceptId} className="p-4 space-y-3 shadow-sm">
+                  <div>
+                    <p className="font-semibold text-base">{g.title}</p>
+                    {g.taxonomy ? <p className="text-[11px] text-muted-foreground mt-1">{g.taxonomy}</p> : null}
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      <Badge variant="secondary" className="text-[10px]">{g.keyPointCount} key points</Badge>
+                      <Badge variant="outline" className="text-[10px] tabular-nums">{pct}% studied</Badge>
+                      {sessionCount > 0 ? (
+                        <Badge variant="outline" className="text-[10px]">{sessionCount} practice</Badge>
+                      ) : null}
+                    </div>
+                    <Progress value={pct} className="h-1.5 mt-2" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button asChild className="h-10">
+                      <Link to={`/concept/${g.conceptId}/learn`}>
+                        <GraduationCap className="h-4 w-4 mr-1.5" /> Study & Practice
+                      </Link>
+                    </Button>
+                    <Button asChild variant="outline" className="h-10">
+                      <Link to={`/concept/${g.conceptId}/details`}>
+                        <BookOpen className="h-4 w-4 mr-1.5" /> Details
+                      </Link>
                     </Button>
                   </div>
                 </Card>

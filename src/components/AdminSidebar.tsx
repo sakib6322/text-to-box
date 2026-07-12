@@ -13,8 +13,9 @@ import {
   Target,
   Users,
   FileCheck,
+  BarChart3,
 } from "lucide-react";
-import { logout } from "@/lib/auth";
+import { logout, isAdmin } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -39,10 +40,14 @@ type NavItem = {
   children?: { label: string; to: string }[];
 };
 
-const items: NavItem[] = [
+const userItems: NavItem[] = [
   { label: "Home", to: "/", icon: School },
   { label: "Suggestions", to: "/suggestions", icon: Target },
+  { label: "My progress", to: "/study/progress", icon: BarChart3 },
   { label: "My exams", to: "/my-exams", icon: FileCheck },
+];
+
+const adminItems: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: LayoutDashboard },
   {
     label: "Question bank",
@@ -65,6 +70,8 @@ const items: NavItem[] = [
   { label: "Organization", to: "/admin/organization", icon: Bell },
   { label: "Settings", to: "/admin/settings", icon: Settings },
 ];
+
+const items: NavItem[] = [...userItems, ...adminItems];
 
 function NavDropdown({
   item,
@@ -117,6 +124,8 @@ function NavDropdown({
 export function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const admin = isAdmin();
+  const navItems = admin ? items : userItems;
   const isActive = (to?: string) =>
     to ? location.pathname === to || location.pathname.startsWith(`${to}/`) : false;
 
@@ -135,7 +144,7 @@ export function AdminSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {navItems.map((item) => {
                 const Icon = item.icon;
                 if (item.children?.length) {
                   return <NavDropdown key={item.label} item={item} isActive={isActive} />;

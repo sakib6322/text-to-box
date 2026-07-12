@@ -6,8 +6,15 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { emptyConceptDetail, fetchConceptByKeyPointId, fetchConceptByTitle, type ConceptDetail } from "@/lib/conceptDetail";
-import type { ExamQuestion } from "@/lib/exams";
+import {
+  emptyConceptDetail,
+  fetchConceptByIdWithBoards,
+  fetchConceptByKeyPointId,
+  fetchConceptByTitle,
+  type ConceptDetail,
+  type KeyPointWithBoards,
+} from "@/lib/conceptDetail";
+import type { AnswerDistribution, ExamQuestion } from "@/lib/exams";
 import { toast } from "sonner";
 
 type Props = {
@@ -15,6 +22,8 @@ type Props = {
   showSolutionsDefault?: boolean;
   showToggle?: boolean;
   showConceptButtons?: boolean;
+  answerDistribution?: AnswerDistribution | null;
+  showAnswerReview?: boolean;
 };
 
 export function ExamPaperView({
@@ -22,13 +31,15 @@ export function ExamPaperView({
   showSolutionsDefault = false,
   showToggle = true,
   showConceptButtons = true,
+  answerDistribution = null,
+  showAnswerReview = false,
 }: Props) {
   const [showSolutions, setShowSolutions] = useState(showSolutionsDefault);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsName, setDetailsName] = useState("");
   const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
-  const [detailsKeyPoints, setDetailsKeyPoints] = useState<string[]>([]);
+  const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
 
   const openConcept = async (q: ExamQuestion) => {
     if (!q.concept?.trim()) {
@@ -39,17 +50,30 @@ export function ExamPaperView({
     setDetailsLoading(true);
     setDetailsName(q.concept);
     try {
-      const data = q.sourcePointId?.trim()
-        ? await fetchConceptByKeyPointId(q.sourcePointId)
-        : await fetchConceptByTitle(q.concept, {
-            subject: q.subject,
-            system: q.system,
-            chapter: q.chapter,
-            topic: q.topic,
-          });
-      setDetailsConcept(data.detail);
-      setDetailsKeyPoints(data.keyPoints);
-      if (data.conceptName) setDetailsName(data.conceptName);
+      if (q.sourcePointId?.trim()) {
+        const data = await fetchConceptByKeyPointId(q.sourcePointId);
+        const withBoards = await fetchConceptByIdWithBoards(data.conceptId);
+        setDetailsConcept(withBoards.detail);
+        setDetailsKeyPoints(withBoards.keyPoints);
+        if (withBoards.conceptName) setDetailsName(withBoards.conceptName);
+      } else {
+        const data = await fetchConceptByTitle(q.concept, {
+          subject: q.subject,
+          system: q.system,
+          chapter: q.chapter,
+          topic: q.topic,
+        });
+        if (data.conceptId) {
+          const withBoards = await fetchConceptByIdWithBoards(data.conceptId);
+          setDetailsConcept(withBoards.detail);
+          setDetailsKeyPoints(withBoards.keyPoints);
+          if (withBoards.conceptName) setDetailsName(withBoards.conceptName);
+        } else {
+          setDetailsConcept(data.detail);
+          setDetailsKeyPoints(data.keyPoints.map((content) => ({ content })));
+          if (data.conceptName) setDetailsName(data.conceptName);
+        }
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Concept not found");
       setDetailsOpen(false);
@@ -86,6 +110,11 @@ export function ExamPaperView({
                   {q.isCorrect ? "Correct" : "Wrong"}
                 </Badge>
               ) : null}
+              {q.marksEarned != null ? (
+                <Badge variant="outline" className="text-[10px] tabular-nums">
+                  {q.marksEarned.toFixed(1)} marks
+                </Badge>
+              ) : null}
             </div>
             <QuestionPaperCard
               index={i}
@@ -99,6 +128,9 @@ export function ExamPaperView({
               hideAnswers={!(showSolutions || q.showSolutions)}
               mcq={q.mcq}
               sba={q.sba}
+              studentAnswer={q.studentAnswer}
+              distribution={answerDistribution?.[q.id] ?? null}
+              showAnswerReview={showAnswerReview && (showSolutions || q.showSolutions)}
             />
           </div>
         ))}

@@ -1,4 +1,6 @@
 export const EXTRACT_QUESTIONS_PROMPT_KEY = "extract_questions_prompt";
+export const EXTRACT_CONCEPT_PROMPT_KEY = "extract_concept_prompt";
+export const EXTRACT_KEY_POINTS_PROMPT_KEY = "extract_key_points_prompt";
 
 export function getDefaultExtractQuestionsPrompt() {
   return `You digitize medical exam papers from images or text.
@@ -31,4 +33,19 @@ MULTIPLE QUESTIONS: If the image has Q04, Q05, etc., return one object per quest
 If there are no exam questions, return "questions": [].
 
 Do not invent options or answers not visible in the source.`;
+}
+
+export function getDefaultExtractConceptPrompt() {
+  return `You are an expert Medical Professor. Analyze the uploaded medical textbook image and/or given source text.
+First extract verbatim_text as close to the original wording as possible (plain text, no HTML).
+Extract detail_summary as the main one-line definition (same-to-same wording when possible).
+Extract detail_paragraphs as the teaching bullet paragraphs from the source (same-to-same, not rewritten as key points).
+If the source has a comparison/classification table, populate detail_table with title, headers, and rows (cells per column).
+Return the output STRICTLY matching the JSON schema. Do not include any extra text.`;
+}
+
+export function getDefaultExtractKeyPointsPrompt() {
+  return `For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.
+Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.
+Each point should be a concise, high-yield fact suitable for matching against a medical question bank.`;
 }

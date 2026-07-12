@@ -1,5 +1,17 @@
 import { apiUrl } from "@/lib/apiBase";
 
+export type ExamPerformance = {
+  mcq: { correct: number; wrong: number; notTouched: number; positiveMarks: number; negativeMarks: number };
+  sba: { correct: number; wrong: number; notTouched: number; positiveMarks: number; negativeMarks: number };
+  scoreWithoutNegative: number;
+  scoreWithNegative: number;
+};
+
+export type AnswerDistribution = Record<
+  string,
+  { mode: string; options: Record<string, { true?: number; false?: number; notTouched?: number; count?: number }> }
+>;
+
 export type ExamQuestion = {
   id: string;
   sourcePointId?: string | null;
@@ -17,6 +29,7 @@ export type ExamQuestion = {
   studentAnswer?: unknown;
   isCorrect?: boolean;
   marksEarned?: number;
+  gradingDetail?: unknown;
   showSolutions?: boolean;
 };
 
@@ -56,6 +69,8 @@ export type ExamAttempt = {
   score: number;
   totalMarks: number;
   status: string;
+  performance?: ExamPerformance | null;
+  position?: number | null;
 };
 
 async function parseJson<T>(res: Response): Promise<T> {
@@ -152,6 +167,7 @@ export async function fetchAttemptResult(attemptId: string): Promise<{
   attempt: ExamAttempt;
   exam: ExamSummary | null;
   questions: ExamQuestion[];
+  answerDistribution?: AnswerDistribution | null;
 }> {
   const res = await fetch(apiUrl(`/api/exam-attempts/${attemptId}?include=answers`));
   return parseJson(res);

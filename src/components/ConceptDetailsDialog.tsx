@@ -14,12 +14,15 @@ import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { KeyPointList } from "@/components/KeyPointList";
+import type { KeyPointWithBoards } from "@/lib/conceptDetail";
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conceptName: string;
   detail: ConceptDetail;
-  keyPoints: string[];
+  keyPoints: KeyPointWithBoards[] | string[];
   loading?: boolean;
   editable?: boolean;
   onDetailChange?: (detail: ConceptDetail) => void;
@@ -27,6 +30,14 @@ type Props = {
   saving?: boolean;
   showDownloadPdf?: boolean;
 };
+
+function normalizeKeyPoints(kps: KeyPointWithBoards[] | string[]): KeyPointWithBoards[] {
+  if (!kps.length) return [];
+  if (typeof kps[0] === "string") {
+    return (kps as string[]).map((content) => ({ content }));
+  }
+  return kps as KeyPointWithBoards[];
+}
 
 export function ConceptDetailsDialog({
   open,
@@ -43,6 +54,7 @@ export function ConceptDetailsDialog({
 }: Props) {
   const [draft, setDraft] = useState<ConceptDetail>(detail);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const normalizedKps = normalizeKeyPoints(keyPoints);
 
   useEffect(() => {
     if (open) setDraft(detail);
@@ -62,7 +74,11 @@ export function ConceptDetailsDialog({
     const payload = editable ? draft : detail;
     setDownloadingPdf(true);
     try {
-      downloadConceptDetailPdf(conceptName, payload, keyPoints);
+      downloadConceptDetailPdf(
+        conceptName,
+        payload,
+        normalizedKps.map((kp) => kp.content),
+      );
       toast.success("PDF downloaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "PDF download failed");
@@ -70,6 +86,13 @@ export function ConceptDetailsDialog({
       setDownloadingPdf(false);
     }
   };
+
+  const keyPointsList = (
+    <div className="space-y-2 pt-2 border-t">
+      <p className="font-semibold text-sm">Key points</p>
+      <KeyPointList keyPoints={normalizedKps} />
+    </div>
+  );
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,24 +141,19 @@ export function ConceptDetailsDialog({
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
               </div>
               <div className="flex-1 overflow-y-auto p-4 max-h-[58vh]">
-                <ConceptDetailPreview conceptName={conceptName} detail={draft} keyPoints={keyPoints} />
+                <ConceptDetailPreview
+                  conceptName={conceptName}
+                  detail={draft}
+                  keyPoints={normalizedKps.map((kp) => kp.content)}
+                />
+                {keyPointsList}
               </div>
             </div>
           </div>
         ) : (
           <>
             <ConceptDetailBody detail={detail} showVerbatim />
-
-            {keyPoints.length ? (
-              <div className="space-y-2 pt-2 border-t">
-                <p className="font-semibold text-sm">Key points</p>
-                <ul className="list-disc pl-5 space-y-1 text-sm">
-                  {keyPoints.map((kp, i) => (
-                    <li key={i}>{kp}</li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
+            {normalizedKps.length ? keyPointsList : null}
           </>
         )}
 

@@ -189,18 +189,23 @@ export default function TakeExam() {
                         {(["true", "false"] as const).map((val) => {
                           const checked = selected === val;
                           const inputId = `${key}-${val}`;
+                          const isLocked = selected != null;
                           return (
                             <label
                               key={val}
                               htmlFor={inputId}
-                              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                              className={`flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors ${
                                 checked ? "border-primary bg-primary/10" : "border-border bg-background"
-                              }`}
+                              } ${isLocked && !checked ? "opacity-50 cursor-not-allowed" : isLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
                             >
                               <Checkbox
                                 id={inputId}
                                 checked={checked}
-                                onCheckedChange={() => setMcqAnswers((prev) => ({ ...prev, [key]: val }))}
+                                disabled={isLocked}
+                                onCheckedChange={() => {
+                                  if (isLocked) return;
+                                  setMcqAnswers((prev) => ({ ...prev, [key]: val }));
+                                }}
                               />
                               <span className="text-sm font-medium">{val === "true" ? "True" : "False"}</span>
                             </label>
@@ -218,18 +223,23 @@ export default function TakeExam() {
                 {q.sba.options.map((opt, i) => {
                   const checked = sbaAnswers[q.id] === i;
                   const inputId = `${q.id}-${i}`;
+                  const isLocked = sbaAnswers[q.id] != null && sbaAnswers[q.id] >= 0;
                   return (
                     <label
                       key={i}
                       htmlFor={inputId}
-                      className={`flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                      className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${
                         checked ? "border-primary bg-primary/10" : "border-border bg-background"
-                      }`}
+                      } ${isLocked && !checked ? "opacity-50 cursor-not-allowed" : isLocked ? "cursor-not-allowed" : "cursor-pointer"}`}
                     >
                       <Checkbox
                         id={inputId}
                         checked={checked}
-                        onCheckedChange={() => setSbaAnswers((prev) => ({ ...prev, [q.id]: i }))}
+                        disabled={isLocked}
+                        onCheckedChange={() => {
+                          if (isLocked) return;
+                          setSbaAnswers((prev) => ({ ...prev, [q.id]: i }));
+                        }}
                         className="mt-0.5"
                       />
                       <div className="flex-1 min-w-0">

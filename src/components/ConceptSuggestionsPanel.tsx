@@ -1,15 +1,32 @@
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Loader2 } from "lucide-react";
-import type { SuggestionMatch } from "@/lib/conceptDetail";
+import { SuggestionMatchPanel } from "@/components/SuggestionMatchPanel";
+import type { SuggestionMatch } from "@/lib/suggestionMatch";
 
 type Props = {
   lines: string[];
   matches: Map<string, SuggestionMatch | null>;
   loading?: boolean;
+  onMatchUpdate?: (line: string, match: SuggestionMatch) => void;
 };
 
-export function ConceptSuggestionsPanel({ lines, matches, loading }: Props) {
+export function ConceptSuggestionsPanel({ lines, matches, loading, onMatchUpdate }: Props) {
+  const [localMatches, setLocalMatches] = useState<Map<string, SuggestionMatch | null>>(matches);
+
+  useEffect(() => {
+    setLocalMatches(matches);
+  }, [matches]);
+
+  const handleUpdate = (line: string, updated: SuggestionMatch) => {
+    setLocalMatches((prev) => {
+      const next = new Map(prev);
+      next.set(line, updated);
+      return next;
+    });
+    onMatchUpdate?.(line, updated);
+  };
+
   if (!lines.length && !loading) return null;
 
   return (
@@ -21,30 +38,21 @@ export function ConceptSuggestionsPanel({ lines, matches, loading }: Props) {
           Matching against database…
         </div>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-3">
           {lines.map((line) => {
-            const match = matches.get(line);
-            const pct = match?.percentage;
+            const match = localMatches.get(line) ?? matches.get(line);
             return (
-              <li
-                key={line}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm"
-              >
-                <span className="flex-1 min-w-[12rem]">{line}</span>
-                <div className="flex items-center gap-2 shrink-0">
-                  {typeof pct === "number" ? (
-                    <Badge variant="secondary" className="tabular-nums">
-                      {pct}% match
-                    </Badge>
-                  ) : (
-                    <span className="text-xs text-muted-foreground">No match</span>
-                  )}
-                  {(match?.boardNames ?? []).map((board) => (
-                    <Badge key={board} variant="outline" className="text-red-600 border-red-300 bg-red-50">
-                      {board}
-                    </Badge>
-                  ))}
-                </div>
+              <li key={line} className="rounded-md border p-3 space-y-2 text-sm">
+                <div className="font-medium text-foreground">{line}</div>
+                {match ? (
+                  <SuggestionMatchPanel
+                    match={match}
+                    compact
+                    onMatchUpdate={(updated) => handleUpdate(line, updated)}
+                  />
+                ) : (
+                  <span className="text-xs text-muted-foreground">No match</span>
+                )}
               </li>
             );
           })}

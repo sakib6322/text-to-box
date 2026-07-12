@@ -1,10 +1,11 @@
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
-import type { ConceptDetail } from "@/lib/conceptDetail";
+import { KeyPointList } from "@/components/KeyPointList";
+import type { ConceptDetail, KeyPointWithBoards } from "@/lib/conceptDetail";
 
 type Props = {
   conceptName: string;
   detail: ConceptDetail;
-  keyPoints?: string[];
+  keyPoints?: KeyPointWithBoards[] | string[];
 };
 
 export function ConceptDetailPreview({ conceptName, detail, keyPoints = [] }: Props) {
@@ -20,11 +21,7 @@ export function ConceptDetailPreview({ conceptName, detail, keyPoints = [] }: Pr
       {keyPoints.length ? (
         <div className="space-y-2 pt-2 border-t">
           <p className="font-semibold">Key points</p>
-          <ul className="list-disc pl-5 space-y-1">
-            {keyPoints.map((kp, i) => (
-              <li key={i}>{kp}</li>
-            ))}
-          </ul>
+          <KeyPointList keyPoints={keyPoints} />
         </div>
       ) : null}
 

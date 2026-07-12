@@ -34,12 +34,7 @@ export function buildSuggestionLines(table: DetailTable | null, keyPoints: strin
   return keyPoints.map((p) => p.trim()).filter(Boolean);
 }
 
-export type SuggestionMatch = {
-  percentage: number;
-  conceptTitle: string | null;
-  boardNames: string[];
-  keyPointId: string | null;
-};
+export type { SuggestionMatch } from "@/lib/suggestionMatch";
 
 export function parseDetailTable(raw: unknown): DetailTable | null {
   if (!raw || typeof raw !== "object") return null;
@@ -442,6 +437,63 @@ export async function fetchConceptByTitle(
     });
   }
   return result;
+}
+
+export type KeyPointWithBoards = {
+  id?: string;
+  content: string;
+  boardNames?: string[];
+};
+
+export type KeyPointWithBoards = {
+  id?: string;
+  content: string;
+  boardNames?: string[];
+};
+
+export type ConceptTaxonomy = {
+  subject: string;
+  system: string;
+  chapter: string;
+  topic: string;
+};
+
+export type ConceptWithBoards = {
+  conceptName: string;
+  taxonomy: ConceptTaxonomy;
+  detail: ConceptDetail;
+  keyPoints: KeyPointWithBoards[];
+};
+
+export async function fetchConceptByIdWithBoards(conceptId: string): Promise<ConceptWithBoards> {
+  const id = conceptId.trim();
+  if (!id) throw new Error("Concept id required");
+
+  const res = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(id)}`));
+  const data = (await res.json().catch(() => ({}))) as {
+    concept?: Record<string, unknown>;
+    key_points?: { id?: string; content?: string; board_names?: string[] }[];
+    error?: string;
+  };
+  if (!res.ok) throw new Error(data.error ?? "Concept not found");
+  if (!data.concept) throw new Error("Concept not found");
+
+  const concept = data.concept;
+  return {
+    conceptName: typeof concept["title"] === "string" ? concept["title"] : "",
+    taxonomy: {
+      subject: typeof concept["subject"] === "string" ? concept["subject"] : "",
+      system: typeof concept["system"] === "string" ? concept["system"] : "",
+      chapter: typeof concept["chapter"] === "string" ? concept["chapter"] : "",
+      topic: typeof concept["topic"] === "string" ? concept["topic"] : "",
+    },
+    detail: conceptDetailFromApi(concept),
+    keyPoints: (data.key_points ?? []).map((kp) => ({
+      id: kp.id,
+      content: kp.content ?? "",
+      boardNames: Array.isArray(kp.board_names) ? kp.board_names.filter(Boolean) : [],
+    })),
+  };
 }
 
 export async function fetchConceptById(conceptId: string): Promise<{

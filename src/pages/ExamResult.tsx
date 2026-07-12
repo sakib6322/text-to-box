@@ -5,9 +5,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { fetchAttemptResult, type ExamQuestion } from "@/lib/exams";
+import {
+  fetchAttemptResult,
+  type AnswerDistribution,
+  type ExamPerformance,
+  type ExamQuestion,
+} from "@/lib/exams";
 import { ExamPaperView } from "@/components/ExamPaperView";
 import { ExamTimeline } from "@/components/ExamTimeline";
+import { ExamPerformanceCard } from "@/components/ExamPerformanceCard";
 
 export default function ExamResult() {
   const { attemptId } = useParams<{ attemptId: string }>();
@@ -16,24 +22,30 @@ export default function ExamResult() {
   const [score, setScore] = useState(0);
   const [totalMarks, setTotalMarks] = useState(0);
   const [questions, setQuestions] = useState<ExamQuestion[]>([]);
+  const [performance, setPerformance] = useState<ExamPerformance | null>(null);
+  const [position, setPosition] = useState<number | null>(null);
   const [scheduledStart, setScheduledStart] = useState<string | null>(null);
   const [scheduledEnd, setScheduledEnd] = useState<string | null>(null);
   const [attemptStartedAt, setAttemptStartedAt] = useState<string | null>(null);
   const [attemptEndsAt, setAttemptEndsAt] = useState<string | null>(null);
+  const [answerDistribution, setAnswerDistribution] = useState<AnswerDistribution | null>(null);
 
   useEffect(() => {
     if (!attemptId) return;
     setLoading(true);
     fetchAttemptResult(attemptId)
-      .then(({ attempt, exam, questions: qs }) => {
+      .then(({ attempt, exam, questions: qs, answerDistribution: dist }) => {
         setTitle(exam?.title ?? "Exam result");
-        setScore(attempt.score);
+        setScore(attempt.performance?.scoreWithNegative ?? attempt.score);
         setTotalMarks(attempt.totalMarks);
+        setPerformance(attempt.performance ?? null);
+        setPosition(attempt.position ?? null);
         setQuestions(qs);
         setScheduledStart(exam?.scheduledStart ?? null);
         setScheduledEnd(exam?.scheduledEnd ?? null);
         setAttemptStartedAt(attempt.startedAt);
         setAttemptEndsAt(attempt.endsAt);
+        setAnswerDistribution(dist ?? null);
       })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Load failed"))
       .finally(() => setLoading(false));
@@ -67,7 +79,7 @@ export default function ExamResult() {
 
       <Card className="p-5 text-center space-y-3">
         <p className="text-3xl font-bold tabular-nums text-primary">
-          {score} <span className="text-lg text-muted-foreground font-normal">/ {totalMarks}</span>
+          {score.toFixed(1)} <span className="text-lg text-muted-foreground font-normal">/ {totalMarks}</span>
         </p>
         <Badge variant="secondary" className="text-sm">{pct}%</Badge>
         <div className="flex justify-center gap-3 text-xs">
@@ -87,14 +99,27 @@ export default function ExamResult() {
         attemptEndsAt={attemptEndsAt}
       />
 
+      {performance ? (
+        <Card className="p-4">
+          <ExamPerformanceCard performance={performance} position={position} totalMarks={totalMarks} />
+        </Card>
+      ) : null}
+
       <Card className="p-4 space-y-3">
         <div>
           <h2 className="text-sm font-semibold">Question paper review</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Answers, explanations ও concept details দেখুন
+            Correct answer, your submission, and how other students answered
           </p>
         </div>
-        <ExamPaperView questions={questions} showSolutionsDefault showToggle showConceptButtons />
+        <ExamPaperView
+          questions={questions}
+          showSolutionsDefault
+          showToggle
+          showConceptButtons
+          answerDistribution={answerDistribution}
+          showAnswerReview
+        />
       </Card>
     </div>
   );

@@ -22,13 +22,37 @@ import {
   getExtractQuestionsPrompt,
   resetExtractQuestionsPrompt,
   saveExtractQuestionsPrompt,
+  getExtractConceptPrompt,
+  resetExtractConceptPrompt,
+  saveExtractConceptPrompt,
+  getExtractKeyPointsPrompt,
+  resetExtractKeyPointsPrompt,
+  saveExtractKeyPointsPrompt,
+  registerUser,
+  loginUser,
+  validateSession,
+  logoutSession,
 } from "./appSettings.mjs";
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 12 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      file.mimetype.startsWith("image/") ||
+      file.mimetype === "application/pdf" ||
+      file.originalname?.toLowerCase().endsWith(".pdf");
+    cb(ok ? null : new Error("Only image or PDF files are allowed"), ok);
+  },
+});
+
+const MCQ_STATEMENT_MARK = 0.2;
+const MCQ_WRONG_PENALTY = 0.05;
+const SBA_CORRECT_MARK = 1;
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const SUPABASE_SERVICE_ROLE_KEY =
@@ -170,12 +194,28 @@ function taxonomyParentKey(level) {
 }
 
 function fileToGenerativePart(fileBuffer, mimeType) {
+  const mt = mimeType === "application/pdf" || mimeType?.endsWith("/pdf") ? "application/pdf" : mimeType;
   return {
     inlineData: {
       data: fileBuffer.toString("base64"),
-      mimeType,
+      mimeType: mt || "image/jpeg",
     },
   };
+}
+
+function getBearerToken(req) {
+  const header = String(req.headers.authorization ?? "");
+  if (header.startsWith("Bearer ")) return header.slice(7).trim();
+  return String(req.body?.token ?? req.query?.token ?? "").trim() || null;
+}
+
+async function enrichKeyPointsWithBoards(db, conceptId, keyPoints) {
+  const boardsByConcept = await fetchBoardNamesByConceptIds(db, [conceptId]);
+  const boardNames = boardsByConcept.get(conceptId) ?? [];
+  return (keyPoints ?? []).map((kp) => ({
+    ...kp,
+    board_names: boardNames,
+  }));
 }
 
 function parseGeminiJson(rawText) {
@@ -557,18 +597,21 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
       responseSchema,
     };
 
+    const promptConcept = (await getExtractConceptPrompt(db)).prompt;
+    const promptKeyPoints = (await getExtractKeyPointsPrompt(db)).prompt;
+
     const prompt =
-      "You are an expert Medical Professor. Analyze the uploaded medical textbook image and/or given source text.\n" +
-      "First extract verbatim_text as close to the original wording as possible (plain text, no HTML).\n" +
-      "Extract detail_summary as the main one-line definition (same-to-same wording when possible).\n" +
-      "Extract detail_paragraphs as the teaching bullet paragraphs from the source (same-to-same, not rewritten as key points).\n" +
-      "If the source has a comparison/classification table, populate detail_table with title, headers, and rows (cells per column).\n" +
-      "For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.\n" +
-      "Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.\n" +
+      `${promptConcept}\n\n${promptKeyPoints}\n` +
       "Return the output STRICTLY matching the JSON schema. Do not include any extra text.";
 
     const parts = [{ text: `${prompt}${inputText ? `\n\nSource text:\n${inputText}` : ""}` }];
-    if (req.file) parts.push(fileToGenerativePart(req.file.buffer, req.file.mimetype || "image/jpeg"));
+    if (req.file) {
+      const mime =
+        req.file.mimetype === "application/pdf" || req.file.originalname?.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : req.file.mimetype || "image/jpeg";
+      parts.push(fileToGenerativePart(req.file.buffer, mime));
+    }
 
     const {
       concept_name,
@@ -1082,6 +1125,104 @@ app.post("/api/settings/prompts/extract-questions/reset", async (_req, res) => {
   }
 });
 
+const promptHandlers = [
+  ["extract-concept", getExtractConceptPrompt, saveExtractConceptPrompt, resetExtractConceptPrompt],
+  ["extract-key-points", getExtractKeyPointsPrompt, saveExtractKeyPointsPrompt, resetExtractKeyPointsPrompt],
+];
+
+for (const [slug, getFn, saveFn, resetFn] of promptHandlers) {
+  app.get(`/api/settings/prompts/${slug}`, async (_req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      return res.json(await getFn(db));
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: formatSupabaseError(e) });
+    }
+  });
+
+  app.put(`/api/settings/prompts/${slug}`, async (req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      const result = await saveFn(db, req.body?.prompt);
+      return res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error(e);
+      return res.status(400).json({ error: e instanceof Error ? e.message : "Save failed" });
+    }
+  });
+
+  app.post(`/api/settings/prompts/${slug}/reset`, async (_req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      const result = await resetFn(db);
+      return res.json({ ok: true, ...result });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: formatSupabaseError(e) });
+    }
+  });
+}
+
+app.post("/api/auth/register", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await registerUser(db, req.body?.email, req.body?.password);
+    const session = await loginUser(db, user.email, req.body?.password, { userOnly: false });
+    return res.json({ ok: true, ...session });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Registration failed" });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const mode = String(req.body?.mode ?? "user");
+    const session = await loginUser(db, req.body?.email, req.body?.password, {
+      adminOnly: mode === "admin",
+      userOnly: mode === "user",
+    });
+    return res.json({ ok: true, ...session });
+  } catch (e) {
+    console.error(e);
+    return res.status(401).json({ error: e instanceof Error ? e.message : "Login failed" });
+  }
+});
+
+app.post("/api/auth/logout", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const token = getBearerToken(req);
+    if (token) await logoutSession(db, token);
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Logout failed" });
+  }
+});
+
+app.get("/api/auth/me", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const token = getBearerToken(req);
+    const user = token ? await validateSession(db, token) : null;
+    if (!user) return res.status(401).json({ error: "Not authenticated" });
+    return res.json({ user: { id: user.id, email: user.email, role: user.role } });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.get("/api/settings/gemini-keys", async (_req, res) => {
   try {
     const db = requireSupabase(res);
@@ -1299,7 +1440,7 @@ app.get("/api/concepts/lookup", async (req, res) => {
 
     if (!concept) return res.status(404).json({ error: "Concept not found" });
 
-    const key_points = await loadKeyPoints(concept.id);
+    const key_points = await enrichKeyPointsWithBoards(db, concept.id, await loadKeyPoints(concept.id));
     return res.json({ concept, key_points });
   } catch (e) {
     console.error(e);
@@ -1331,7 +1472,8 @@ app.get("/api/concepts/:id", async (req, res) => {
       .order("position", { ascending: true });
     if (kpErr) return res.status(500).json({ error: formatSupabaseError(kpErr) });
 
-    return res.json({ concept, key_points: keyPoints ?? [] });
+    const key_points = await enrichKeyPointsWithBoards(db, id, keyPoints ?? []);
+    return res.json({ concept, key_points });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -2237,28 +2379,114 @@ function formatQuestionRow(q) {
 function gradeAnswer(question, answer) {
   const mode = question.question_mode;
   const payload = question.payload && typeof question.payload === "object" ? question.payload : {};
-  const marks = Number(question.marks ?? 1);
+
   if (mode === "mcq") {
     const statements = Array.isArray(payload.trueFalse) ? payload.trueFalse : [];
     const studentAnswers = Array.isArray(answer?.answers) ? answer.answers : [];
-    if (!statements.length) return { isCorrect: false, marksEarned: 0 };
-    const allCorrect = statements.every((stmt, i) => {
+    if (!statements.length) {
+      return {
+        isCorrect: false,
+        marksEarned: 0,
+        gradingDetail: { mode: "mcq", correct: 0, wrong: 0, notTouched: 0, positiveMarks: 0, negativeMarks: 0 },
+      };
+    }
+
+    let correct = 0;
+    let wrong = 0;
+    let notTouched = 0;
+    let positiveMarks = 0;
+    let negativeMarks = 0;
+    const statementResults = [];
+
+    statements.forEach((stmt, i) => {
       const sid = stmt.id ?? String(i);
       const student =
         studentAnswers.find((a) => a?.id === sid || a?.id === stmt.id) ?? studentAnswers[i];
       const expected = stmt.correct === "true" ? "true" : "false";
       const given = student?.value === "true" ? "true" : student?.value === "false" ? "false" : "";
-      return given === expected;
+      let status = "not_touched";
+      if (!given) {
+        notTouched += 1;
+      } else if (given === expected) {
+        correct += 1;
+        positiveMarks += MCQ_STATEMENT_MARK;
+        status = "correct";
+      } else {
+        wrong += 1;
+        negativeMarks += MCQ_WRONG_PENALTY;
+        status = "wrong";
+      }
+      statementResults.push({
+        id: sid,
+        statement: stmt.statement ?? "",
+        expected,
+        given: given || null,
+        status,
+      });
     });
-    return { isCorrect: allCorrect, marksEarned: allCorrect ? marks : 0 };
+
+    const marksEarned = Math.max(0, positiveMarks - negativeMarks);
+    const allCorrect = wrong === 0 && notTouched === 0 && correct === statements.length;
+    return {
+      isCorrect: allCorrect,
+      marksEarned,
+      gradingDetail: {
+        mode: "mcq",
+        correct,
+        wrong,
+        notTouched,
+        positiveMarks,
+        negativeMarks,
+        statementResults,
+      },
+    };
   }
+
   if (mode === "sba") {
     const correctIndex = Number(payload.correctIndex);
-    const selected = Number(answer?.selectedIndex);
-    const isCorrect = !Number.isNaN(correctIndex) && selected === correctIndex;
-    return { isCorrect, marksEarned: isCorrect ? marks : 0 };
+    const selected = answer?.selectedIndex;
+    const hasAnswer = selected !== undefined && selected !== null && selected !== "";
+    const selectedNum = Number(selected);
+    const isCorrect = hasAnswer && !Number.isNaN(correctIndex) && selectedNum === correctIndex;
+    const marksEarned = isCorrect ? SBA_CORRECT_MARK : 0;
+    let status = "not_touched";
+    if (hasAnswer) status = isCorrect ? "correct" : "wrong";
+    return {
+      isCorrect,
+      marksEarned,
+      gradingDetail: {
+        mode: "sba",
+        correct: isCorrect ? 1 : 0,
+        wrong: hasAnswer && !isCorrect ? 1 : 0,
+        notTouched: hasAnswer ? 0 : 1,
+        positiveMarks: marksEarned,
+        negativeMarks: 0,
+        correctIndex,
+        selectedIndex: hasAnswer ? selectedNum : null,
+        status,
+      },
+    };
   }
-  return { isCorrect: false, marksEarned: 0 };
+
+  return { isCorrect: false, marksEarned: 0, gradingDetail: { mode: "unknown" } };
+}
+
+function computeQuestionMaxMarks(question) {
+  const mode = question.question_mode ?? question.questionMode;
+  const payload =
+    question.payload && typeof question.payload === "object"
+      ? question.payload
+      : mode === "mcq"
+        ? (question.mcq ?? {})
+        : mode === "sba"
+          ? (question.sba ?? {})
+          : {};
+  if (mode === "mcq") {
+    const count = Array.isArray(payload.trueFalse) ? payload.trueFalse.length : 0;
+    return count * MCQ_STATEMENT_MARK;
+  }
+  if (mode === "sba") return SBA_CORRECT_MARK;
+  return Number(question.marks ?? 1);
 }
 
 async function loadExamQuestions(db, examId) {
@@ -2277,11 +2505,93 @@ async function loadExamQuestions(db, examId) {
 }
 
 async function syncExamTotalMarks(db, examId) {
-  const { data, error } = await db.from("exam_questions").select("marks").eq("exam_id", examId);
-  if (error) throw new Error(error.message);
-  const total = (data ?? []).reduce((sum, r) => sum + Number(r.marks ?? 0), 0);
+  const questions = await loadExamQuestions(db, examId);
+  const total = questions.reduce((sum, q) => {
+    if (!q.question) return sum;
+    return sum + computeQuestionMaxMarks(q.question);
+  }, 0);
   await db.from("exams").update({ total_marks: total, updated_at: new Date().toISOString() }).eq("id", examId);
   return total;
+}
+
+async function computeExamPosition(db, examId, attemptId, score) {
+  const { data: attempts } = await db
+    .from("exam_attempts")
+    .select("id, score, status")
+    .eq("exam_id", examId)
+    .in("status", ["submitted", "expired"]);
+  const submitted = (attempts ?? []).filter((a) => a.status === "submitted" || a.status === "expired");
+  if (!submitted.length) return null;
+  const sorted = [...submitted].sort((a, b) => Number(b.score) - Number(a.score));
+  const rank = sorted.findIndex((a) => a.id === attemptId) + 1;
+  return rank > 0 ? rank : submitted.length;
+}
+
+async function buildAnswerDistribution(db, examId) {
+  const questions = await loadExamQuestions(db, examId);
+  const questionIds = questions.filter((q) => q.question).map((q) => q.question.id);
+  if (!questionIds.length) return {};
+
+  const { data: attempts } = await db
+    .from("exam_attempts")
+    .select("id")
+    .eq("exam_id", examId)
+    .in("status", ["submitted", "expired"]);
+  const attemptIds = (attempts ?? []).map((a) => a.id);
+  if (!attemptIds.length) return {};
+
+  const { data: allAnswers } = await db
+    .from("exam_answers")
+    .select("question_id, answer")
+    .in("attempt_id", attemptIds)
+    .in("question_id", questionIds);
+
+  const dist = {};
+  for (const q of questions) {
+    if (!q.question) continue;
+    const qid = q.question.id;
+    const mode = q.question.questionMode;
+    dist[qid] = { mode, options: {} };
+    if (mode === "mcq") {
+      const statements = q.question.mcq?.trueFalse ?? [];
+      for (const stmt of statements) {
+        const sid = stmt.id ?? stmt.statement;
+        dist[qid].options[sid] = { true: 0, false: 0, notTouched: 0 };
+      }
+    } else if (mode === "sba") {
+      const opts = q.question.sba?.options ?? [];
+      for (let i = 0; i < opts.length; i++) {
+        dist[qid].options[String(i)] = { count: 0 };
+      }
+      dist[qid].options.notTouched = { count: 0 };
+    }
+  }
+
+  for (const row of allAnswers ?? []) {
+    const qid = row.question_id;
+    const bucket = dist[qid];
+    if (!bucket) continue;
+    const ans = row.answer ?? {};
+    if (bucket.mode === "mcq") {
+      const studentAnswers = Array.isArray(ans.answers) ? ans.answers : [];
+      for (const [sid, opt] of Object.entries(bucket.options)) {
+        const student = studentAnswers.find((a) => a?.id === sid);
+        const val = student?.value;
+        if (val === "true") opt.true += 1;
+        else if (val === "false") opt.false += 1;
+        else opt.notTouched += 1;
+      }
+    } else if (bucket.mode === "sba") {
+      const sel = ans.selectedIndex;
+      if (sel === undefined || sel === null || sel === "") {
+        bucket.options.notTouched.count += 1;
+      } else {
+        const key = String(sel);
+        if (bucket.options[key]) bucket.options[key].count += 1;
+      }
+    }
+  }
+  return dist;
 }
 
 function formatExamSummary(exam, questionCount = 0) {
@@ -2583,7 +2893,7 @@ app.post("/api/exams/:id/start", async (req, res) => {
     const startedAt = new Date();
     const endsAt = new Date(startedAt.getTime() + Number(exam.duration_minutes) * 60 * 1000);
     const questions = await loadExamQuestions(db, examId);
-    const totalMarks = questions.reduce((s, q) => s + Number(q.marks ?? 0), 0);
+    const totalMarks = questions.reduce((s, q) => s + (q.question ? computeQuestionMaxMarks(q.question) : 0), 0);
 
     const { data: attempt, error: attErr } = await db
       .from("exam_attempts")
@@ -2645,7 +2955,10 @@ app.post("/api/exams/:id/submit", async (req, res) => {
     );
 
     let score = 0;
+    let scoreWithoutNegative = 0;
     const answerRows = [];
+    const breakdown = { mcq: { correct: 0, wrong: 0, notTouched: 0, positiveMarks: 0, negativeMarks: 0 }, sba: { correct: 0, wrong: 0, notTouched: 0, positiveMarks: 0, negativeMarks: 0 } };
+
     for (const item of answers) {
       const qid = String(item?.questionId ?? "").trim();
       const entry = questionMap.get(qid);
@@ -2654,12 +2967,28 @@ app.post("/api/exams/:id/submit", async (req, res) => {
       if (!rawQ) continue;
       const graded = gradeAnswer(rawQ, item.answer ?? {});
       score += graded.marksEarned;
+      const gd = graded.gradingDetail ?? {};
+      if (gd.mode === "mcq") {
+        breakdown.mcq.correct += gd.correct ?? 0;
+        breakdown.mcq.wrong += gd.wrong ?? 0;
+        breakdown.mcq.notTouched += gd.notTouched ?? 0;
+        breakdown.mcq.positiveMarks += gd.positiveMarks ?? 0;
+        breakdown.mcq.negativeMarks += gd.negativeMarks ?? 0;
+        scoreWithoutNegative += gd.positiveMarks ?? 0;
+      } else if (gd.mode === "sba") {
+        breakdown.sba.correct += gd.correct ?? 0;
+        breakdown.sba.wrong += gd.wrong ?? 0;
+        breakdown.sba.notTouched += gd.notTouched ?? 0;
+        breakdown.sba.positiveMarks += gd.positiveMarks ?? 0;
+        scoreWithoutNegative += gd.positiveMarks ?? 0;
+      }
       answerRows.push({
         attempt_id: attemptId,
         question_id: qid,
         answer: item.answer ?? {},
         is_correct: graded.isCorrect,
         marks_earned: graded.marksEarned,
+        grading_detail: graded.gradingDetail ?? null,
       });
     }
 
@@ -2681,7 +3010,9 @@ app.post("/api/exams/:id/submit", async (req, res) => {
       ok: true,
       attemptId,
       score,
+      scoreWithoutNegative,
       totalMarks: Number(attempt.total_marks),
+      breakdown,
       status: finalStatus,
       expired,
     });
@@ -2713,6 +3044,36 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
 
     const showSolutions = attempt.status === "submitted" || attempt.status === "expired";
 
+    let performance = null;
+    let position = null;
+    let answerDistribution = null;
+    if (showSolutions) {
+      const { data: ansRows } = await db.from("exam_answers").select("grading_detail").eq("attempt_id", attemptId);
+      const perf = {
+        mcq: { correct: 0, wrong: 0, notTouched: 0, positiveMarks: 0, negativeMarks: 0 },
+        sba: { correct: 0, wrong: 0, notTouched: 0, positiveMarks: 0, negativeMarks: 0 },
+      };
+      for (const row of ansRows ?? []) {
+        const gd = row.grading_detail ?? {};
+        if (gd.mode === "mcq") {
+          perf.mcq.correct += gd.correct ?? 0;
+          perf.mcq.wrong += gd.wrong ?? 0;
+          perf.mcq.notTouched += gd.notTouched ?? 0;
+          perf.mcq.positiveMarks += gd.positiveMarks ?? 0;
+          perf.mcq.negativeMarks += gd.negativeMarks ?? 0;
+        } else if (gd.mode === "sba") {
+          perf.sba.correct += gd.correct ?? 0;
+          perf.sba.wrong += gd.wrong ?? 0;
+          perf.sba.notTouched += gd.notTouched ?? 0;
+          perf.sba.positiveMarks += gd.positiveMarks ?? 0;
+        }
+      }
+      const scoreWithoutNegative = perf.mcq.positiveMarks + perf.sba.positiveMarks;
+      performance = { ...perf, scoreWithoutNegative, scoreWithNegative: Number(attempt.score) };
+      position = await computeExamPosition(db, attempt.exam_id, attemptId, Number(attempt.score));
+      answerDistribution = await buildAnswerDistribution(db, attempt.exam_id);
+    }
+
     return res.json({
       attempt: {
         id: attempt.id,
@@ -2724,8 +3085,11 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
         score: Number(attempt.score),
         totalMarks: Number(attempt.total_marks),
         status: attempt.status,
+        performance,
+        position,
       },
       exam: exam ? formatExamSummary(exam, questions.length) : null,
+      answerDistribution,
       questions: questions
         .filter((q) => q.question)
         .map((q) => {
@@ -2742,6 +3106,7 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
             studentAnswer: ans?.answer ?? null,
             isCorrect: ans?.is_correct ?? false,
             marksEarned: Number(ans?.marks_earned ?? 0),
+            gradingDetail: ans?.grading_detail ?? null,
             showSolutions: true,
           };
         }),

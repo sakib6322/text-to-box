@@ -19,6 +19,10 @@ import ExamSchedules from "./pages/ExamSchedules.tsx";
 import MyExams from "./pages/MyExams.tsx";
 import TakeExam from "./pages/TakeExam.tsx";
 import ExamResult from "./pages/ExamResult.tsx";
+import ConceptLearn from "./pages/ConceptLearn.tsx";
+import ConceptDetailPage from "./pages/ConceptDetailPage.tsx";
+import PracticeTake from "./pages/PracticeTake.tsx";
+import StudyProgressPage from "./pages/StudyProgressPage.tsx";
 import { AppShellProvider } from "@/components/AppShellContext";
 
 
@@ -47,11 +51,17 @@ const App = () => (
             <Route path="my-exams" element={<MyExams />} />
             <Route path="my-exams/take/:examId" element={<TakeExam />} />
             <Route path="my-exams/result/:attemptId" element={<ExamResult />} />
+            <Route path="concept/:conceptId/learn" element={<ConceptLearn />} />
+            <Route path="concept/:conceptId/details" element={<ConceptDetailPage />} />
+            <Route path="study/:conceptId" element={<ConceptLearn />} />
+            <Route path="practice/:conceptId/setup" element={<ConceptLearn />} />
+            <Route path="practice/session/:sessionId" element={<PracticeTake />} />
+            <Route path="study/progress" element={<StudyProgressPage />} />
           </Route>
           <Route
             path="/admin"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute role="admin">
                 <AdminLayout />
               </ProtectedRoute>
             }

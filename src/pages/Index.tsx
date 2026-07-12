@@ -1,15 +1,15 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { CKEditorField } from "@/components/CKEditorField";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { htmlToPlainText, isHtmlEmpty } from "@/lib/htmlContent";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Upload, Save, Sparkles } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload, Save, Sparkles, FileText } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
@@ -18,11 +18,19 @@ import { ConceptDetailCard } from "@/components/ConceptDetailCard";
 import { ConceptSuggestionsPanel } from "@/components/ConceptSuggestionsPanel";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import {
+  ACCEPTED_SOURCE_TYPES,
+  fileFromPasteEvent,
+  isAcceptedSourceFile,
+  isPdfFile,
+  prepareSourceFileForUpload,
+  readFilePreview,
+} from "@/lib/sourceInput";
+import { fetchSuggestionMatches, type SuggestionMatch } from "@/lib/suggestionMatch";
+import {
   buildSuggestionLines,
   emptyConceptDetail,
   parseDetailTable,
   type ConceptDetail,
-  type SuggestionMatch,
 } from "@/lib/conceptDetail";
 
 type KeyPoint = { content: string };
@@ -31,94 +39,11 @@ const toErrorMessage = (error: unknown) => (error instanceof Error ? error.messa
 
 const emptyKeyPoint = (): KeyPoint => ({ content: "" });
 
-async function compressImage(file: File, maxWidth = 1600, quality = 0.82): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
-
-  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const src = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(src);
-      resolve(img);
-    };
-    img.onerror = (err) => {
-      URL.revokeObjectURL(src);
-      reject(err);
-    };
-    img.src = src;
-  });
-
-  const scale = Math.min(1, maxWidth / image.width);
-  const width = Math.round(image.width * scale);
-  const height = Math.round(image.height * scale);
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file;
-  ctx.drawImage(image, 0, 0, width, height);
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", quality);
-  });
-  if (!blob) return file;
-  return new File([blob], file.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" });
-}
-
-async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
-  const bestByText = new Map<string, SuggestionMatch | null>();
-  const list = texts.filter((t) => t.trim());
-  if (!list.length) return bestByText;
-
-  const resp = await fetch(apiUrl("/api/match-key-points"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texts: list.slice(0, 40), threshold: 0.55, count: 1 }),
-  });
-
-  type Match = {
-    id: string;
-    percentage?: number;
-    similarity?: number;
-    concept_title?: string | null;
-    board_names?: string[];
-    ai_percentage?: number | null;
-  };
-  type MatchResult = { text: string; matches: Match[] };
-
-  const j = (await resp.json().catch(() => ({}))) as { results?: MatchResult[]; error?: string };
-  if (!resp.ok) throw new Error(j.error ?? "Match failed");
-
-  for (const r of j.results ?? []) {
-    if (typeof r?.text !== "string") continue;
-    const best = Array.isArray(r.matches) && r.matches.length ? r.matches[0] : null;
-    if (!best?.id) {
-      bestByText.set(r.text, null);
-      continue;
-    }
-    const pct =
-      typeof best.ai_percentage === "number"
-        ? Math.round(best.ai_percentage)
-        : typeof best.percentage === "number"
-          ? Math.round(best.percentage)
-          : typeof best.similarity === "number"
-            ? Math.round(best.similarity * 100)
-            : 0;
-    bestByText.set(r.text, {
-      keyPointId: best.id,
-      percentage: pct,
-      conceptTitle: best.concept_title ?? null,
-      boardNames: Array.isArray(best.board_names) ? best.board_names.filter(Boolean) : [],
-    });
-  }
-  return bestByText;
-}
-
 const Index = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -143,15 +68,31 @@ const Index = () => {
     return true;
   };
 
-  const onPick = (f: File) => {
-    if (!f.type.startsWith("image/")) {
-      toast.error("Please choose an image file");
+  const onPick = async (f: File) => {
+    if (!isAcceptedSourceFile(f)) {
+      toast.error("Please choose an image or PDF file");
       return;
     }
     setImageFile(f);
-    const r = new FileReader();
-    r.onload = () => setImagePreview(r.result as string);
-    r.readAsDataURL(f);
+    setIsPdf(isPdfFile(f));
+    if (isPdfFile(f)) {
+      setImagePreview(null);
+    } else {
+      try {
+        setImagePreview(await readFilePreview(f));
+      } catch {
+        setImagePreview(null);
+      }
+    }
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const f = await fileFromPasteEvent(e.nativeEvent);
+    if (f) {
+      e.preventDefault();
+      await onPick(f);
+      toast.success(isPdfFile(f) ? "PDF pasted" : "Image pasted");
+    }
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -199,8 +140,8 @@ const Index = () => {
     try {
       const formData = new FormData();
       if (imageFile) {
-        const compressed = await compressImage(imageFile);
-        formData.append("image", compressed);
+        const prepared = await prepareSourceFileForUpload(imageFile);
+        formData.append("image", prepared);
       }
       if (htmlToPlainText(sourceText)) formData.append("input_text", htmlToPlainText(sourceText));
 
@@ -254,6 +195,7 @@ const Index = () => {
   const resetForm = () => {
     setImageFile(null);
     setImagePreview(null);
+    setIsPdf(false);
     setConceptName("");
     setSourceText("");
     setConceptDetail(emptyConceptDetail());
@@ -389,6 +331,7 @@ const Index = () => {
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
+              onPaste={onPaste}
               onClick={() => fileRef.current?.click()}
               onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
               className={[
@@ -397,16 +340,23 @@ const Index = () => {
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">ছবি ড্র্যাগ করুন বা ক্লিক করুন</p>
-              <p className="text-xs text-muted-foreground mt-1">Book page image (JPG, PNG…)</p>
+              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ করুন, ক্লিক করুন, অথবা paste করুন</p>
+              <p className="text-xs text-muted-foreground mt-1">Image (JPG, PNG…) অথবা PDF</p>
               <Input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                accept={ACCEPTED_SOURCE_TYPES}
                 className="sr-only"
-                onChange={(e) => e.target.files?.[0] && onPick(e.target.files[0])}
+                onChange={(e) => e.target.files?.[0] && void onPick(e.target.files[0])}
               />
             </div>
+
+            {isPdf && imageFile ? (
+              <div className="rounded-md border p-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <FileText className="h-5 w-5 shrink-0" />
+                <span>{imageFile.name}</span>
+              </div>
+            ) : null}
 
             {imagePreview && (
               <div className="rounded-md overflow-hidden border">

@@ -14,7 +14,7 @@ import { DatabaseConnectionPanel } from "@/components/DatabaseConnectionPanel";
 import { GeminiKeysPanel } from "@/components/GeminiKeysPanel";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { EditItemDialog } from "@/components/EditItemDialog";
-import { ExtractQuestionsPromptPanel } from "@/components/ExtractQuestionsPromptPanel";
+import { AIPromptsPanel } from "@/components/AIPromptsPanel";
 import { ConceptsPanel } from "@/components/ConceptsPanel";
 
 type BoardRow = { id: string; name: string; created_at?: string };
@@ -455,7 +455,7 @@ export default function AdminSettings() {
             <GeminiKeysPanel />
           </TabsContent>
           <TabsContent value="prompts" className="mt-4">
-            <ExtractQuestionsPromptPanel />
+            <AIPromptsPanel />
           </TabsContent>
           <TabsContent value="subjects" className="mt-4">
             <TaxonomySection level="subjects" label="Subject" />

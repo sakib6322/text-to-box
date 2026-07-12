@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { ChevronRight, FileText, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,7 +24,21 @@ import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { emptyConceptDetail, fetchConceptById, type ConceptDetail } from "@/lib/conceptDetail";
+import { SuggestionMatchPanel } from "@/components/SuggestionMatchPanel";
+import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import {
+  ACCEPTED_SOURCE_TYPES,
+  fileFromPasteEvent,
+  isAcceptedSourceFile,
+  isPdfFile,
+  prepareSourceFileForUpload,
+  readFilePreview,
+} from "@/lib/sourceInput";
+import {
+  fetchSuggestionMatches,
+  toLegacyMatch,
+  type LegacySuggestionMatch,
+} from "@/lib/suggestionMatch";
 
 type ExtractResult = {
   concept_name: string;
@@ -42,20 +56,7 @@ type ExtractedQuestion = {
   sba_correct_index?: number;
 };
 
-type SuggestionMatch = {
-  key_point_id: string;
-  concept_id?: string | null;
-  similarity: number;
-  concept_title: string | null;
-  concept_subject?: string | null;
-  concept_system?: string | null;
-  concept_chapter?: string | null;
-  concept_topic?: string | null;
-  board_names?: string[];
-  ai_percentage?: number | null;
-  ai_reason?: string | null;
-  vector_percentage?: number;
-};
+type SuggestionMatch = LegacySuggestionMatch;
 
 type ApprovedPoint = {
   point_id: string;
@@ -116,7 +117,7 @@ function questionStem(q: Pick<DraftQuestion, "mcq" | "sba">): string {
 }
 
 function matchPct(m: SuggestionMatch): number {
-  return Math.round((m.ai_percentage ?? m.similarity * 100));
+  return Math.round(m.ai_percentage ?? m.similarity * 100);
 }
 
 function matchPath(m: SuggestionMatch): string {
@@ -173,207 +174,13 @@ async function fetchGeneratedExplanations(drafts: DraftQuestion[], concept?: str
   return mergeExplanationResults(drafts, j.results ?? []);
 }
 
-async function fetchSuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
-  const bestByText = new Map<string, SuggestionMatch | null>();
-  const list = texts.filter((t) => t.trim());
-  if (list.length === 0) return bestByText;
-
-  const resp = await fetch(apiUrl("/api/match-key-points"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ texts: list.slice(0, 30), threshold: 0.55, count: 1 }),
-  });
-  type Match = {
-    id: string;
-    concept_id?: string | null;
-    similarity: number;
-    concept_title: string | null;
-    concept_subject?: string | null;
-    concept_system?: string | null;
-    concept_chapter?: string | null;
-    concept_topic?: string | null;
-    board_names?: string[];
-    ai_percentage?: number;
-    ai_reason?: string | null;
-    vector_percentage?: number;
-  };
-  type MatchResult = { text: string; matches: Match[] };
-  const j = (await resp.json().catch(() => ({}))) as { results?: MatchResult[]; error?: string };
-  if (!resp.ok) throw new Error(j.error ?? "Match failed");
-
-  for (const r of j.results ?? []) {
-    const best = Array.isArray(r?.matches) && r.matches.length ? r.matches[0] : null;
-    if (typeof r?.text !== "string") continue;
-    if (!best?.id || typeof best.similarity !== "number") {
-      bestByText.set(r.text, null);
-      continue;
-    }
-    bestByText.set(r.text, {
-      key_point_id: best.id,
-      concept_id: best.concept_id ?? null,
-      similarity: best.similarity,
-      concept_title: best.concept_title ?? null,
-      concept_subject: best.concept_subject ?? null,
-      concept_system: best.concept_system ?? null,
-      concept_chapter: best.concept_chapter ?? null,
-      concept_topic: best.concept_topic ?? null,
-      board_names: Array.isArray(best.board_names) ? best.board_names.filter(Boolean) : [],
-      ai_percentage: typeof best.ai_percentage === "number" ? best.ai_percentage : null,
-      ai_reason: typeof best.ai_reason === "string" ? best.ai_reason : null,
-      vector_percentage: typeof best.vector_percentage === "number" ? best.vector_percentage : undefined,
-    });
+async function fetchLegacySuggestionMatches(texts: string[]): Promise<Map<string, SuggestionMatch | null>> {
+  const raw = await fetchSuggestionMatches(texts);
+  const legacy = new Map<string, SuggestionMatch | null>();
+  for (const [text, match] of raw) {
+    legacy.set(text, match ? toLegacyMatch(match) : null);
   }
-  return bestByText;
-}
-
-function SuggestionMatchPanel({
-  match,
-  matchApproved,
-  matchApproving,
-  matchApproveError,
-  selectedBoardNames,
-  onApprove,
-  onViewConcept,
-  allowApproveWithoutMatch = false,
-}: {
-  match: SuggestionMatch | null | undefined;
-  matchApproved?: boolean;
-  matchApproving?: boolean;
-  matchApproveError?: string | null;
-  selectedBoardNames?: string[];
-  onApprove?: () => void;
-  onViewConcept?: () => void;
-  allowApproveWithoutMatch?: boolean;
-}) {
-  if (!match) {
-    return (
-      <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
-        <p>No matching suggestion in database yet.</p>
-        {selectedBoardNames?.length ? (
-          <div className="flex flex-wrap gap-1">
-            {selectedBoardNames.map((b) => (
-              <Badge key={b} variant="outline" className="text-[10px] text-red-600 border-red-300 bg-red-50">
-                {b}
-              </Badge>
-            ))}
-          </div>
-        ) : null}
-        {onApprove && !matchApproved && allowApproveWithoutMatch ? (
-          <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
-            {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Approve as new suggestion
-          </Button>
-        ) : null}
-        {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
-      </div>
-    );
-  }
-  const path = matchPath(match);
-  const boards = [
-    ...new Set([...(match.board_names ?? []), ...(selectedBoardNames ?? [])].filter(Boolean)),
-  ];
-  return (
-    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <span className="font-medium text-foreground">Suggestion match:</span> {matchPct(match)}%
-          {matchApproved ? (
-            <Badge variant="secondary" className="ml-2 text-[10px]">
-              Approved
-            </Badge>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {onViewConcept && match.concept_id ? (
-            <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={onViewConcept}>
-              Concept details
-            </Button>
-          ) : null}
-          {onApprove && !matchApproved ? (
-            <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
-              {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              {allowApproveWithoutMatch ? "Approve" : "Approve match"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-      {path ? (
-        <p>
-          <span className="font-medium text-foreground">Path:</span> {path}
-        </p>
-      ) : null}
-      {boards.length ? (
-        <div className="flex flex-wrap gap-1">
-          {boards.map((b) => (
-            <Badge key={b} variant="outline" className="text-[10px] text-red-600 border-red-300 bg-red-50">
-              {b}
-            </Badge>
-          ))}
-        </div>
-      ) : null}
-      {typeof match.vector_percentage === "number" ? (
-        <p>
-          <span className="font-medium text-foreground">Vector score:</span> {Math.round(match.vector_percentage)}%
-        </p>
-      ) : null}
-      <p className="font-mono">Key point ID: {match.key_point_id}</p>
-      {match.ai_reason ? (
-        <p>
-          <span className="font-medium text-foreground">Analysis:</span> {match.ai_reason}
-        </p>
-      ) : null}
-      {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
-      {!matchApproved && onApprove ? (
-        <p className="text-[11px]">
-          {allowApproveWithoutMatch
-            ? "Approve to save as suggestion with selected boards (not as a question)."
-            : "Approve this match to link the suggestion and apply selected boards before saving."}
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
-async function compressImage(file: File): Promise<File> {
-  if (!file.type.startsWith("image/")) return file;
-
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("Failed to read image"));
-    reader.readAsDataURL(file);
-  });
-
-  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("Failed to load image"));
-    image.src = dataUrl;
-  });
-
-  const MAX_SIDE = 1600;
-  const ratio = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
-  const width = Math.max(1, Math.round(img.width * ratio));
-  const height = Math.max(1, Math.round(img.height * ratio));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) return file;
-  ctx.drawImage(img, 0, 0, width, height);
-
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/jpeg", 0.78);
-  });
-  if (!blob) return file;
-
-  const compressed = new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), {
-    type: "image/jpeg",
-    lastModified: Date.now(),
-  });
-
-  return compressed.size < file.size ? compressed : file;
+  return legacy;
 }
 
 export default function CreateQuestionAI() {
@@ -386,6 +193,7 @@ export default function CreateQuestionAI() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isPdf, setIsPdf] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [extracting, setExtracting] = useState(false);
@@ -420,7 +228,7 @@ export default function CreateQuestionAI() {
   const [conceptDetailsLoading, setConceptDetailsLoading] = useState(false);
   const [conceptDetailsName, setConceptDetailsName] = useState("");
   const [conceptDetailsData, setConceptDetailsData] = useState<ConceptDetail>(emptyConceptDetail());
-  const [conceptDetailsKeyPoints, setConceptDetailsKeyPoints] = useState<string[]>([]);
+  const [conceptDetailsKeyPoints, setConceptDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [extractedQuestionSummary, setExtractedQuestionSummary] = useState<string | null>(null);
   const [deleteQuestionTarget, setDeleteQuestionTarget] = useState<DraftQuestion | null>(null);
 
@@ -601,7 +409,7 @@ export default function CreateQuestionAI() {
     let drafts = questions.map((q) => draftFromExtracted(q, conceptOverride));
     try {
       const stems = drafts.map(questionStem).filter(Boolean);
-      const bestByText = await fetchSuggestionMatches(stems);
+      const bestByText = await fetchLegacySuggestionMatches(stems);
       drafts = drafts.map((q) => {
         const stem = questionStem(q);
         const match = stem ? (bestByText.get(stem) ?? null) : null;
@@ -639,15 +447,31 @@ export default function CreateQuestionAI() {
     setExtractedQuestionSummary(parts.join(", "));
   };
 
-  const onPickImage = (f: File) => {
-    if (!f.type.startsWith("image/")) {
-      toast.error("Please choose an image file");
+  const onPickImage = async (f: File) => {
+    if (!isAcceptedSourceFile(f)) {
+      toast.error("Please choose an image or PDF file");
       return;
     }
     setImageFile(f);
-    const reader = new FileReader();
-    reader.onload = () => setImagePreview(reader.result as string);
-    reader.readAsDataURL(f);
+    setIsPdf(isPdfFile(f));
+    if (isPdfFile(f)) {
+      setImagePreview(null);
+    } else {
+      try {
+        setImagePreview(await readFilePreview(f));
+      } catch {
+        setImagePreview(null);
+      }
+    }
+  };
+
+  const onPaste = async (e: React.ClipboardEvent) => {
+    const f = await fileFromPasteEvent(e.nativeEvent);
+    if (f) {
+      e.preventDefault();
+      await onPickImage(f);
+      toast.success(isPdfFile(f) ? "PDF pasted" : "Image pasted");
+    }
   };
 
   const onDragOver = (e: React.DragEvent) => {
@@ -679,7 +503,7 @@ export default function CreateQuestionAI() {
     setPoints(initial);
 
     try {
-      const bestByText = await fetchSuggestionMatches(texts);
+      const bestByText = await fetchLegacySuggestionMatches(texts);
       setPoints((prev) =>
         prev.map((p) => ({
           ...p,
@@ -699,8 +523,8 @@ export default function CreateQuestionAI() {
     try {
       const formData = new FormData();
       if (imageFile) {
-        const compressed = await compressImage(imageFile);
-        formData.append("image", compressed);
+        const prepared = await prepareSourceFileForUpload(imageFile);
+        formData.append("image", prepared);
       }
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
 
@@ -814,7 +638,7 @@ export default function CreateQuestionAI() {
     if (!p?.text.trim()) return;
     setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, matching: true } : x)));
     try {
-      const bestByText = await fetchSuggestionMatches([p.text.trim()]);
+      const bestByText = await fetchLegacySuggestionMatches([p.text.trim()]);
       const match = bestByText.get(p.text.trim()) ?? null;
       setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, match, matching: false } : x)));
     } catch {
@@ -833,7 +657,7 @@ export default function CreateQuestionAI() {
     setConceptDetailsData(emptyConceptDetail());
     setConceptDetailsKeyPoints([]);
     try {
-      const loaded = await fetchConceptById(match.concept_id);
+      const loaded = await fetchConceptByIdWithBoards(match.concept_id);
       setConceptDetailsName(loaded.conceptName);
       setConceptDetailsData(loaded.detail);
       setConceptDetailsKeyPoints(loaded.keyPoints);
@@ -968,10 +792,6 @@ export default function CreateQuestionAI() {
     if (!questionMode) return toast.error("Select a question type");
     if (!requireTaxonomy()) return;
     const toSave = questionsForSave();
-    const pendingMatch = toSave.find((q) => q.match && !q.matchApproved);
-    if (pendingMatch) {
-      return toast.error("Approve suggestion match for each question before saving");
-    }
     setSaving(true);
     try {
       const payload = {
@@ -1143,6 +963,7 @@ export default function CreateQuestionAI() {
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
               onDrop={onDrop}
+              onPaste={onPaste}
               onClick={() => fileRef.current?.click()}
               onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
               className={[
@@ -1151,16 +972,22 @@ export default function CreateQuestionAI() {
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
-              <p className="text-sm font-medium">ছবি ড্র্যাগ করুন বা ক্লিক করুন</p>
-              <p className="text-xs text-muted-foreground mt-1">JPG, PNG…</p>
+              <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ, ক্লিক, অথবা paste করুন</p>
+              <p className="text-xs text-muted-foreground mt-1">Image অথবা PDF</p>
               <Input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                accept={ACCEPTED_SOURCE_TYPES}
                 className="sr-only"
-                onChange={(e) => e.target.files?.[0] && onPickImage(e.target.files[0])}
+                onChange={(e) => e.target.files?.[0] && void onPickImage(e.target.files[0])}
               />
             </div>
+            {isPdf && imageFile ? (
+              <div className="max-w-md rounded-md border p-3 flex items-center gap-2 text-sm text-muted-foreground">
+                <FileText className="h-5 w-5 shrink-0" />
+                <span>{imageFile.name}</span>
+              </div>
+            ) : null}
             {imagePreview ? (
               <div className="max-w-md rounded-md overflow-hidden border">
                 <img src={imagePreview} alt="Upload preview" className="w-full" />
@@ -1231,7 +1058,7 @@ export default function CreateQuestionAI() {
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
-                    Match against suggestions (subject → system → chapter → topic → concept → board), then approve each line.
+                    Match against suggestions (subject → system → chapter → topic → concept → board). Approve is optional before save.
                     Only MCQ/SBA questions go to All Questions — not these points.
                   </div>
                 </div>
@@ -1269,6 +1096,15 @@ export default function CreateQuestionAI() {
                         onApprove={() => approvePoint(idx)}
                         onViewConcept={p.match ? () => void openMatchConceptDetails(p.match!) : undefined}
                         allowApproveWithoutMatch
+                        onMatchUpdate={(updated) => {
+                          setPoints((ps) =>
+                            ps.map((x, i) =>
+                              i === idx
+                                ? { ...x, match: { ...x.match!, key_point_content: updated.keyPointContent } }
+                                : x,
+                            ),
+                          );
+                        }}
                       />
                     )}
                   </Card>
@@ -1349,7 +1185,7 @@ export default function CreateQuestionAI() {
           <p className="mt-4 text-xs text-muted-foreground">
             Detected from image (verbatim): <span className="font-medium text-foreground">{extractedQuestionSummary}</span>
             {queuedQuestions.length > 1 ? ` · ${queuedQuestions.length} questions in paper — select below to edit each` : null}
-            {queuedQuestions.some((q) => q.match) ? " · approve each match before save" : null}
+            {queuedQuestions.some((q) => q.match) ? " · approve match optional (links suggestion when approved)" : null}
           </p>
         ) : null}
 
@@ -1365,6 +1201,15 @@ export default function CreateQuestionAI() {
               onViewConcept={() => {
                 const m = queuedQuestions[activeQuestionIndex]?.match;
                 if (m) void openMatchConceptDetails(m);
+              }}
+              onMatchUpdate={(updated) => {
+                setQueuedQuestions((qs) =>
+                  qs.map((q, i) =>
+                    i === activeQuestionIndex
+                      ? { ...q, match: { ...q.match!, key_point_content: updated.keyPointContent } }
+                      : q,
+                  ),
+                );
               }}
             />
           </div>
