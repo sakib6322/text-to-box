@@ -4,6 +4,8 @@ export type HeaderSearchConfig = {
   placeholder?: string;
   value: string;
   onChange: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 export type AppNotification = {

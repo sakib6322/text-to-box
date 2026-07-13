@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { MultiLineField } from "@/components/MultiLineField";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 import {
@@ -62,8 +61,11 @@ type ApprovedPoint = {
   point_id: string;
   text: string;
   approved: boolean;
+  saved?: boolean;
+  approving?: boolean;
   saving?: boolean;
   approveError?: string | null;
+  saveError?: string | null;
   match?: SuggestionMatch | null;
   matching?: boolean;
 };
@@ -241,13 +243,10 @@ export default function CreateQuestionAI() {
 
   const [boardOptions, setBoardOptions] = useState<BoardOption[]>([]);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
-  const [importantSchools, setImportantSchools] = useState([""]);
-  const [sources, setSources] = useState([""]);
-  const [teachers, setTeachers] = useState([""]);
-  const [tags, setTags] = useState([""]);
   const [difficulty, setDifficulty] = useState("medium");
   const [status, setStatus] = useState("published");
   const [marks, setMarks] = useState("1");
+  const sourceTextRef = useRef<HTMLTextAreaElement>(null);
 
   const [mcqStem, setMcqStem] = useState("");
   const [tfItems, setTfItems] = useState<TfItem[]>([]);
@@ -261,6 +260,8 @@ export default function CreateQuestionAI() {
   const [generatingExplanations, setGeneratingExplanations] = useState(false);
   const [queuedQuestions, setQueuedQuestions] = useState<DraftQuestion[]>([]);
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+  /** Questions selected in preview for bulk match-approve / point linking. */
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<Set<string>>(() => new Set());
   const [conceptDetailsOpen, setConceptDetailsOpen] = useState(false);
   const [conceptDetailsLoading, setConceptDetailsLoading] = useState(false);
   const [conceptDetailsName, setConceptDetailsName] = useState("");
@@ -325,14 +326,25 @@ export default function CreateQuestionAI() {
 
   const buildMetadata = (boardIds: string[] = selectedBoardIds): DraftQuestion["metadata"] => ({
     boards: boardNamesForIds(boardIds),
-    importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
-    sources: sources.map((b) => b.trim()).filter(Boolean),
-    teachers: teachers.map((b) => b.trim()).filter(Boolean),
-    tags: tags.map((b) => b.trim()).filter(Boolean),
+    importantSchools: [],
+    sources: [],
+    teachers: [],
+    tags: [],
     difficulty,
     status,
     marks: Number(marks) || 0,
   });
+
+  const resizeSourceText = () => {
+    const el = sourceTextRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
+  };
+
+  useEffect(() => {
+    resizeSourceText();
+  }, [sourceText]);
 
   const loadQuestionIntoForm = (q: DraftQuestion) => {
     setQuestionMode(q.questionMode);
@@ -475,6 +487,7 @@ export default function CreateQuestionAI() {
 
     setQueuedQuestions(drafts);
     setActiveQuestionIndex(0);
+    setSelectedQuestionIds(new Set(drafts.map((d) => d.id)));
     loadQuestionIntoForm(drafts[0]);
 
     const mcqCount = questions.filter((q) => q.question_type === "mcq").length;
@@ -534,7 +547,9 @@ export default function CreateQuestionAI() {
       point_id: mkId(),
       text,
       approved: false,
+      saved: false,
       approveError: null,
+      saveError: null,
       match: null,
       matching: true,
     }));
@@ -619,20 +634,40 @@ export default function CreateQuestionAI() {
     }
   };
 
+  /** Link a key point id onto selected questions (or all unmatched ones if none selected). */
+  const linkPointToQuestions = (pointId: string) => {
+    if (queuedQuestions.length === 0) return;
+    updateActiveDraftFromForm();
+    const useSelection = selectedQuestionIds.size > 0;
+    setQueuedQuestions((prev) =>
+      prev.map((q) => {
+        if (useSelection && !selectedQuestionIds.has(q.id)) return q;
+        if (q.matchApproved) return q;
+        return { ...q, sourcePointId: pointId };
+      }),
+    );
+  };
+
   const approvePoint = async (idx: number) => {
     const p = points[idx];
     if (!p) return;
+    if (!p.match?.key_point_id) {
+      return toast.error("No match to approve. Use Save to add this as a new key point.");
+    }
     if (!requireTaxonomy()) return;
     const t = taxonomyNames();
     const text = p.text.trim();
     if (!text) return toast.error("Point text is required");
-    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, approveError: null } : x)));
+    if (queuedQuestions.length > 0) updateActiveDraftFromForm();
+    const boardIds = selectedBoardIds;
+    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, approving: true, approveError: null } : x)));
     try {
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          matched_key_point_id: p.match?.key_point_id ?? null,
+          mode: "approve",
+          matched_key_point_id: p.match.key_point_id,
           concept: conceptTitle,
           subject: t.subject,
           system: t.system,
@@ -640,34 +675,98 @@ export default function CreateQuestionAI() {
           topic: t.topic,
           topic_id: t.topicId,
           question_text: text,
-          board_ids: selectedBoardIds,
+          board_ids: boardIds,
         }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string; created_new_point?: boolean; point_id?: string };
+      const data = (await resp.json().catch(() => ({}))) as { error?: string; point_id?: string };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Approval failed");
 
+      const pointId = typeof data?.point_id === "string" ? data.point_id : p.match.key_point_id;
       setPoints((ps) =>
         ps.map((x, i) =>
           i === idx
             ? {
                 ...x,
                 approved: true,
-                saving: false,
+                approving: false,
                 approveError: null,
-                point_id: typeof data?.point_id === "string" ? data.point_id : x.point_id,
+                point_id: pointId,
               }
             : x,
         ),
       );
+      linkPointToQuestions(pointId);
       toast.success(
-        data.created_new_point
-          ? "Added as new suggestion (with boards if selected)"
-          : "Suggestion approved — linked with selected boards",
+        "Approved — linked matched key point to question(s)" +
+          (boardIds.length ? " with boards from selected question" : ""),
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Approval failed";
       toast.error(msg);
-      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: false, approveError: msg } : x)));
+      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, approving: false, approveError: msg } : x)));
+    }
+  };
+
+  const savePoint = async (idx: number) => {
+    const p = points[idx];
+    if (!p) return;
+    if (!requireTaxonomy()) return;
+    const t = taxonomyNames();
+    const text = p.text.trim();
+    if (!text) return toast.error("Point text is required");
+    // Boards come from the active/selected question (same as before), not per key point
+    if (queuedQuestions.length > 0) updateActiveDraftFromForm();
+    const boardIds = selectedBoardIds;
+    setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, saveError: null } : x)));
+    try {
+      const resp = await fetch(apiUrl("/api/approve-point"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "save",
+          // Never pass matched id on save — boards must only attach to the newly created KP
+          matched_key_point_id: null,
+          concept: conceptTitle,
+          subject: t.subject,
+          system: t.system,
+          chapter: t.chapter,
+          topic: t.topic,
+          topic_id: t.topicId,
+          question_text: text,
+          board_ids: boardIds,
+        }),
+      });
+      const data = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        created_new_point?: boolean;
+        point_id?: string;
+      };
+      if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
+
+      const pointId = typeof data?.point_id === "string" ? data.point_id : p.point_id;
+      setPoints((ps) =>
+        ps.map((x, i) =>
+          i === idx
+            ? {
+                ...x,
+                saved: true,
+                saving: false,
+                saveError: null,
+                point_id: pointId,
+              }
+            : x,
+        ),
+      );
+      linkPointToQuestions(pointId);
+      toast.success(
+        "Saved new key point to database" +
+          (boardIds.length ? " with boards from selected question" : "") +
+          " and linked to question(s)",
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Save failed";
+      toast.error(msg);
+      setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: false, saveError: msg } : x)));
     }
   };
 
@@ -707,13 +806,16 @@ export default function CreateQuestionAI() {
     }
   };
 
-  const approveQuestionMatch = async (index: number) => {
+  const approveQuestionMatch = async (index: number, options?: { quiet?: boolean }) => {
     const q = index === activeQuestionIndex ? buildCurrentDraftFromForm() : queuedQuestions[index];
-    if (!q?.match?.key_point_id) return;
-    if (!requireTaxonomy()) return;
+    if (!q?.match?.key_point_id) return false;
+    if (!requireTaxonomy()) return false;
     const t = taxonomyNames();
     const stem = questionStem(q);
-    if (!stem) return toast.error("Question stem is required to approve match");
+    if (!stem) {
+      if (!options?.quiet) toast.error("Question stem is required to approve match");
+      return false;
+    }
 
     setQueuedQuestions((prev) =>
       prev.map((item, i) =>
@@ -725,6 +827,7 @@ export default function CreateQuestionAI() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          mode: "approve",
           matched_key_point_id: q.match!.key_point_id,
           concept: q.concept || conceptTitle,
           subject: t.subject,
@@ -752,7 +855,13 @@ export default function CreateQuestionAI() {
             : item,
         ),
       );
-      toast.success("Match approved — boards linked to suggestion");
+      if (!options?.quiet) {
+        toast.success(
+          "Match approved — linked to key point" +
+            ((q.boardIds?.length ?? 0) > 0 ? " with boards" : ""),
+        );
+      }
+      return true;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Approval failed";
       setQueuedQuestions((prev) =>
@@ -760,8 +869,35 @@ export default function CreateQuestionAI() {
           i === index ? { ...item, matchApproving: false, matchApproveError: msg } : item,
         ),
       );
-      toast.error(msg);
+      if (!options?.quiet) toast.error(msg);
+      return false;
     }
+  };
+
+  const approveSelectedQuestionMatches = async () => {
+    if (queuedQuestions.length === 0) return;
+    updateActiveDraftFromForm();
+    const indexes = queuedQuestions
+      .map((q, i) => ({ q, i }))
+      .filter(({ q }) => selectedQuestionIds.has(q.id) && q.match?.key_point_id && !q.matchApproved)
+      .map(({ i }) => i);
+    if (indexes.length === 0) {
+      return toast.error("Select questions that have an unapproved match");
+    }
+    let ok = 0;
+    for (const i of indexes) {
+      if (await approveQuestionMatch(i, { quiet: true })) ok += 1;
+    }
+    toast.success(`Approved ${ok} of ${indexes.length} selected question match(es)`);
+  };
+
+  const toggleQuestionSelected = (id: string) => {
+    setSelectedQuestionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const addTfQuestion = () => {
@@ -782,10 +918,6 @@ export default function CreateQuestionAI() {
 
   const resetForm = () => {
     setSelectedBoardIds([]);
-    setImportantSchools([""]);
-    setSources([""]);
-    setTeachers([""]);
-    setTags([""]);
     setDifficulty("medium");
     setStatus("published");
     setMarks("1");
@@ -800,6 +932,7 @@ export default function CreateQuestionAI() {
     setPoints([]);
     setQueuedQuestions([]);
     setActiveQuestionIndex(0);
+    setSelectedQuestionIds(new Set());
     setExtractedQuestionSummary(null);
     setSourceText("");
     setConceptTitle("");
@@ -848,6 +981,7 @@ export default function CreateQuestionAI() {
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
       toast.success(`${payload.questions.length} question saved`);
       setQueuedQuestions([]);
+      setSelectedQuestionIds(new Set());
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
@@ -941,9 +1075,7 @@ export default function CreateQuestionAI() {
       const sourcePointId =
         draft.matchApproved && draft.match?.key_point_id
           ? draft.sourcePointId ?? draft.match.key_point_id
-          : draft.match
-            ? null
-            : draft.sourcePointId;
+          : draft.sourcePointId ?? null;
       return { ...draft, sourcePointId, metadata: { ...draft.metadata, boards: boardNamesForIds(draft.boardIds ?? []) } };
     });
   };
@@ -1036,10 +1168,12 @@ export default function CreateQuestionAI() {
         <div className="mt-4 space-y-2">
           <Label>Source text (Text to concept generator)</Label>
           <Textarea
+            ref={sourceTextRef}
             value={sourceText}
             onChange={(e) => setSourceText(e.target.value)}
-            rows={5}
-            className="resize-y"
+            rows={1}
+            className="min-h-10 resize-none overflow-hidden"
+            placeholder="Paste or type source text…"
           />
         </div>
       </Card>
@@ -1089,14 +1223,20 @@ export default function CreateQuestionAI() {
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
-                    Match against suggestions (subject → system → chapter → topic → concept → board). Approve is optional before save.
-                    Boards from the active question below apply when you approve a key point.
+                    Approve links the matched key point to selected questions and applies boards from the selected question (no new KP).
+                    Save always adds this text as a new key point in the database and applies boards from the selected question.
+                    Select a question in the preview, set its boards, then Approve or Save a key point.
                     Only MCQ/SBA questions go to All Questions — not these points.
                   </div>
                 </div>
-                <Badge variant="outline">
-                  {points.filter((p) => p.approved).length}/{points.length} approved
-                </Badge>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="outline">
+                    {points.filter((p) => p.approved).length}/{points.length} approved
+                  </Badge>
+                  <Badge variant="outline">
+                    {points.filter((p) => p.saved).length}/{points.length} saved
+                  </Badge>
+                </div>
               </div>
               <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
                 {points.map((p, idx) => (
@@ -1122,12 +1262,15 @@ export default function CreateQuestionAI() {
                       <SuggestionMatchPanel
                         match={p.match}
                         matchApproved={p.approved}
-                        matchApproving={p.saving}
+                        matchApproving={p.approving}
                         matchApproveError={p.approveError}
+                        pointSaved={p.saved}
+                        pointSaving={p.saving}
+                        pointSaveError={p.saveError}
                         selectedBoardNames={selectedBoardNames}
-                        onApprove={() => approvePoint(idx)}
+                        onApprove={p.match ? () => void approvePoint(idx) : undefined}
+                        onSave={() => void savePoint(idx)}
                         onViewConcept={p.match ? () => void openMatchConceptDetails(p.match!) : undefined}
-                        allowApproveWithoutMatch
                         onMatchUpdate={(updated) => {
                           setPoints((ps) =>
                             ps.map((x, i) =>
@@ -1155,7 +1298,7 @@ export default function CreateQuestionAI() {
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
             <Label>Boards (this question)</Label>
             <p className="text-xs text-muted-foreground">
-              Each question has its own board selection. Switch questions in the preview below to set boards per question.
+              Select a question in the preview, then set boards here. Those boards apply when you Approve or Save a key point (and when you Save questions).
               {queuedQuestions.length > 1 ? ` Editing question ${activeQuestionIndex + 1} of ${queuedQuestions.length}.` : null}
             </p>
             <BoardCheckboxGroup
@@ -1164,10 +1307,6 @@ export default function CreateQuestionAI() {
               onChange={setSelectedBoardIds}
             />
           </div>
-          <MultiLineField label="Important schools (multi)" values={importantSchools} onChange={setImportantSchools} />
-          <MultiLineField label="Sources (multi)" values={sources} onChange={setSources} />
-          <MultiLineField label="Teachers (multi)" values={teachers} onChange={setTeachers} />
-          <MultiLineField label="Tags (multi)" values={tags} onChange={setTags} />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -1400,7 +1539,42 @@ export default function CreateQuestionAI() {
       </div>
       {queuedQuestions.length > 0 && (
         <Card className="p-4">
-          <div className="mb-2 text-sm font-medium">Question paper preview ({queuedQuestions.length})</div>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-medium">Question paper preview ({queuedQuestions.length})</div>
+              <p className="text-xs text-muted-foreground">
+                Check questions to approve their matches or to link when approving/saving an extracted point.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedQuestionIds((prev) =>
+                    prev.size === queuedQuestions.length
+                      ? new Set()
+                      : new Set(queuedQuestions.map((q) => q.id)),
+                  );
+                }}
+              >
+                {selectedQuestionIds.size === queuedQuestions.length ? "Deselect all" : "Select all"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void approveSelectedQuestionMatches()}
+                disabled={
+                  !queuedQuestions.some(
+                    (q) => selectedQuestionIds.has(q.id) && q.match?.key_point_id && !q.matchApproved,
+                  )
+                }
+              >
+                Approve selected matches
+              </Button>
+            </div>
+          </div>
           <div className="space-y-2">
             {queuedQuestions.map((q, idx) => (
               <div
@@ -1416,31 +1590,45 @@ export default function CreateQuestionAI() {
                   idx === activeQuestionIndex ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
                 )}
               >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">
-                    {idx + 1}. {q.questionMode.toUpperCase()} - {q.concept || "Untitled concept"}
-                    {q.match ? (
-                      <Badge variant="outline" className="ml-2 font-normal">
-                        {matchPct(q.match)}% match
-                        {q.matchApproved ? " ✓" : ""}
-                      </Badge>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <Checkbox
+                    checked={selectedQuestionIds.has(q.id)}
+                    onCheckedChange={() => toggleQuestionSelected(q.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    aria-label={`Select question ${idx + 1}`}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">
+                      {idx + 1}. {q.questionMode.toUpperCase()} - {q.concept || "Untitled concept"}
+                      {q.match ? (
+                        <Badge variant="outline" className="ml-2 font-normal">
+                          {matchPct(q.match)}% match
+                          {q.matchApproved ? " ✓" : ""}
+                        </Badge>
+                      ) : null}
+                      {q.sourcePointId && !q.matchApproved ? (
+                        <Badge variant="secondary" className="ml-2 font-normal text-[10px]">
+                          Linked to point
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {q.mcq?.stem || q.sba?.stem || "No stem"}
+                    </div>
+                    {q.match && matchPath(q.match) ? (
+                      <div className="truncate text-[11px] text-muted-foreground">{matchPath(q.match)}</div>
+                    ) : null}
+                    {boardNamesForIds(q.boardIds ?? []).length ? (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {boardNamesForIds(q.boardIds ?? []).map((b) => (
+                          <Badge key={b} variant="outline" className="text-[10px]">
+                            {b}
+                          </Badge>
+                        ))}
+                      </div>
                     ) : null}
                   </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {q.mcq?.stem || q.sba?.stem || "No stem"}
-                  </div>
-                  {q.match && matchPath(q.match) ? (
-                    <div className="truncate text-[11px] text-muted-foreground">{matchPath(q.match)}</div>
-                  ) : null}
-                  {boardNamesForIds(q.boardIds ?? []).length ? (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {boardNamesForIds(q.boardIds ?? []).map((b) => (
-                        <Badge key={b} variant="outline" className="text-[10px]">
-                          {b}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
                 </div>
                 <Button
                   type="button"
@@ -1473,7 +1661,14 @@ export default function CreateQuestionAI() {
         }
         onConfirm={() => {
           if (!deleteQuestionTarget) return;
-          setQueuedQuestions((prev) => prev.filter((item) => item.id !== deleteQuestionTarget.id));
+          const removedId = deleteQuestionTarget.id;
+          setQueuedQuestions((prev) => prev.filter((item) => item.id !== removedId));
+          setSelectedQuestionIds((prev) => {
+            if (!prev.has(removedId)) return prev;
+            const next = new Set(prev);
+            next.delete(removedId);
+            return next;
+          });
           setDeleteQuestionTarget(null);
         }}
       />

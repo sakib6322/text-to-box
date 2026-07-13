@@ -78,16 +78,22 @@ export default function CreateExam() {
   const [conceptFilter, setConceptFilter] = useState("all");
   const [conceptOptions, setConceptOptions] = useState<{ id: string; title: string | null }[]>([]);
   const [search, setSearch] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [questions, setQuestions] = useState<QuestionRow[]>([]);
   const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingExam, setLoadingExam] = useState(Boolean(editId));
-  const headerSearch = useMemo(() => ({
-    value: search,
-    onChange: setSearch,
-    placeholder: "Search question bank for exam...",
-  }), [search]);
+  const headerSearch = useMemo(
+    () => ({
+      value: search,
+      onChange: setSearch,
+      placeholder: "Search question bank for exam...",
+      onFocus: () => setSearchFocused(true),
+      onBlur: () => setSearchFocused(false),
+    }),
+    [search],
+  );
 
   useHeaderSearch(headerSearch);
   
@@ -346,7 +352,11 @@ export default function CreateExam() {
         </div>
       </Card>
 
-      <Card className="p-4 space-y-3 sticky-filter-card">
+      <Card
+        className={`p-4 space-y-3 sticky-filter-card scroll-aware-panel ${
+          searchFocused ? "hidden-on-scroll-down" : ""
+        }`}
+      >
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <Select value={typeFilter} onValueChange={setTypeFilter}>

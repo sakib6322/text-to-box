@@ -43,9 +43,14 @@ type Props = {
   matchApproved?: boolean;
   matchApproving?: boolean;
   matchApproveError?: string | null;
+  pointSaved?: boolean;
+  pointSaving?: boolean;
+  pointSaveError?: string | null;
   selectedBoardNames?: string[];
   onApprove?: () => void;
+  onSave?: () => void;
   onViewConcept?: () => void;
+  /** @deprecated Use onSave for persisting new key points; Approve requires a match. */
   allowApproveWithoutMatch?: boolean;
   onMatchUpdate?: (updated: SuggestionMatch) => void;
   compact?: boolean;
@@ -56,8 +61,12 @@ export function SuggestionMatchPanel({
   matchApproved,
   matchApproving,
   matchApproveError,
+  pointSaved,
+  pointSaving,
+  pointSaveError,
   selectedBoardNames,
   onApprove,
+  onSave,
   onViewConcept,
   allowApproveWithoutMatch = false,
   onMatchUpdate,
@@ -66,7 +75,8 @@ export function SuggestionMatchPanel({
   const match = normalizeMatch(rawMatch);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const busy = Boolean(matchApproving || pointSaving);
 
   if (!match) {
     return (
@@ -81,13 +91,28 @@ export function SuggestionMatchPanel({
             ))}
           </div>
         ) : null}
-        {onApprove && !matchApproved && allowApproveWithoutMatch ? (
-          <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
-            {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-            Approve as new suggestion
-          </Button>
-        ) : null}
+        <div className="flex flex-wrap gap-1">
+          {onSave && !pointSaved ? (
+            <Button type="button" size="sm" className="h-7 text-xs" onClick={onSave} disabled={busy}>
+              {pointSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Save
+            </Button>
+          ) : null}
+          {pointSaved ? (
+            <Badge variant="secondary" className="text-[10px]">
+              Saved
+            </Badge>
+          ) : null}
+          {/* Legacy: approve-as-new only if Save is not provided */}
+          {onApprove && !matchApproved && allowApproveWithoutMatch && !onSave ? (
+            <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={busy}>
+              {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Approve as new suggestion
+            </Button>
+          ) : null}
+        </div>
         {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
+        {pointSaveError ? <p className="text-destructive">{pointSaveError}</p> : null}
       </div>
     );
   }
@@ -103,7 +128,7 @@ export function SuggestionMatchPanel({
   const saveEdit = async () => {
     const content = editContent.trim();
     if (!content) return toast.error("Key point cannot be empty");
-    setSaving(true);
+    setSavingEdit(true);
     try {
       await updateKeyPointContent(match.keyPointId, content);
       const updated = { ...match, keyPointContent: content };
@@ -113,7 +138,7 @@ export function SuggestionMatchPanel({
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
-      setSaving(false);
+      setSavingEdit(false);
     }
   };
 
@@ -127,6 +152,11 @@ export function SuggestionMatchPanel({
               Approved
             </Badge>
           ) : null}
+          {pointSaved ? (
+            <Badge variant="secondary" className="ml-2 text-[10px]">
+              Saved
+            </Badge>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-1">
           {onViewConcept && match.conceptId ? (
@@ -135,9 +165,15 @@ export function SuggestionMatchPanel({
             </Button>
           ) : null}
           {onApprove && !matchApproved ? (
-            <Button type="button" size="sm" className="h-7 text-xs" onClick={onApprove} disabled={matchApproving}>
+            <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={onApprove} disabled={busy}>
               {matchApproving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
-              {allowApproveWithoutMatch ? "Approve" : "Approve match"}
+              Approve
+            </Button>
+          ) : null}
+          {onSave && !pointSaved ? (
+            <Button type="button" size="sm" className="h-7 text-xs" onClick={onSave} disabled={busy}>
+              {pointSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+              Save
             </Button>
           ) : null}
         </div>
@@ -167,11 +203,11 @@ export function SuggestionMatchPanel({
               className="text-xs resize-none bg-background"
             />
             <div className="flex gap-2">
-              <Button type="button" size="sm" className="h-7 text-xs" onClick={saveEdit} disabled={saving}>
-                {saving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
-                Save
+              <Button type="button" size="sm" className="h-7 text-xs" onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Check className="mr-1 h-3 w-3" />}
+                Save edit
               </Button>
-              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(false)} disabled={saving}>
+              <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setEditing(false)} disabled={savingEdit}>
                 Cancel
               </Button>
             </div>
@@ -205,6 +241,7 @@ export function SuggestionMatchPanel({
       ) : null}
 
       {matchApproveError ? <p className="text-destructive">{matchApproveError}</p> : null}
+      {pointSaveError ? <p className="text-destructive">{pointSaveError}</p> : null}
     </div>
   );
 }

@@ -95,13 +95,19 @@ export default function AllQuestions() {
   const [detailsName, setDetailsName] = useState("");
   const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
   const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
-  const headerSearch = useMemo(() => ({
-    value: search,
-    onChange: setSearch,
-    placeholder: "Search questions, subject, concept...",
-  }), [search]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const headerSearch = useMemo(
+    () => ({
+      value: search,
+      onChange: setSearch,
+      placeholder: "Search questions, subject, concept...",
+      onFocus: () => setSearchFocused(true),
+      onBlur: () => setSearchFocused(false),
+    }),
+    [search],
+  );
   useHeaderSearch(headerSearch);
-  const filtersVisible = useScrollUpVisible();
+  const filtersVisible = useScrollUpVisible() && !searchFocused;
 
   useEffect(() => {
     fetchTaxonomy("subjects")

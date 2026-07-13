@@ -33,6 +33,8 @@ export function AppShellHeader({ title, leftSlot }: { title: string; leftSlot?: 
             <Input
               value={search.value}
               onChange={(e) => search.onChange(e.target.value)}
+              onFocus={() => search.onFocus?.()}
+              onBlur={() => search.onBlur?.()}
               placeholder={search.placeholder ?? "Search..."}
               className="pl-8 h-9"
             />

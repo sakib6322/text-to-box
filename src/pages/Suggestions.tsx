@@ -95,13 +95,19 @@ const Suggestions = () => {
   const [boardFilter, setBoardFilter] = useState("all");
   const [conceptFilter, setConceptFilter] = useState("all");
   const [expandedConceptIds, setExpandedConceptIds] = useState<Set<string>>(new Set());
-  const headerSearch = useMemo(() => ({
-    value: search,
-    onChange: setSearch,
-    placeholder: "Search suggestions, concept, taxonomy...",
-  }), [search]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const headerSearch = useMemo(
+    () => ({
+      value: search,
+      onChange: setSearch,
+      placeholder: "Search suggestions, concept, taxonomy...",
+      onFocus: () => setSearchFocused(true),
+      onBlur: () => setSearchFocused(false),
+    }),
+    [search],
+  );
   useHeaderSearch(headerSearch);
-  const filtersVisible = useScrollUpVisible();
+  const filtersVisible = useScrollUpVisible() && !searchFocused;
 
   const subjectName = useMemo(
     () => (subjectId === "all" ? "" : subjects.find((s) => s.id === subjectId)?.name ?? ""),

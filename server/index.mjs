@@ -2004,17 +2004,25 @@ app.post("/api/approve-point", async (req, res) => {
       topic,
       topic_id,
       board_ids,
+      mode: rawMode,
     } = req.body ?? {};
+    // approve = link existing match (increment + boards if provided, no new KP)
+    // save = always insert a new KP (+ boards on the NEW KP only; never touch matched_key_point boards)
+    const mode = rawMode === "save" ? "save" : "approve";
     const boardIds = Array.isArray(board_ids) ? board_ids.filter((id) => typeof id === "string" && id.trim()) : [];
     if (typeof question_text !== "string" || !question_text.trim()) return res.status(400).json({ error: "question_text required" });
-    let targetId = typeof matched_key_point_id === "string" && matched_key_point_id.trim()
-      ? matched_key_point_id.trim()
-      : typeof point_id === "string" && point_id.trim()
-        ? point_id.trim()
-      : null;
+
+    // For approve only: resolve matched key point. Save never uses matched id for boards.
+    let targetId =
+      mode === "approve"
+        ? typeof matched_key_point_id === "string" && matched_key_point_id.trim()
+          ? matched_key_point_id.trim()
+          : typeof point_id === "string" && point_id.trim()
+            ? point_id.trim()
+            : null
+        : null;
 
     let point = null;
-    let createdNewPoint = false;
 
     if (targetId) {
       const { data: existingPoint, error: pointErr } = await db
@@ -2025,84 +2033,92 @@ app.post("/api/approve-point", async (req, res) => {
       if (!pointErr && existingPoint) {
         point = existingPoint;
       } else {
-        // id was provided but not found -> fallback to creating a new suggestion.
         targetId = null;
       }
-    } else {
-      // No matched suggestion: create a new concept + key_point so it appears in Suggestions.
-      targetId = null;
     }
 
-    if (!targetId || !point) {
-      const conceptTitle = typeof concept === "string" && concept.trim() ? concept.trim() : "Auto-added from approval";
-      const { data: newConcept, error: conceptErr } = await db
-        .from("concepts")
-        .insert({
-          title: conceptTitle,
-          detected_language: "mixed",
-          subject: typeof subject === "string" ? subject.trim() || null : null,
-          system: typeof system === "string" ? system.trim() || null : null,
-          chapter: typeof chapter === "string" ? chapter.trim() || null : null,
-          topic: typeof topic === "string" ? topic.trim() || null : null,
-          topic_id: typeof topic_id === "string" && topic_id.trim() ? topic_id.trim() : null,
-          raw_extraction: {
-            source: "create-ai-approve-fallback",
-            text: question_text.trim(),
-          },
-        })
-        .select("id")
-        .single();
-      if (conceptErr || !newConcept) return res.status(500).json({ error: conceptErr?.message ?? "Failed to create concept fallback" });
+    if (mode === "approve") {
+      if (!targetId || !point) {
+        return res.status(400).json({
+          error: "A matched key point is required to approve. Use Save to add a new key point.",
+        });
+      }
 
-      const emb = await embedTextRotating(db, question_text);
-      const embedding = toPgVector(emb);
+      const conceptPatch = {};
+      if (typeof subject === "string") conceptPatch.subject = subject.trim() || null;
+      if (typeof system === "string") conceptPatch.system = system.trim() || null;
+      if (typeof chapter === "string") conceptPatch.chapter = chapter.trim() || null;
+      if (typeof topic === "string") conceptPatch.topic = topic.trim() || null;
+      if (typeof topic_id === "string" && topic_id.trim()) conceptPatch.topic_id = topic_id.trim();
+      if (typeof concept === "string" && concept.trim()) conceptPatch.title = concept.trim();
+      if (Object.keys(conceptPatch).length) {
+        const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
+        if (upErr) return res.status(500).json({ error: upErr.message });
+      }
 
-      const { data: newPoint, error: kpErr } = await db
-        .from("key_points")
-        .insert({
-          concept_id: newConcept.id,
-          content: question_text.trim(),
-          language: "mixed",
-          position: 0,
-          increment_count: 1,
-          embedding,
-        })
-        .select("id, concept_id, increment_count")
-        .single();
-      if (kpErr || !newPoint) return res.status(500).json({ error: kpErr?.message ?? "Failed to create suggestion point fallback" });
-
-      point = newPoint;
-      targetId = newPoint.id;
-      createdNewPoint = true;
-    }
-
-    const conceptPatch = {};
-    if (typeof subject === "string") conceptPatch.subject = subject.trim() || null;
-    if (typeof system === "string") conceptPatch.system = system.trim() || null;
-    if (typeof chapter === "string") conceptPatch.chapter = chapter.trim() || null;
-    if (typeof topic === "string") conceptPatch.topic = topic.trim() || null;
-    if (typeof topic_id === "string" && topic_id.trim()) conceptPatch.topic_id = topic_id.trim();
-    if (typeof concept === "string" && concept.trim()) conceptPatch.title = concept.trim();
-    if (Object.keys(conceptPatch).length) {
-      const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
-      if (upErr) return res.status(500).json({ error: upErr.message });
-    }
-    await linkKeyPointBoards(db, point.id, boardIds);
-
-    if (!createdNewPoint) {
       const { error: incErr } = await db
         .from("key_points")
         .update({ increment_count: Number(point.increment_count || 0) + 1 })
         .eq("id", point.id);
       if (incErr) return res.status(500).json({ error: incErr.message });
+
+      await linkKeyPointBoards(db, point.id, boardIds);
+
+      return res.json({
+        ok: true,
+        point_id: targetId,
+        incremented: true,
+        saved_question: false,
+        created_new_point: false,
+        mode: "approve",
+      });
     }
+
+    // mode === "save": always create a brand-new concept + key point; boards only on this new KP
+    const conceptTitle = typeof concept === "string" && concept.trim() ? concept.trim() : "Auto-added from save";
+    const { data: newConcept, error: conceptErr } = await db
+      .from("concepts")
+      .insert({
+        title: conceptTitle,
+        detected_language: "mixed",
+        subject: typeof subject === "string" ? subject.trim() || null : null,
+        system: typeof system === "string" ? system.trim() || null : null,
+        chapter: typeof chapter === "string" ? chapter.trim() || null : null,
+        topic: typeof topic === "string" ? topic.trim() || null : null,
+        topic_id: typeof topic_id === "string" && topic_id.trim() ? topic_id.trim() : null,
+        raw_extraction: {
+          source: "create-ai-save-point",
+          text: question_text.trim(),
+        },
+      })
+      .select("id")
+      .single();
+    if (conceptErr || !newConcept) return res.status(500).json({ error: conceptErr?.message ?? "Failed to create concept" });
+
+    const emb = await embedTextRotating(db, question_text);
+    const { data: newPoint, error: kpErr } = await db
+      .from("key_points")
+      .insert({
+        concept_id: newConcept.id,
+        content: question_text.trim(),
+        language: "mixed",
+        position: 0,
+        increment_count: 1,
+        embedding: toPgVector(emb),
+      })
+      .select("id, concept_id, increment_count")
+      .single();
+    if (kpErr || !newPoint) return res.status(500).json({ error: kpErr?.message ?? "Failed to save key point" });
+
+    await linkKeyPointBoards(db, newPoint.id, boardIds);
 
     return res.json({
       ok: true,
-      point_id: targetId,
-      incremented: !createdNewPoint,
+      point_id: newPoint.id,
+      incremented: false,
       saved_question: false,
-      created_new_point: createdNewPoint,
+      created_new_point: true,
+      mode: "save",
     });
   } catch (e) {
     console.error(e);
@@ -2345,6 +2361,11 @@ app.post("/api/save-question", async (req, res) => {
             const sba = q.sba ?? null;
             const emb = await embedTextRotating(db, stem ?? "");
             const explanationEmbedding = await embedExplanationRotating(db, q.questionMode, mcq, sba);
+            const boardIds = Array.isArray(q.boardIds)
+              ? q.boardIds.filter((id) => typeof id === "string" && id.trim())
+              : Array.isArray(q.board_ids)
+                ? q.board_ids.filter((id) => typeof id === "string" && id.trim())
+                : [];
             return {
               subject: q.subject ?? null,
               system: q.system ?? null,
@@ -2357,6 +2378,7 @@ app.post("/api/save-question", async (req, res) => {
               mcq,
               sba,
               sourcePointId: q.sourcePointId ?? null,
+              boardIds,
               embedding: toPgVector(emb),
               explanationEmbedding,
             };
@@ -2402,6 +2424,13 @@ app.post("/api/save-question", async (req, res) => {
     }));
     const { data: inserted, error: qErr } = await db.from("questions").insert(questionsToInsert).select("id");
     if (qErr) return res.status(500).json({ error: qErr.message });
+
+    // On save (not approve-only): link each question's boards to its linked key point
+    for (const q of normalized) {
+      if (q.sourcePointId && q.boardIds?.length) {
+        await linkKeyPointBoards(db, q.sourcePointId, q.boardIds);
+      }
+    }
 
     const explanationEmbeddingsSaved = normalized.filter((q) => q.explanationEmbedding != null).length;
     return res.json({
