@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, GraduationCap, Loader2, RotateCcw } from "lucide-react";
+import { ArrowLeft, Loader2, RotateCcw } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -17,9 +16,8 @@ import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { isAdmin } from "@/lib/auth";
 import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
-import { Progress } from "@/components/ui/progress";
-import { SuggestionKeyPointCard, mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
+import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
 import {
   Dialog,
   DialogContent,
@@ -65,7 +63,6 @@ function norm(s: string | null | undefined) {
 }
 
 const Suggestions = () => {
-  const isMobile = useIsMobile();
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -450,13 +447,13 @@ const Suggestions = () => {
             <p className="text-muted-foreground mt-1">
               {adminView
                 ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."
-                : "Concept-wise key points with board mentions — study, practice, and track your progress."}
+                : "Browse concepts — tap a concept to expand its key points. Study, practice, and track progress."}
             </p>
           </div>
         </div>
       </header>
 
-      <main className="app-mesh-content container mx-auto px-4 py-8">
+      <main className="app-mesh-content container mx-auto max-w-7xl px-4 py-6 sm:py-8">
         <Card
           className={`filter-card sticky-filter-card scroll-aware-panel mb-4 space-y-3 ${
             filtersVisible ? "" : "hidden-on-scroll-down"
@@ -475,7 +472,7 @@ const Suggestions = () => {
               Reset filters
             </Button>
           </div>
-          <div className="filter-grid-mobile">
+          <div className="filter-grid-mobile xl:grid-cols-6">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Subject</Label>
               <Select
@@ -607,128 +604,51 @@ const Suggestions = () => {
           </div>
         ) : filteredRows.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No matching suggestions found.</Card>
-        ) : adminView ? (
-          conceptGroups.length === 0 ? (
-            <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
-          ) : (
-            <div className="space-y-3 max-w-5xl mx-auto">
-              <p className="text-sm text-muted-foreground px-1">{conceptGroups.length} concept(s)</p>
-              {conceptGroups.map((g) => {
-                const expanded = expandedConceptIds.has(g.conceptId);
-                return (
-                  <Card key={g.conceptId} className="overflow-hidden">
-                    <div className="flex items-start gap-2 p-4">
-                      <button
-                        type="button"
-                        onClick={() => toggleConceptExpanded(g.conceptId)}
-                        className="mt-0.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                        aria-expanded={expanded}
-                        aria-label={expanded ? "Collapse key points" : "Expand key points"}
-                      >
-                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleConceptExpanded(g.conceptId)}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <p className="font-semibold text-base">{g.title}</p>
-                        {g.taxonomy ? <p className="mt-0.5 text-[11px] text-muted-foreground">{g.taxonomy}</p> : null}
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <Badge variant="secondary" className="text-[10px]">
-                            {g.rows.length} key point{g.rows.length === 1 ? "" : "s"}
-                          </Badge>
-                        </div>
-                      </button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0"
-                        onClick={() => void openConceptDetails(g.conceptId, g.title)}
-                      >
-                        <BookOpen className="h-4 w-4 mr-1" />
-                        Details
-                      </Button>
-                    </div>
-                    {expanded ? (
-                      <div className="border-t bg-muted/20 px-4 pb-4 pt-3">
-                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                          {g.rows.map((r) => (
-                            <SuggestionKeyPointCard
-                              key={r.id}
-                              content={r.content}
-                              incrementCount={r.increment_count}
-                              boardLinks={r.key_point_boards ?? []}
-                              boardFilterId={boardFilter}
-                              showActions
-                              deleting={deleting === r.id}
-                              onEdit={() => openEdit(r)}
-                              onDelete={() => setDeleteTarget(r)}
-                              compact
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </Card>
-                );
-              })}
-            </div>
-          )
         ) : conceptGroups.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
         ) : (
-          <div className={isMobile ? "space-y-4 max-w-lg mx-auto" : "space-y-6 max-w-5xl mx-auto"}>
-            <div className="flex items-center justify-between px-1">
+          <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
               <p className="text-sm text-muted-foreground">{conceptGroups.length} concept(s)</p>
-              <Button asChild variant="ghost" size="sm" className="text-xs h-8">
-                <Link to="/study/progress">My progress →</Link>
-              </Button>
+              {!adminView ? (
+                <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Link to="/study/progress">My progress →</Link>
+                </Button>
+              ) : null}
             </div>
             {conceptGroups.map((g) => {
               const prog = getStudyProgress(g.conceptId);
               const pct = studyCompletionPct(prog);
               const sessionCount = getPracticeSessionsForConcept(g.conceptId).length;
               return (
-                <Card key={g.conceptId} className={`space-y-4 shadow-sm ${isMobile ? "p-4" : "p-5"}`}>
-                  <div className="space-y-2">
-                    <p className={`font-semibold ${isMobile ? "text-base" : "text-lg"}`}>{g.title}</p>
-                    {g.taxonomy ? <p className="text-[11px] text-muted-foreground">{g.taxonomy}</p> : null}
-                    <div className="flex flex-wrap gap-2">
-                      <Badge variant="secondary" className="text-[10px]">{g.rows.length} key points</Badge>
-                      <Badge variant="outline" className="text-[10px] tabular-nums">{pct}% studied</Badge>
-                      {sessionCount > 0 ? (
-                        <Badge variant="outline" className="text-[10px]">{sessionCount} practice</Badge>
-                      ) : null}
-                    </div>
-                    <Progress value={pct} className="h-1.5" />
-                  </div>
-                  <div className={`grid gap-2 ${isMobile ? "grid-cols-2" : "grid-cols-2 max-w-md"}`}>
-                    <Button asChild className="h-10">
-                      <Link to={`/concept/${g.conceptId}/learn`}>
-                        <GraduationCap className="h-4 w-4 mr-1.5" /> Study & Practice
-                      </Link>
-                    </Button>
-                    <Button asChild variant="outline" className="h-10">
-                      <Link to={`/concept/${g.conceptId}/details`}>
-                        <BookOpen className="h-4 w-4 mr-1.5" /> Details
-                      </Link>
-                    </Button>
-                  </div>
-                  <div className={isMobile ? "space-y-2" : "grid sm:grid-cols-2 gap-2"}>
-                    {g.rows.map((r) => (
-                      <SuggestionKeyPointCard
-                        key={r.id}
-                        content={r.content}
-                        incrementCount={r.increment_count}
-                        boardLinks={r.key_point_boards ?? []}
-                        boardFilterId={boardFilter}
-                        compact
-                      />
-                    ))}
-                  </div>
-                </Card>
+                <ConceptSuggestionGroupCard
+                  key={g.conceptId}
+                  group={g}
+                  expanded={expandedConceptIds.has(g.conceptId)}
+                  onToggle={() => toggleConceptExpanded(g.conceptId)}
+                  boardFilter={boardFilter}
+                  adminView={adminView}
+                  studyPct={pct}
+                  sessionCount={sessionCount}
+                  deleting={deleting}
+                  onDetails={adminView ? () => void openConceptDetails(g.conceptId, g.title) : undefined}
+                  onEdit={
+                    adminView
+                      ? (row) => {
+                          const full = g.rows.find((r) => r.id === row.id);
+                          if (full) openEdit(full);
+                        }
+                      : undefined
+                  }
+                  onDelete={
+                    adminView
+                      ? (row) => {
+                          const full = g.rows.find((r) => r.id === row.id);
+                          if (full) setDeleteTarget(full);
+                        }
+                      : undefined
+                  }
+                />
               );
             })}
           </div>
