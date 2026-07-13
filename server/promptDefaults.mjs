@@ -1,6 +1,9 @@
 export const EXTRACT_QUESTIONS_PROMPT_KEY = "extract_questions_prompt";
 export const EXTRACT_CONCEPT_PROMPT_KEY = "extract_concept_prompt";
 export const EXTRACT_KEY_POINTS_PROMPT_KEY = "extract_key_points_prompt";
+export const MATCHING_PROMPT_KEY = "matching_prompt";
+export const MATCHING_VECTOR_ENABLED_KEY = "matching_vector_enabled";
+export const MATCHING_AI_ENABLED_KEY = "matching_ai_enabled";
 
 export function getDefaultExtractQuestionsPrompt() {
   return `You digitize medical exam papers from images or text.
@@ -48,4 +51,10 @@ export function getDefaultExtractKeyPointsPrompt() {
   return `For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.
 Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.
 Each point should be a concise, high-yield fact suitable for matching against a medical question bank.`;
+}
+
+export function getDefaultMatchingPrompt() {
+  return `You are matching semantic similarity between one extracted study point and candidate key-points.
+Return percentage similarity between 0 and 100 for each candidate.
+Higher means stronger conceptual match.`;
 }

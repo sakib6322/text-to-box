@@ -3,9 +3,13 @@ import {
   EXTRACT_CONCEPT_PROMPT_KEY,
   EXTRACT_KEY_POINTS_PROMPT_KEY,
   EXTRACT_QUESTIONS_PROMPT_KEY,
+  MATCHING_AI_ENABLED_KEY,
+  MATCHING_PROMPT_KEY,
+  MATCHING_VECTOR_ENABLED_KEY,
   getDefaultExtractConceptPrompt,
   getDefaultExtractKeyPointsPrompt,
   getDefaultExtractQuestionsPrompt,
+  getDefaultMatchingPrompt,
 } from "./promptDefaults.mjs";
 
 export async function getAppSetting(db, key) {
@@ -44,6 +48,23 @@ async function savePromptToDb(db, key, prompt) {
     .single();
   if (error) throw error;
   return { prompt: data.value, source: "database", updated_at: data.updated_at };
+}
+
+async function saveBoolSetting(db, key, value) {
+  const { error } = await db
+    .from("app_settings")
+    .upsert({ key, value: value ? "true" : "false", updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) throw error;
+}
+
+function parseBoolSetting(value, defaultValue) {
+  if (value == null || value === "") return defaultValue;
+  return String(value).toLowerCase() === "true";
+}
+
+async function deleteAppSetting(db, key) {
+  const { error } = await db.from("app_settings").delete().eq("key", key);
+  if (error) throw error;
 }
 
 async function resetPromptInDb(db, key, getDefault) {
@@ -90,6 +111,58 @@ export async function saveExtractKeyPointsPrompt(db, prompt) {
 
 export async function resetExtractKeyPointsPrompt(db) {
   return resetPromptInDb(db, EXTRACT_KEY_POINTS_PROMPT_KEY, getDefaultExtractKeyPointsPrompt);
+}
+
+export async function getMatchingPrompt(db) {
+  return getPromptFromDb(db, MATCHING_PROMPT_KEY, getDefaultMatchingPrompt);
+}
+
+export async function saveMatchingPrompt(db, prompt) {
+  return savePromptToDb(db, MATCHING_PROMPT_KEY, prompt);
+}
+
+export async function resetMatchingPrompt(db) {
+  return resetPromptInDb(db, MATCHING_PROMPT_KEY, getDefaultMatchingPrompt);
+}
+
+export async function getMatchingPromptConfig(db) {
+  const [promptRes, vectorRow, aiRow] = await Promise.all([
+    getMatchingPrompt(db),
+    getAppSetting(db, MATCHING_VECTOR_ENABLED_KEY),
+    getAppSetting(db, MATCHING_AI_ENABLED_KEY),
+  ]);
+  return {
+    prompt: promptRes.prompt,
+    source: promptRes.source,
+    updated_at: promptRes.updated_at,
+    vector_enabled: parseBoolSetting(vectorRow?.value, true),
+    ai_enabled: parseBoolSetting(aiRow?.value, false),
+    vector_source: vectorRow?.value != null ? "database" : "default",
+    ai_source: aiRow?.value != null ? "database" : "default",
+  };
+}
+
+export async function saveMatchingPromptConfig(db, { prompt, vector_enabled, ai_enabled }) {
+  if (typeof prompt !== "string" || !prompt.trim()) {
+    throw new Error("Matching prompt is required");
+  }
+  await saveMatchingPrompt(db, prompt);
+  if (typeof vector_enabled === "boolean") {
+    await saveBoolSetting(db, MATCHING_VECTOR_ENABLED_KEY, vector_enabled);
+  }
+  if (typeof ai_enabled === "boolean") {
+    await saveBoolSetting(db, MATCHING_AI_ENABLED_KEY, ai_enabled);
+  }
+  return getMatchingPromptConfig(db);
+}
+
+export async function resetMatchingPromptConfig(db) {
+  await Promise.all([
+    resetMatchingPrompt(db),
+    deleteAppSetting(db, MATCHING_VECTOR_ENABLED_KEY),
+    deleteAppSetting(db, MATCHING_AI_ENABLED_KEY),
+  ]);
+  return getMatchingPromptConfig(db);
 }
 
 const SESSION_DAYS = 30;
@@ -175,7 +248,14 @@ export {
   EXTRACT_CONCEPT_PROMPT_KEY,
   EXTRACT_KEY_POINTS_PROMPT_KEY,
   EXTRACT_QUESTIONS_PROMPT_KEY,
+  MATCHING_PROMPT_KEY,
+  MATCHING_VECTOR_ENABLED_KEY,
+  MATCHING_AI_ENABLED_KEY,
   getDefaultExtractConceptPrompt,
   getDefaultExtractKeyPointsPrompt,
   getDefaultExtractQuestionsPrompt,
+  getDefaultMatchingPrompt,
+  getMatchingPrompt,
+  saveMatchingPrompt,
+  resetMatchingPrompt,
 };

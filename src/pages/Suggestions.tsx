@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, BookOpen, Loader2, RotateCcw, GraduationCap } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronRight, GraduationCap, Loader2, RotateCcw } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -97,6 +97,7 @@ const Suggestions = () => {
   const [topicId, setTopicId] = useState("all");
   const [boardFilter, setBoardFilter] = useState("all");
   const [conceptFilter, setConceptFilter] = useState("all");
+  const [expandedConceptIds, setExpandedConceptIds] = useState<Set<string>>(new Set());
   const headerSearch = useMemo(() => ({
     value: search,
     onChange: setSearch,
@@ -263,15 +264,15 @@ const Suggestions = () => {
     setEditConceptTitle((row.concepts?.title ?? "").trim());
   };
 
-  const openConceptDetails = async (row: Row) => {
+  const openConceptDetails = async (conceptId: string, conceptTitle?: string) => {
     setDetailsOpen(true);
     setDetailsLoading(true);
-    setDetailsConceptId(row.concept_id);
-    setDetailsConceptName((row.concepts?.title ?? "").trim());
+    setDetailsConceptId(conceptId);
+    setDetailsConceptName((conceptTitle ?? "").trim());
     setDetailsConceptDetail(emptyConceptDetail());
     setDetailsKeyPoints([]);
     try {
-      const loaded = await fetchConceptByIdWithBoards(row.concept_id);
+      const loaded = await fetchConceptByIdWithBoards(conceptId);
       setDetailsConceptName(loaded.conceptName);
       setDetailsConceptDetail(loaded.detail);
       setDetailsKeyPoints(loaded.keyPoints);
@@ -281,6 +282,15 @@ const Suggestions = () => {
     } finally {
       setDetailsLoading(false);
     }
+  };
+
+  const toggleConceptExpanded = (conceptId: string) => {
+    setExpandedConceptIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(conceptId)) next.delete(conceptId);
+      else next.add(conceptId);
+      return next;
+    });
   };
 
   const saveConceptDetail = async (detail: ConceptDetail) => {
@@ -439,7 +449,7 @@ const Suggestions = () => {
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Suggestions</h1>
             <p className="text-muted-foreground mt-1">
               {adminView
-                ? "Filters use the same Subject → System → Chapter → Topic and Boards as Admin Settings. Suggestions are matched by taxonomy names saved on each concept."
+                ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."
                 : "Concept-wise key points with board mentions — study, practice, and track your progress."}
             </p>
           </div>
@@ -598,28 +608,74 @@ const Suggestions = () => {
         ) : filteredRows.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No matching suggestions found.</Card>
         ) : adminView ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {filteredRows.map((r) => {
-              const tax = compactTaxonomy(r.concepts);
-              const title = (r.concepts?.title ?? "").trim();
-              return (
-                <SuggestionKeyPointCard
-                  key={r.id}
-                  content={r.content}
-                  incrementCount={r.increment_count}
-                  boardLinks={r.key_point_boards ?? []}
-                  boardFilterId={boardFilter}
-                  conceptTitle={title}
-                  taxonomy={tax}
-                  showActions
-                  deleting={deleting === r.id}
-                  onDetails={() => openConceptDetails(r)}
-                  onEdit={() => openEdit(r)}
-                  onDelete={() => setDeleteTarget(r)}
-                />
-              );
-            })}
-          </div>
+          conceptGroups.length === 0 ? (
+            <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
+          ) : (
+            <div className="space-y-3 max-w-5xl mx-auto">
+              <p className="text-sm text-muted-foreground px-1">{conceptGroups.length} concept(s)</p>
+              {conceptGroups.map((g) => {
+                const expanded = expandedConceptIds.has(g.conceptId);
+                return (
+                  <Card key={g.conceptId} className="overflow-hidden">
+                    <div className="flex items-start gap-2 p-4">
+                      <button
+                        type="button"
+                        onClick={() => toggleConceptExpanded(g.conceptId)}
+                        className="mt-0.5 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-expanded={expanded}
+                        aria-label={expanded ? "Collapse key points" : "Expand key points"}
+                      >
+                        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleConceptExpanded(g.conceptId)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="font-semibold text-base">{g.title}</p>
+                        {g.taxonomy ? <p className="mt-0.5 text-[11px] text-muted-foreground">{g.taxonomy}</p> : null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {g.rows.length} key point{g.rows.length === 1 ? "" : "s"}
+                          </Badge>
+                        </div>
+                      </button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => void openConceptDetails(g.conceptId, g.title)}
+                      >
+                        <BookOpen className="h-4 w-4 mr-1" />
+                        Details
+                      </Button>
+                    </div>
+                    {expanded ? (
+                      <div className="border-t bg-muted/20 px-4 pb-4 pt-3">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          {g.rows.map((r) => (
+                            <SuggestionKeyPointCard
+                              key={r.id}
+                              content={r.content}
+                              incrementCount={r.increment_count}
+                              boardLinks={r.key_point_boards ?? []}
+                              boardFilterId={boardFilter}
+                              showActions
+                              deleting={deleting === r.id}
+                              onEdit={() => openEdit(r)}
+                              onDelete={() => setDeleteTarget(r)}
+                              compact
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </Card>
+                );
+              })}
+            </div>
+          )
         ) : conceptGroups.length === 0 ? (
           <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
         ) : (

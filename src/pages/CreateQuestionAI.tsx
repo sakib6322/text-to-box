@@ -90,6 +90,7 @@ type DraftQuestion = {
   topic: string;
   topicId?: string;
   concept: string;
+  boardIds: string[];
   metadata: {
     boards: string[];
     importantSchools: string[];
@@ -111,6 +112,42 @@ type DraftQuestion = {
 
 const mkId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+
+function boardNamesFromIds(boardOptions: BoardOption[], ids: string[]): string[] {
+  const byId = new Map(boardOptions.map((b) => [b.id, b.name]));
+  return ids.map((id) => byId.get(id)).filter((n): n is string => Boolean(n?.trim()));
+}
+
+function BoardCheckboxGroup({
+  boardOptions,
+  selectedIds,
+  onChange,
+  compact = false,
+}: {
+  boardOptions: BoardOption[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  compact?: boolean;
+}) {
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+  };
+
+  if (boardOptions.length === 0) {
+    return <span className="text-sm text-muted-foreground">No boards yet. Add them in Settings.</span>;
+  }
+
+  return (
+    <div className={cn("flex flex-wrap gap-x-4 gap-y-2", compact ? "gap-x-3 gap-y-1" : "rounded-md border p-3")}>
+      {boardOptions.map((b) => (
+        <label key={b.id} className={cn("flex cursor-pointer items-center gap-2", compact ? "text-xs" : "text-sm")}>
+          <Checkbox checked={selectedIds.includes(b.id)} onCheckedChange={() => toggle(b.id)} />
+          {b.name}
+        </label>
+      ))}
+    </div>
+  );
+}
 
 function questionStem(q: Pick<DraftQuestion, "mcq" | "sba">): string {
   return (q.mcq?.stem ?? q.sba?.stem ?? "").trim();
@@ -242,10 +279,12 @@ export default function CreateQuestionAI() {
     ];
   }, [taxonomy]);
 
-  const selectedBoardNames = useMemo(() => {
-    const byId = new Map(boardOptions.map((b) => [b.id, b.name]));
-    return selectedBoardIds.map((id) => byId.get(id)).filter((n): n is string => Boolean(n?.trim()));
-  }, [boardOptions, selectedBoardIds]);
+  const selectedBoardNames = useMemo(
+    () => boardNamesFromIds(boardOptions, selectedBoardIds),
+    [boardOptions, selectedBoardIds],
+  );
+
+  const boardNamesForIds = (ids: string[]) => boardNamesFromIds(boardOptions, ids);
 
   useEffect(() => {
     let cancelled = false;
@@ -280,16 +319,12 @@ export default function CreateQuestionAI() {
     return true;
   };
 
-  const toggleBoard = (id: string) => {
-    setSelectedBoardIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  };
-
   const applyAutofillFromExtract = (extracted: ExtractResult) => {
     setConceptTitle(extracted.concept_name);
   };
 
-  const buildMetadata = (): DraftQuestion["metadata"] => ({
-    boards: selectedBoardNames,
+  const buildMetadata = (boardIds: string[] = selectedBoardIds): DraftQuestion["metadata"] => ({
+    boards: boardNamesForIds(boardIds),
     importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
     sources: sources.map((b) => b.trim()).filter(Boolean),
     teachers: teachers.map((b) => b.trim()).filter(Boolean),
@@ -301,6 +336,7 @@ export default function CreateQuestionAI() {
 
   const loadQuestionIntoForm = (q: DraftQuestion) => {
     setQuestionMode(q.questionMode);
+    setSelectedBoardIds(q.boardIds ?? []);
     if (q.topicId) {
       void (async () => {
         try {
@@ -359,7 +395,8 @@ export default function CreateQuestionAI() {
         topic: t.topic,
         topicId: t.topicId,
         concept,
-        metadata: buildMetadata(),
+        boardIds: [],
+        metadata: buildMetadata([]),
         mcq: {
           stem: q.stem,
           trueFalse: (q.mcq_statements ?? []).map((row) => ({
@@ -388,7 +425,8 @@ export default function CreateQuestionAI() {
       topic: t.topic,
       topicId: t.topicId,
       concept,
-      metadata: buildMetadata(),
+      boardIds: [],
+      metadata: buildMetadata([]),
       mcq: null,
       sba: {
         stem: q.stem,
@@ -695,7 +733,7 @@ export default function CreateQuestionAI() {
           topic: t.topic,
           topic_id: t.topicId,
           question_text: stem,
-          board_ids: selectedBoardIds,
+          board_ids: q.boardIds ?? [],
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as { error?: string; point_id?: string };
@@ -830,16 +868,8 @@ export default function CreateQuestionAI() {
       topic: t.topic,
       topicId: t.topicId,
       concept: conceptTitle,
-      metadata: {
-        boards: selectedBoardNames,
-        importantSchools: importantSchools.map((b) => b.trim()).filter(Boolean),
-        sources: sources.map((b) => b.trim()).filter(Boolean),
-        teachers: teachers.map((b) => b.trim()).filter(Boolean),
-        tags: tags.map((b) => b.trim()).filter(Boolean),
-        difficulty,
-        status,
-        marks: Number(marks) || 0,
-      },
+      boardIds: [...selectedBoardIds],
+      metadata: buildMetadata(selectedBoardIds),
       mcq: mode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
       sba:
         mode === "sba"
@@ -877,7 +907,8 @@ export default function CreateQuestionAI() {
       topic: t.topic,
       topicId: t.topicId,
       concept: conceptTitle,
-      metadata: buildMetadata(),
+      boardIds: [...selectedBoardIds],
+      metadata: buildMetadata(selectedBoardIds),
       mcq: questionMode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
       sba:
         questionMode === "sba"
@@ -913,7 +944,7 @@ export default function CreateQuestionAI() {
           : draft.match
             ? null
             : draft.sourcePointId;
-      return { ...draft, sourcePointId, metadata: { ...draft.metadata, boards: selectedBoardNames } };
+      return { ...draft, sourcePointId, metadata: { ...draft.metadata, boards: boardNamesForIds(draft.boardIds ?? []) } };
     });
   };
 
@@ -1059,6 +1090,7 @@ export default function CreateQuestionAI() {
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
                     Match against suggestions (subject → system → chapter → topic → concept → board). Approve is optional before save.
+                    Boards from the active question below apply when you approve a key point.
                     Only MCQ/SBA questions go to All Questions — not these points.
                   </div>
                 </div>
@@ -1121,22 +1153,16 @@ export default function CreateQuestionAI() {
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           <div className="space-y-2 md:col-span-2 lg:col-span-3">
-            <Label>Boards</Label>
+            <Label>Boards (this question)</Label>
             <p className="text-xs text-muted-foreground">
-              Create subject, system, chapter, topic, and boards in Admin → Settings before saving questions.
+              Each question has its own board selection. Switch questions in the preview below to set boards per question.
+              {queuedQuestions.length > 1 ? ` Editing question ${activeQuestionIndex + 1} of ${queuedQuestions.length}.` : null}
             </p>
-            <div className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border p-3">
-              {boardOptions.length === 0 ? (
-                <span className="text-sm text-muted-foreground">No boards yet. Add them in Settings.</span>
-              ) : (
-                boardOptions.map((b) => (
-                  <label key={b.id} className="flex cursor-pointer items-center gap-2 text-sm">
-                    <Checkbox checked={selectedBoardIds.includes(b.id)} onCheckedChange={() => toggleBoard(b.id)} />
-                    {b.name}
-                  </label>
-                ))
-              )}
-            </div>
+            <BoardCheckboxGroup
+              boardOptions={boardOptions}
+              selectedIds={selectedBoardIds}
+              onChange={setSelectedBoardIds}
+            />
           </div>
           <MultiLineField label="Important schools (multi)" values={importantSchools} onChange={setImportantSchools} />
           <MultiLineField label="Sources (multi)" values={sources} onChange={setSources} />
@@ -1369,7 +1395,7 @@ export default function CreateQuestionAI() {
         </Button>
         <Button type="button" onClick={saveQuestion} disabled={saving || !questionMode}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-          Save question
+          {queuedQuestions.length > 1 ? `Save all ${queuedQuestions.length} questions` : "Save question"}
         </Button>
       </div>
       {queuedQuestions.length > 0 && (
@@ -1405,6 +1431,15 @@ export default function CreateQuestionAI() {
                   </div>
                   {q.match && matchPath(q.match) ? (
                     <div className="truncate text-[11px] text-muted-foreground">{matchPath(q.match)}</div>
+                  ) : null}
+                  {boardNamesForIds(q.boardIds ?? []).length ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {boardNamesForIds(q.boardIds ?? []).map((b) => (
+                        <Badge key={b} variant="outline" className="text-[10px]">
+                          {b}
+                        </Badge>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
                 <Button

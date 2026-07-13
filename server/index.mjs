@@ -28,11 +28,18 @@ import {
   getExtractKeyPointsPrompt,
   resetExtractKeyPointsPrompt,
   saveExtractKeyPointsPrompt,
+  getMatchingPromptConfig,
+  saveMatchingPromptConfig,
+  resetMatchingPromptConfig,
+  getMatchingPrompt,
+  saveMatchingPrompt,
+  resetMatchingPrompt,
   registerUser,
   loginUser,
   validateSession,
   logoutSession,
 } from "./appSettings.mjs";
+import { getDefaultMatchingPrompt } from "./promptDefaults.mjs";
 
 const app = express();
 app.use(cors());
@@ -492,7 +499,7 @@ async function embedExplanationRotating(db, questionMode, mcq, sba) {
   return toPgVector(emb);
 }
 
-async function scoreMatchesWithGemini(apiKey, sourceText, candidates) {
+async function scoreMatchesWithGemini(apiKey, sourceText, candidates, customPrompt) {
   if (!Array.isArray(candidates) || candidates.length === 0) return {};
   const modelName = process.env.MATCH_AI_MODEL || process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -517,9 +524,10 @@ async function scoreMatchesWithGemini(apiKey, sourceText, candidates) {
     required: ["scores"],
   };
 
-  const prompt = `You are matching semantic similarity between one extracted study point and candidate key-points.
-Return percentage similarity between 0 and 100 for each candidate.
-Higher means stronger conceptual match.`;
+  const prompt =
+    typeof customPrompt === "string" && customPrompt.trim()
+      ? customPrompt.trim()
+      : getDefaultMatchingPrompt();
 
   const candidatesText = candidates
     .map((c, idx) => `${idx + 1}. id=${c.id} | concept=${c.concept_title ?? "N/A"} | text=${c.content}`)
@@ -1190,6 +1198,49 @@ for (const [slug, getFn, saveFn, resetFn] of promptHandlers) {
     }
   });
 }
+
+app.get("/api/settings/prompts/matching", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await getMatchingPromptConfig(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.put("/api/settings/prompts/matching", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const { prompt, vector_enabled, ai_enabled } = req.body ?? {};
+    if (typeof prompt !== "string" || !prompt.trim()) {
+      return res.status(400).json({ error: "Matching prompt is required" });
+    }
+    const result = await saveMatchingPromptConfig(db, {
+      prompt,
+      vector_enabled: typeof vector_enabled === "boolean" ? vector_enabled : undefined,
+      ai_enabled: typeof ai_enabled === "boolean" ? ai_enabled : undefined,
+    });
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Save failed" });
+  }
+});
+
+app.post("/api/settings/prompts/matching/reset", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await resetMatchingPromptConfig(db);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
 
 app.post("/api/auth/register", async (req, res) => {
   try {
@@ -2062,12 +2113,23 @@ app.post("/api/match-key-points", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    if (!(await hasGeminiKeys(db))) {
+
+    const matchingConfig = await getMatchingPromptConfig(db);
+    const useVector = matchingConfig.vector_enabled;
+    const useAi = matchingConfig.ai_enabled;
+    const matchingPrompt = matchingConfig.prompt;
+
+    if (!useVector && !useAi) {
+      return res.status(400).json({
+        error: "Both vector and AI matching are disabled. Enable at least one in Settings → AI Prompts → Matching.",
+      });
+    }
+
+    if ((useVector || useAi) && !(await hasGeminiKeys(db))) {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
 
     const { texts, threshold, count } = req.body ?? {};
-    const useAiScoring = String(process.env.MATCH_USE_AI_SCORING || "false").toLowerCase() === "true";
     const list = Array.isArray(texts) ? texts.filter((t) => typeof t === "string") : [];
     if (list.length === 0) return res.status(400).json({ error: "texts[] required" });
     const matchThreshold = typeof threshold === "number" ? threshold : 0.6;
@@ -2075,6 +2137,11 @@ app.post("/api/match-key-points", async (req, res) => {
 
     const results = [];
     for (const text of list) {
+      if (!useVector) {
+        results.push({ text, matches: [] });
+        continue;
+      }
+
       const emb = await embedTextRotating(db, text);
       const embStr = toPgVector(emb);
       if (!embStr) {
@@ -2112,10 +2179,10 @@ app.post("/api/match-key-points", async (req, res) => {
         };
       });
       let aiScoreById = {};
-      if (useAiScoring) {
+      if (useAi) {
         try {
           aiScoreById = await withGeminiKeyRotation(db, (key) =>
-            scoreMatchesWithGemini(key, text, enrichedMatches.slice(0, 5)),
+            scoreMatchesWithGemini(key, text, enrichedMatches.slice(0, 5), matchingPrompt),
           );
         } catch (err) {
           console.error("Gemini match scoring failed, using vector similarity fallback", err);
@@ -2127,7 +2194,12 @@ app.post("/api/match-key-points", async (req, res) => {
         matches: enrichedMatches.map((m) => {
           const aiScore = aiScoreById[m.id];
           const vectorPct = Math.max(0, Math.min(100, Math.round((m.vector_similarity ?? 0) * 100)));
-          const finalPct = typeof aiScore?.percentage === "number" ? aiScore.percentage : vectorPct;
+          const finalPct =
+            useAi && typeof aiScore?.percentage === "number"
+              ? aiScore.percentage
+              : useVector
+                ? vectorPct
+                : 0;
           return {
             id: m.id,
             content: m.content,
@@ -2141,15 +2213,15 @@ app.post("/api/match-key-points", async (req, res) => {
             increment_count: m.increment_count,
             similarity: finalPct / 100,
             percentage: finalPct,
-            ai_percentage: typeof aiScore?.percentage === "number" ? aiScore.percentage : null,
-            ai_reason: typeof aiScore?.reason === "string" ? aiScore.reason : null,
-            vector_percentage: vectorPct,
+            ai_percentage: useAi && typeof aiScore?.percentage === "number" ? aiScore.percentage : null,
+            ai_reason: useAi && typeof aiScore?.reason === "string" ? aiScore.reason : null,
+            vector_percentage: useVector ? vectorPct : null,
           };
         }),
       });
     }
 
-    return res.json({ results });
+    return res.json({ results, matching: { vector_enabled: useVector, ai_enabled: useAi, prompt_source: matchingConfig.source } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });

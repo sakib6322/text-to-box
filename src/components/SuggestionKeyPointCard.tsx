@@ -90,17 +90,23 @@ export function SuggestionKeyPointCard({
       </div>
       {showActions ? (
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onDetails}>
-            <BookOpen className="h-4 w-4 mr-1" />
-            Details
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onEdit}>
-            <Pencil className="h-4 w-4 mr-1" />
-            Edit
-          </Button>
-          <Button variant="destructive" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onDelete} disabled={deleting}>
-            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          </Button>
+          {onDetails ? (
+            <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onDetails}>
+              <BookOpen className="h-4 w-4 mr-1" />
+              Details
+            </Button>
+          ) : null}
+          {onEdit ? (
+            <Button variant="outline" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onEdit}>
+              <Pencil className="h-4 w-4 mr-1" />
+              Edit
+            </Button>
+          ) : null}
+          {onDelete ? (
+            <Button variant="destructive" size="sm" className="flex-1 min-w-[5.5rem]" onClick={onDelete} disabled={deleting}>
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </Card>
