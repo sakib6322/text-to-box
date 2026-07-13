@@ -255,7 +255,4 @@ export {
   getDefaultExtractKeyPointsPrompt,
   getDefaultExtractQuestionsPrompt,
   getDefaultMatchingPrompt,
-  getMatchingPrompt,
-  saveMatchingPrompt,
-  resetMatchingPrompt,
 };

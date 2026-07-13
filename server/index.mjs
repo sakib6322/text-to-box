@@ -112,7 +112,8 @@ app.get("/api/debug/schema-check", async (_req, res) => {
     const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts", "gemini_api_keys", "app_settings"];
     const checks = {};
     for (const table of tables) {
-      const { error } = await db.from(table).select("id").limit(1);
+      const selectCol = table === "app_settings" ? "key" : "id";
+      const { error } = await db.from(table).select(selectCol).limit(1);
       checks[table] = {
         ok: !error,
         code: error?.code ?? null,
