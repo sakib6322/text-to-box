@@ -503,6 +503,7 @@ export default function CreateQuestionAI() {
       toast.error("Please choose an image or PDF file");
       return;
     }
+
     setImageFile(f);
     setIsPdf(isPdfFile(f));
     if (isPdfFile(f)) {
@@ -515,6 +516,7 @@ export default function CreateQuestionAI() {
       }
     }
   };
+
 
   const onPaste = async (e: React.ClipboardEvent) => {
     const f = await fileFromPasteEvent(e.nativeEvent);
@@ -757,6 +759,8 @@ export default function CreateQuestionAI() {
             : x,
         ),
       );
+
+
       linkPointToQuestions(pointId);
       toast.success(
         "Saved new key point to database" +
@@ -1223,10 +1227,7 @@ export default function CreateQuestionAI() {
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
-                    Approve links the matched key point to selected questions and applies boards from the selected question (no new KP).
-                    Save always adds this text as a new key point in the database and applies boards from the selected question.
-                    Select a question in the preview, set its boards, then Approve or Save a key point.
-                    Only MCQ/SBA questions go to All Questions — not these points.
+                    Approve links the matched key point to selected questions and applies boards from the selected question (no new KP)
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
