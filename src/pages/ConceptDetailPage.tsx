@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Target } from "lucide-react";
+import { ArrowLeft, HelpCircle, Loader2, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { toast } from "sonner";
@@ -16,6 +17,8 @@ export default function ConceptDetailPage() {
   const [taxonomy, setTaxonomy] = useState("");
   const [detail, setDetail] = useState(emptyConceptDetail());
   const [keyPoints, setKeyPoints] = useState<KeyPointWithBoards[]>([]);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     if (!conceptId) return;
@@ -57,6 +60,18 @@ export default function ConceptDetailPage() {
           <h1 className="font-semibold text-sm truncate">{conceptName}</h1>
           {taxonomy ? <p className="text-[10px] text-muted-foreground truncate">{taxonomy}</p> : null}
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 text-xs h-8"
+          onClick={() => {
+            setBoardFilter(null);
+            setQuestionsOpen(true);
+          }}
+        >
+          <HelpCircle className="h-3 w-3 mr-1" /> Questions
+        </Button>
         <Button asChild size="sm" className="shrink-0 text-xs h-8">
           <Link to={`/concept/${conceptId}/learn`}>
             <Target className="h-3 w-3 mr-1" /> Study & Practice
@@ -69,10 +84,32 @@ export default function ConceptDetailPage() {
         {keyPoints.length ? (
           <div className="space-y-2 border-t pt-4">
             <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
-            <KeyPointList keyPoints={keyPoints} />
+            <KeyPointList
+              keyPoints={keyPoints}
+              onBoardClick={(board) => {
+                setBoardFilter(board);
+                setQuestionsOpen(true);
+              }}
+            />
           </div>
         ) : null}
       </Card>
+
+      <ConceptQuestionsPanel
+        open={questionsOpen}
+        onOpenChange={(open) => {
+          setQuestionsOpen(open);
+          if (!open) setBoardFilter(null);
+        }}
+        conceptName={conceptName}
+        boardId={boardFilter?.id}
+        boardName={boardFilter?.name}
+        onClearBoardFilter={() => setBoardFilter(null)}
+        onBoardClick={(board) => {
+          setBoardFilter(board);
+          setQuestionsOpen(true);
+        }}
+      />
     </div>
   );
 }

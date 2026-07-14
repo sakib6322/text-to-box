@@ -19,6 +19,10 @@ export function RichHtmlContent({ content, className, as: Tag = "div" }: Props) 
           "[&_h2]:text-lg [&_h2]:font-semibold",
           "[&_h3]:text-base [&_h3]:font-semibold",
           "[&_u]:underline",
+          "[&_strong]:font-bold [&_b]:font-bold",
+          "[&_em]:italic [&_i]:italic",
+          "[&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md [&_img]:my-2",
+          "[&_figure]:my-3 [&_figcaption]:text-xs [&_figcaption]:text-muted-foreground",
           className,
         )}
         dangerouslySetInnerHTML={{ __html: content }}

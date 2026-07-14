@@ -223,15 +223,20 @@ async function fetchBoardsByKeyPointIds(db, keyPointIds) {
   if (!keyPointIds.length) return new Map();
   const { data } = await db
     .from("key_point_boards")
-    .select("key_point_id, mention_count, boards(id, name)")
+    .select("key_point_id, board_id, mention_count, boards(id, name)")
     .in("key_point_id", keyPointIds);
   const map = new Map();
   for (const row of data ?? []) {
     const kpid = row.key_point_id;
     const name = row?.boards?.name;
     if (!kpid || typeof name !== "string" || !name.trim()) continue;
+    const boardId = row?.boards?.id ?? row.board_id;
     const list = map.get(kpid) ?? [];
-    list.push({ name: name.trim(), mention_count: Number(row.mention_count ?? 1) });
+    list.push({
+      board_id: typeof boardId === "string" ? boardId : null,
+      name: name.trim(),
+      mention_count: Number(row.mention_count ?? 1),
+    });
     map.set(kpid, list);
   }
   return map;
@@ -246,6 +251,22 @@ async function enrichKeyPointsWithBoards(db, _conceptId, keyPoints) {
       ...kp,
       board_names: links.map((l) => l.name),
       board_links: links,
+    };
+  });
+}
+
+async function enrichQuestionsWithBoards(db, rows) {
+  const pointIds = [...new Set((rows ?? []).map((q) => q.sourcePointId).filter(Boolean))];
+  const boardsByKp = await fetchBoardsByKeyPointIds(db, pointIds);
+  return (rows ?? []).map((q) => {
+    const links = q.sourcePointId ? boardsByKp.get(q.sourcePointId) ?? [] : [];
+    return {
+      ...q,
+      boards: links.map((l) => ({
+        id: l.board_id,
+        name: l.name,
+        mention_count: l.mention_count,
+      })),
     };
   });
 }
@@ -284,6 +305,39 @@ function sanitizeModelText(value) {
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+/** Keep CKEditor HTML (bold, lists, paragraphs, tables, images) while stripping scripts/events.
+ *  Do not run full entity-decoding on markup — that can break tags/entities from the editor. */
+function sanitizeRichHtml(value) {
+  let html = String(value ?? "")
+    .replace(/&nbsp;/gi, "\u00a0")
+    .trim();
+  if (!html) return "";
+
+  html = html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\son\w+\s*=\s*(['"]).*?\1/gi, "")
+    .replace(/\son\w+\s*=\s*[^\s>]+/gi, "")
+    .replace(/\s(href|src)\s*=\s*(['"])\s*javascript:[^'"]*\2/gi, "")
+    .replace(/<\s*(iframe|object|embed|form|input|button|textarea|select)\b[^>]*>[\s\S]*?(<\/\1\s*>)?/gi, "");
+
+  html = html.replace(/\ssrc\s*=\s*(['"])(.*?)\1/gi, (match, quote, src) => {
+    const trimmed = src.trim();
+    if (/^data:image\//i.test(trimmed) || /^https?:\/\//i.test(trimmed)) return match;
+    return "";
+  });
+
+  return html.trim();
+}
+
+function isRichHtmlEmpty(value) {
+  if (!value?.trim()) return true;
+  const text = sanitizeModelText(value);
+  const hasImage = /<img\b/i.test(value);
+  return !text && !hasImage;
 }
 
 /** Preserve line breaks and wording for exam questions (no paraphrase cleanup). */
@@ -431,9 +485,15 @@ function normalizeDetailTable(raw) {
     ? raw.rows
         .map((row) => {
           const cells = Array.isArray(row?.cells)
-            ? row.cells.filter((c) => typeof c === "string").map((c) => sanitizeModelText(c)).filter(Boolean)
+            ? row.cells
+                .filter((c) => typeof c === "string")
+                .map((c) => sanitizeRichHtml(c))
+                .filter((c) => !isRichHtmlEmpty(c))
             : Array.isArray(row)
-              ? row.filter((c) => typeof c === "string").map((c) => sanitizeModelText(c)).filter(Boolean)
+              ? row
+                  .filter((c) => typeof c === "string")
+                  .map((c) => sanitizeRichHtml(c))
+                  .filter((c) => !isRichHtmlEmpty(c))
               : [];
           return cells.length ? { cells } : null;
         })
@@ -1648,7 +1708,7 @@ app.get("/api/concepts/:id", async (req, res) => {
 
     const { data: keyPoints, error: kpErr } = await db
       .from("key_points")
-      .select("id, content, position")
+      .select("id, content, position, increment_count")
       .eq("concept_id", id)
       .order("position", { ascending: true });
     if (kpErr) return res.status(500).json({ error: formatSupabaseError(kpErr) });
@@ -1690,14 +1750,16 @@ app.patch("/api/concepts/:id", async (req, res) => {
 
     let detailUpdated = false;
     if (typeof req.body?.detail_summary === "string") {
-      patch.detail_summary = sanitizeModelText(req.body.detail_summary) || null;
+      patch.detail_summary = isRichHtmlEmpty(req.body.detail_summary)
+        ? null
+        : sanitizeRichHtml(req.body.detail_summary);
       detailUpdated = true;
     }
     if (Array.isArray(req.body?.detail_paragraphs)) {
       patch.detail_paragraphs = req.body.detail_paragraphs
         .filter((p) => typeof p === "string")
-        .map((p) => sanitizeModelText(p))
-        .filter(Boolean);
+        .map((p) => sanitizeRichHtml(p))
+        .filter((p) => !isRichHtmlEmpty(p));
       detailUpdated = true;
     }
     if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "detail_table")) {
@@ -2266,12 +2328,14 @@ app.post("/api/save-concept", async (req, res) => {
     if (points.length === 0) return res.status(400).json({ error: "high_yield_points required" });
 
     const detailSummary =
-      typeof body?.detail_summary === "string" ? sanitizeModelText(body.detail_summary) : null;
+      typeof body?.detail_summary === "string" && !isRichHtmlEmpty(body.detail_summary)
+        ? sanitizeRichHtml(body.detail_summary)
+        : null;
     const detailParagraphs = Array.isArray(body?.detail_paragraphs)
       ? body.detail_paragraphs
           .filter((p) => typeof p === "string")
-          .map((p) => sanitizeModelText(p))
-          .filter(Boolean)
+          .map((p) => sanitizeRichHtml(p))
+          .filter((p) => !isRichHtmlEmpty(p))
       : [];
     const detailTable = normalizeDetailTable(body?.detail_table);
     const detailEmbedText = buildConceptDetailEmbedText(detailSummary, detailParagraphs, detailTable);
@@ -2459,6 +2523,18 @@ app.get("/api/questions", async (req, res) => {
     const chapter = String(req.query.chapter ?? "").trim();
     const topic = String(req.query.topic ?? "").trim();
     const concept = String(req.query.concept ?? "").trim();
+    const boardId = String(req.query.board_id ?? "").trim();
+
+    let sourcePointIdsForBoard = null;
+    if (boardId) {
+      const { data: kpBoardRows, error: kpBoardErr } = await db
+        .from("key_point_boards")
+        .select("key_point_id")
+        .eq("board_id", boardId);
+      if (kpBoardErr) return res.status(500).json({ error: kpBoardErr.message });
+      sourcePointIdsForBoard = [...new Set((kpBoardRows ?? []).map((r) => r.key_point_id).filter(Boolean))];
+      if (!sourcePointIdsForBoard.length) return res.json({ rows: [] });
+    }
 
     let query = db
       .from("questions")
@@ -2473,6 +2549,7 @@ app.get("/api/questions", async (req, res) => {
     if (chapter) query = query.eq("chapter", chapter);
     if (topic) query = query.eq("topic", topic);
     if (concept) query = query.eq("concept", concept);
+    if (sourcePointIdsForBoard) query = query.in("source_point_id", sourcePointIdsForBoard);
 
     const { data, error } = await query;
     if (error) return res.status(500).json({ error: error.message });
@@ -2498,6 +2575,7 @@ app.get("/api/questions", async (req, res) => {
           .includes(search),
       );
     }
+    rows = await enrichQuestionsWithBoards(db, rows);
     return res.json({ rows });
   } catch (e) {
     console.error(e);

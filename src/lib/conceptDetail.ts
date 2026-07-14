@@ -440,6 +440,7 @@ export async function fetchConceptByTitle(
 }
 
 export type BoardLinkDisplay = {
+  id?: string;
   name: string;
   mention_count?: number;
 };
@@ -447,6 +448,7 @@ export type BoardLinkDisplay = {
 export type KeyPointWithBoards = {
   id?: string;
   content: string;
+  incrementCount?: number;
   boardNames?: string[];
   boardLinks?: BoardLinkDisplay[];
 };
@@ -472,7 +474,13 @@ export async function fetchConceptByIdWithBoards(conceptId: string): Promise<Con
   const res = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(id)}`));
   const data = (await res.json().catch(() => ({}))) as {
     concept?: Record<string, unknown>;
-    key_points?: { id?: string; content?: string; board_names?: string[]; board_links?: { name?: string; mention_count?: number }[] }[];
+    key_points?: {
+      id?: string;
+      content?: string;
+      increment_count?: number;
+      board_names?: string[];
+      board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+    }[];
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? "Concept not found");
@@ -491,11 +499,16 @@ export async function fetchConceptByIdWithBoards(conceptId: string): Promise<Con
     keyPoints: (data.key_points ?? []).map((kp) => ({
       id: kp.id,
       content: kp.content ?? "",
+        incrementCount: Math.max(0, Number(kp.increment_count ?? 0)),
       boardNames: Array.isArray(kp.board_names) ? kp.board_names.filter(Boolean) : [],
       boardLinks: Array.isArray(kp.board_links)
         ? kp.board_links
             .filter((l) => l?.name?.trim())
-            .map((l) => ({ name: l.name!.trim(), mention_count: Number(l.mention_count ?? 1) }))
+            .map((l) => ({
+              id: typeof l.board_id === "string" ? l.board_id : undefined,
+              name: l.name!.trim(),
+              mention_count: Number(l.mention_count ?? 1) || 1,
+            }))
         : undefined,
     })),
   };

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptDetailPreview } from "@/components/ConceptDetailPreview";
 import type { ConceptDetail } from "@/lib/conceptDetail";
+import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,7 +26,7 @@ type Props = {
   keyPoints: KeyPointWithBoards[] | string[];
   loading?: boolean;
   editable?: boolean;
-  onDetailChange?: (detail: ConceptDetail) => void;
+  onDetailChange?: (updater: ConceptDetailUpdater) => void;
   onSave?: (detail: ConceptDetail) => Promise<void>;
   saving?: boolean;
   showDownloadPdf?: boolean;
@@ -56,13 +57,16 @@ export function ConceptDetailsDialog({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const normalizedKps = normalizeKeyPoints(keyPoints);
 
+  // Sync draft only when the dialog opens or loading finishes — not on every parent echo,
+  // otherwise rapid CKEditor edits can be overwritten by stale parent state.
   useEffect(() => {
-    if (open) setDraft(detail);
-  }, [open, detail]);
+    if (open && !loading) setDraft(detail);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally omit `detail`
+  }, [open, loading]);
 
-  const handleDraftChange = (next: ConceptDetail) => {
-    setDraft(next);
-    onDetailChange?.(next);
+  const handleDraftChange = (updater: ConceptDetailUpdater) => {
+    setDraft(updater);
+    onDetailChange?.(updater);
   };
 
   const handleSave = async () => {

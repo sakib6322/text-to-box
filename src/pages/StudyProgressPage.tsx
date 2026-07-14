@@ -42,29 +42,29 @@ export default function StudyProgressPage() {
           <BarChart3 className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Summary</h2>
         </div>
-        <div className={`grid gap-3 text-center text-xs ${isMobile ? "grid-cols-2" : "grid-cols-4"}`}>
-          <div className="rounded-lg border p-3">
-            <p className="text-2xl font-bold tabular-nums">{studyList.length}</p>
-            <p className="text-muted-foreground mt-1">Concepts studied</p>
+        <div className="grid grid-cols-4 gap-2 text-center text-[10px] sm:gap-3 sm:text-xs">
+          <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">{studyList.length}</p>
+            <p className="text-muted-foreground mt-1 leading-tight">Concepts studied</p>
           </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-2xl font-bold tabular-nums">{practiceList.filter((p) => p.completedAt).length}</p>
-            <p className="text-muted-foreground mt-1">Practice exams done</p>
+          <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">
+              {practiceList.filter((p) => p.completedAt).length}
+            </p>
+            <p className="text-muted-foreground mt-1 leading-tight">Practice exams done</p>
           </div>
-          {!isMobile ? (
-            <>
-              <div className="rounded-lg border p-3">
-                <p className="text-2xl font-bold tabular-nums">
-                  {studyList.reduce((n, s) => n + s.studiedKeyPointIds.length, 0)}
-                </p>
-                <p className="text-muted-foreground mt-1">Key points studied</p>
-              </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-2xl font-bold tabular-nums">{practiceList.filter((p) => !p.completedAt).length}</p>
-                <p className="text-muted-foreground mt-1">In progress</p>
-              </div>
-            </>
-          ) : null}
+          <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">
+              {studyList.reduce((n, s) => n + s.studiedKeyPointIds.length, 0)}
+            </p>
+            <p className="text-muted-foreground mt-1 leading-tight">Key points studied</p>
+          </div>
+          <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">
+              {practiceList.filter((p) => !p.completedAt).length}
+            </p>
+            <p className="text-muted-foreground mt-1 leading-tight">In progress</p>
+          </div>
         </div>
       </Card>
 

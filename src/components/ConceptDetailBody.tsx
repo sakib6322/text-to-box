@@ -15,10 +15,12 @@ import {
 import type { ConceptDetail, DetailTable } from "@/lib/conceptDetail";
 import { Plus, Trash2 } from "lucide-react";
 
+export type ConceptDetailUpdater = (prev: ConceptDetail) => ConceptDetail;
+
 type Props = {
   detail: ConceptDetail;
   editable?: boolean;
-  onChange?: (detail: ConceptDetail) => void;
+  onChange?: (updater: ConceptDetailUpdater) => void;
   showVerbatim?: boolean;
 };
 
@@ -43,83 +45,112 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
   const headers = defaultHeaders(table);
   const hasTable = Boolean(table?.rows?.length);
 
-  const patch = (next: Partial<ConceptDetail>) => onChange?.({ ...detail, ...next });
+  const patch = (partial: Partial<ConceptDetail>) => {
+    onChange?.((prev) => ({ ...prev, ...partial }));
+  };
 
-  const patchTable = (next: DetailTable) => patch({ table: next });
+  const patchTable = (map: (prev: ConceptDetail) => DetailTable) => {
+    onChange?.((prev) => ({ ...prev, table: map(prev) }));
+  };
 
   const updateHeader = (index: number, value: string) => {
-    const t = ensureTable(detail);
-    const nextHeaders = [...defaultHeaders(t)];
-    nextHeaders[index] = value;
-    patchTable({ ...t, headers: nextHeaders });
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const nextHeaders = [...defaultHeaders(t)];
+      nextHeaders[index] = value;
+      return { ...t, headers: nextHeaders };
+    });
   };
 
   const updateCell = (rowIndex: number, cellIndex: number, value: string) => {
-    const t = ensureTable(detail);
-    const rows = (t.rows ?? []).map((row, ri) =>
-      ri === rowIndex
-        ? {
-            cells: (row.cells ?? []).map((cell, ci) => (ci === cellIndex ? value : cell)),
-          }
-        : row,
-    );
-    patchTable({ ...t, rows });
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const rows = (t.rows ?? []).map((row, ri) =>
+        ri === rowIndex
+          ? {
+              cells: (row.cells ?? []).map((cell, ci) => (ci === cellIndex ? value : cell)),
+            }
+          : row,
+      );
+      return { ...t, rows };
+    });
   };
 
   const addRow = () => {
-    const t = ensureTable(detail);
-    const colCount = defaultHeaders(t).length;
-    patchTable({
-      ...t,
-      rows: [...(t.rows ?? []), { cells: Array.from({ length: colCount }, () => "") }],
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const colCount = defaultHeaders(t).length;
+      return {
+        ...t,
+        rows: [...(t.rows ?? []), { cells: Array.from({ length: colCount }, () => "") }],
+      };
     });
   };
 
   const removeRow = (rowIndex: number) => {
-    const t = ensureTable(detail);
-    const rows = (t.rows ?? []).filter((_, i) => i !== rowIndex);
-    patchTable({ ...t, rows: rows.length ? rows : [{ cells: Array.from({ length: defaultHeaders(t).length }, () => "") }] });
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const rows = (t.rows ?? []).filter((_, i) => i !== rowIndex);
+      return {
+        ...t,
+        rows: rows.length
+          ? rows
+          : [{ cells: Array.from({ length: defaultHeaders(t).length }, () => "") }],
+      };
+    });
   };
 
   const addColumn = () => {
-    const t = ensureTable(detail);
-    const cols = defaultHeaders(t);
-    const nextHeaders = [...cols, `Column ${cols.length + 1}`];
-    const rows = (t.rows ?? []).map((row) => ({
-      cells: [...(row.cells ?? []), ""],
-    }));
-    patchTable({ ...t, headers: nextHeaders, rows });
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const cols = defaultHeaders(t);
+      const nextHeaders = [...cols, `Column ${cols.length + 1}`];
+      const rows = (t.rows ?? []).map((row) => ({
+        cells: [...(row.cells ?? []), ""],
+      }));
+      return { ...t, headers: nextHeaders, rows };
+    });
   };
 
   const removeColumn = (colIndex: number) => {
-    const t = ensureTable(detail);
-    const cols = defaultHeaders(t);
-    if (cols.length <= 1) return;
-    const nextHeaders = cols.filter((_, i) => i !== colIndex);
-    const rows = (t.rows ?? []).map((row) => ({
-      cells: (row.cells ?? []).filter((_, i) => i !== colIndex),
-    }));
-    patchTable({ ...t, headers: nextHeaders, rows });
+    patchTable((prev) => {
+      const t = ensureTable(prev);
+      const cols = defaultHeaders(t);
+      if (cols.length <= 1) return t;
+      const nextHeaders = cols.filter((_, i) => i !== colIndex);
+      const rows = (t.rows ?? []).map((row) => ({
+        cells: (row.cells ?? []).filter((_, i) => i !== colIndex),
+      }));
+      return { ...t, headers: nextHeaders, rows };
+    });
   };
 
   const deleteTable = () => patch({ table: null });
 
-  const addParagraph = () => patch({ paragraphs: [...detail.paragraphs, ""] });
+  const addParagraph = () => {
+    onChange?.((prev) => ({ ...prev, paragraphs: [...prev.paragraphs, ""] }));
+  };
 
   const updateParagraph = (index: number, value: string) => {
-    patch({ paragraphs: detail.paragraphs.map((p, i) => (i === index ? value : p)) });
+    onChange?.((prev) => ({
+      ...prev,
+      paragraphs: prev.paragraphs.map((p, i) => (i === index ? value : p)),
+    }));
   };
 
   const removeParagraph = (index: number) => {
-    patch({ paragraphs: detail.paragraphs.filter((_, i) => i !== index) });
+    onChange?.((prev) => ({
+      ...prev,
+      paragraphs: prev.paragraphs.filter((_, i) => i !== index),
+    }));
   };
 
   const initTable = () => {
-    patchTable({
+    patchTable(() => ({
       title: "",
       headers: ["Mediator", "Source", "Action"],
       rows: [{ cells: ["", "", ""] }],
-    });
+    }));
   };
 
   return (
@@ -129,7 +160,7 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
           <Label>Summary</Label>
           <CKEditorField
             value={detail.summary}
-            onChange={(summary) => patch({ summary })}
+            onChange={(summary) => onChange?.((prev) => ({ ...prev, summary }))}
             placeholder="One-line concept definition…"
             minHeight="120px"
           />
@@ -192,7 +223,12 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
               <Label>Table title</Label>
               <Input
                 value={table.title ?? ""}
-                onChange={(e) => patchTable({ ...table, title: e.target.value })}
+                onChange={(e) =>
+                  patchTable((prev) => {
+                    const t = ensureTable(prev);
+                    return { ...t, title: e.target.value };
+                  })
+                }
                 placeholder="Table 3.5 Principal Mediators…"
               />
             </div>

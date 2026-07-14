@@ -90,13 +90,22 @@ export function ConceptSuggestionGroupCard({
         </div>
 
         <div className="flex shrink-0 flex-wrap gap-2 pl-9 sm:pl-0 lg:flex-col lg:items-stretch xl:flex-row">
-          {adminView && onDetails ? (
-            <Button type="button" variant="outline" size="sm" className="h-9 flex-1 sm:flex-none" onClick={onDetails}>
-              <BookOpen className="mr-1.5 h-4 w-4" />
-              Details
-            </Button>
-          ) : null}
-          {!adminView ? (
+          {adminView ? (
+            <>
+              {onDetails ? (
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none" onClick={onDetails}>
+                  <BookOpen className="mr-1 h-3.5 w-3.5" />
+                  Details
+                </Button>
+              ) : null}
+              <Button asChild variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none">
+                <Link to={`/concept/${group.conceptId}/learn`}>
+                  <GraduationCap className="mr-1 h-3.5 w-3.5" />
+                  Study & Practice
+                </Link>
+              </Button>
+            </>
+          ) : (
             <>
               <Button asChild size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
                 <Link to={`/concept/${group.conceptId}/learn`}>
@@ -111,7 +120,7 @@ export function ConceptSuggestionGroupCard({
                 </Link>
               </Button>
             </>
-          ) : null}
+          )}
         </div>
       </div>
 

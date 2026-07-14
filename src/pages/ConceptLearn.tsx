@@ -5,6 +5,7 @@ import {
   ArrowRight,
   BookOpen,
   CheckSquare,
+  HelpCircle,
   Loader2,
   Play,
   Square,
@@ -19,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import {
@@ -65,6 +67,8 @@ export default function ConceptLearn() {
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [conceptOnlyFilter, setConceptOnlyFilter] = useState(false);
   const [pastSessions, setPastSessions] = useState<PracticeSession[]>([]);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
 
   const loadConcept = useCallback(async () => {
     if (!conceptId) return;
@@ -170,6 +174,16 @@ export default function ConceptLearn() {
     navigate(`/practice/session/${session.id}`);
   };
 
+  const openConceptQuestions = () => {
+    setBoardFilter(null);
+    setQuestionsOpen(true);
+  };
+
+  const openBoardQuestions = (board: { id: string; name: string }) => {
+    setBoardFilter(board);
+    setQuestionsOpen(true);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -190,6 +204,15 @@ export default function ConceptLearn() {
           <p className="text-xs text-muted-foreground truncate">{topicName || "Concept"}</p>
           <h1 className="font-semibold text-sm truncate">{conceptName}</h1>
         </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="shrink-0 text-xs h-8"
+          onClick={openConceptQuestions}
+        >
+          <HelpCircle className="h-3 w-3 mr-1" /> Questions
+        </Button>
         <Button asChild variant="outline" size="sm" className="shrink-0 text-xs h-8">
           <Link to={`/concept/${conceptId}/details`}>
             <BookOpen className="h-3 w-3 mr-1" /> Details
@@ -219,14 +242,19 @@ export default function ConceptLearn() {
               Key point {step + 1} / {keyPoints.length || 1}
             </Badge>
             {currentKp ? (
-              <KeyPointList keyPoints={[currentKp]} />
+              <KeyPointList keyPoints={[currentKp]} onBoardClick={openBoardQuestions} />
             ) : (
               <p className="text-sm text-muted-foreground">No key points for this concept.</p>
             )}
           </Card>
 
           <Card className="p-4 space-y-3">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+              <Button type="button" variant="secondary" size="sm" className="h-7 text-[10px]" onClick={openConceptQuestions}>
+                <HelpCircle className="h-3 w-3 mr-1" /> Questions
+              </Button>
+            </div>
             <ConceptDetailBody detail={detail} showVerbatim={false} />
             {taxonomyLine ? <p className="text-xs text-muted-foreground border-t pt-2">{taxonomyLine}</p> : null}
           </Card>
@@ -239,6 +267,7 @@ export default function ConceptLearn() {
                 compact
                 studiedIds={studiedIds}
                 currentId={currentKp?.id}
+                onBoardClick={openBoardQuestions}
               />
             </Card>
           ) : null}
@@ -349,6 +378,19 @@ export default function ConceptLearn() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <ConceptQuestionsPanel
+        open={questionsOpen}
+        onOpenChange={(open) => {
+          setQuestionsOpen(open);
+          if (!open) setBoardFilter(null);
+        }}
+        conceptName={conceptName}
+        boardId={boardFilter?.id}
+        boardName={boardFilter?.name}
+        onClearBoardFilter={() => setBoardFilter(null)}
+        onBoardClick={openBoardQuestions}
+      />
     </div>
   );
 }
