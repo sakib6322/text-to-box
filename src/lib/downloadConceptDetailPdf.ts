@@ -1,175 +1,256 @@
 import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
+import html2canvas from "html2canvas";
 import type { ConceptDetail } from "@/lib/conceptDetail";
-import { htmlToPlainText } from "@/lib/htmlContent";
+import { looksLikeHtml } from "@/lib/htmlContent";
 
 function sanitizeFilename(name: string): string {
-  return name.replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-") || "concept";
+  const cleaned = name
+    .normalize("NFKC")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+  return cleaned.slice(0, 80) || "concept";
 }
 
-function ensureSpace(doc: jsPDF, y: number, needed: number, margin: number): number {
-  const pageHeight = doc.internal.pageSize.getHeight();
-  if (y + needed > pageHeight - 20) {
-    doc.addPage();
-    return margin;
-  }
-  return y;
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }
 
-export function downloadConceptDetailPdf(
+function richHtml(value: string): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  if (looksLikeHtml(raw)) return raw;
+  return `<p>${escapeHtml(raw).replace(/\n/g, "<br/>")}</p>`;
+}
+
+function ensureBanglaFontStylesheet(): Promise<void> {
+  const id = "concept-pdf-noto-bengali";
+  if (document.getElementById(id)) return document.fonts.ready.then(() => undefined);
+  return new Promise((resolve) => {
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href =
+      "https://fonts.googleapis.com/css2?family=Noto+Sans+Bengali:wght@400;600;700&family=Noto+Sans:wght@400;600;700&display=swap";
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+    // Don't hang forever if network is slow
+    window.setTimeout(() => resolve(), 2500);
+  }).then(() => document.fonts.ready.then(() => undefined));
+}
+
+function buildConceptHtml(
   conceptName: string,
   detail: ConceptDetail,
   keyPoints: string[],
-): void {
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 18;
-  let y = margin;
-
-  doc.setFillColor(37, 99, 235);
-  doc.rect(0, 0, pageWidth, 32, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  const titleLines = doc.splitTextToSize(conceptName || "Untitled concept", pageWidth - margin * 2);
-  doc.text(titleLines, margin, 16);
-  doc.setFontSize(9);
-  doc.setFont("helvetica", "normal");
-  doc.text("Concept details", margin, 26);
-
-  doc.setTextColor(30, 41, 59);
-  y = 42;
-
-  if (detail.summary.trim()) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    const summaryLines = doc.splitTextToSize(htmlToPlainText(detail.summary), pageWidth - margin * 2);
-    y = ensureSpace(doc, y, summaryLines.length * 6 + 4, margin);
-    doc.text(summaryLines, margin, y);
-    y += summaryLines.length * 6 + 6;
-  }
-
-  if (detail.paragraphs.length) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    y = ensureSpace(doc, y, 10, margin);
-    doc.text("Details", margin, y);
-    y += 8;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    for (const paragraph of detail.paragraphs) {
-      const text = htmlToPlainText(paragraph);
-      if (!text) continue;
-      const lines = doc.splitTextToSize(`• ${text}`, pageWidth - margin * 2);
-      y = ensureSpace(doc, y, lines.length * 5 + 3, margin);
-      doc.text(lines, margin, y);
-      y += lines.length * 5 + 4;
-    }
-  }
-
+): string {
+  const summary = richHtml(detail.summary);
+  const paragraphs = detail.paragraphs.map(richHtml).filter(Boolean);
   const table = detail.table;
-  if (table?.rows?.length) {
-    y += 2;
-    if (table.title?.trim()) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      y = ensureSpace(doc, y, 10, margin);
-      doc.text(table.title.trim(), margin, y);
-      y += 8;
-    }
 
+  let tableHtml = "";
+  if (table?.rows?.length) {
     const headers = table.headers?.length
       ? table.headers
       : Array.from({ length: table.rows[0]?.cells?.length ?? 3 }, (_, i) => `Column ${i + 1}`);
-    const body = table.rows.map((row) => {
-      const cells = row.cells ?? [];
-      return headers.map((_, i) => htmlToPlainText(cells[i] ?? ""));
-    });
+    const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
+    const body = table.rows
+      .map((row) => {
+        const cells = row.cells ?? [];
+        return `<tr>${headers
+          .map((_, i) => `<td>${richHtml(cells[i] ?? "") || "&nbsp;"}</td>`)
+          .join("")}</tr>`;
+      })
+      .join("");
+    tableHtml = `
+      <section class="block">
+        ${table.title?.trim() ? `<h2>${escapeHtml(table.title.trim())}</h2>` : "<h2>Table</h2>"}
+        <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+      </section>`;
+  }
 
-    autoTable(doc, {
-      startY: y,
-      head: [headers],
-      body,
-      margin: { left: margin, right: margin },
-      theme: "grid",
-      headStyles: {
-        fillColor: [251, 191, 36],
-        textColor: [30, 30, 30],
-        fontStyle: "bold",
-        halign: "left",
-      },
-      styles: {
-        fontSize: 9,
-        cellPadding: 3,
-        overflow: "linebreak",
-        valign: "top",
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: headers.reduce(
-        (acc, _, i) => {
-          acc[i] = { cellWidth: "wrap" };
-          return acc;
-        },
-        {} as Record<number, { cellWidth: "wrap" }>,
+  const kpHtml = keyPoints
+    .map((kp) => kp.trim())
+    .filter(Boolean)
+    .map((kp) => `<li>${escapeHtml(kp)}</li>`)
+    .join("");
+
+  const verbatim = detail.verbatimText.trim()
+    ? `<section class="block muted"><h2>Verbatim source</h2><pre>${escapeHtml(detail.verbatimText.trim())}</pre></section>`
+    : "";
+
+  return `
+    <div class="pdf-root">
+      <header class="hero">
+        <p class="eyebrow">Concept details</p>
+        <h1>${escapeHtml(conceptName || "Untitled concept")}</h1>
+      </header>
+      ${summary ? `<section class="block summary">${summary}</section>` : ""}
+      ${
+        paragraphs.length
+          ? `<section class="block"><h2>Details</h2>${paragraphs.map((p) => `<div class="para">${p}</div>`).join("")}</section>`
+          : ""
+      }
+      ${tableHtml}
+      ${kpHtml ? `<section class="block"><h2>Key points</h2><ul>${kpHtml}</ul></section>` : ""}
+      ${verbatim}
+      <footer>pgdiary.cloud · ${escapeHtml(
+        new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" }),
+      )}</footer>
+    </div>
+  `;
+}
+
+export async function downloadConceptDetailPdf(
+  conceptName: string,
+  detail: ConceptDetail,
+  keyPoints: string[],
+): Promise<void> {
+  await ensureBanglaFontStylesheet();
+
+  const host = document.createElement("div");
+  host.setAttribute("data-concept-pdf-host", "1");
+  host.style.cssText = [
+    "position:fixed",
+    "left:-12000px",
+    "top:0",
+    "width:794px",
+    "padding:0",
+    "margin:0",
+    "background:#fff",
+    "z-index:-1",
+    "pointer-events:none",
+  ].join(";");
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .pdf-root {
+      box-sizing: border-box;
+      width: 794px;
+      padding: 36px 40px 48px;
+      color: #1e293b;
+      background: #ffffff;
+      font-family: "Noto Sans Bengali", "Noto Sans", "Nirmala UI", "Vrinda", "Kalpurush", "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    .pdf-root *, .pdf-root *::before, .pdf-root *::after { box-sizing: border-box; }
+    .hero {
+      background: #2563eb;
+      color: #fff;
+      margin: -36px -40px 24px;
+      padding: 28px 40px 24px;
+    }
+    .eyebrow { margin: 0 0 6px; font-size: 12px; opacity: 0.9; }
+    .hero h1 { margin: 0; font-size: 26px; font-weight: 700; line-height: 1.35; word-break: break-word; }
+    .block { margin-bottom: 22px; }
+    .summary { font-size: 15px; font-weight: 600; }
+    h2 { margin: 0 0 10px; font-size: 16px; font-weight: 700; color: #0f172a; }
+    .para { margin-bottom: 12px; }
+    .para p, .summary p { margin: 0 0 8px; }
+    strong, b { font-weight: 700; }
+    em, i { font-style: italic; }
+    u { text-decoration: underline; }
+    ul, ol { margin: 0; padding-left: 1.25rem; }
+    li { margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; word-wrap: break-word; }
+    th { background: #fbbf24; color: #1e293b; font-weight: 700; text-align: left; }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
+    img { max-width: 100%; height: auto; display: block; margin: 8px 0; border-radius: 6px; }
+    figure { margin: 10px 0; }
+    figcaption { font-size: 11px; color: #64748b; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      font-family: inherit;
+      font-size: 12px;
+      color: #475569;
+    }
+    .muted h2 { color: #64748b; }
+    footer { margin-top: 28px; padding-top: 12px; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; }
+  `;
+
+  host.appendChild(style);
+  const content = document.createElement("div");
+  content.innerHTML = buildConceptHtml(conceptName, detail, keyPoints);
+  host.appendChild(content);
+  document.body.appendChild(host);
+
+  try {
+    // Allow images (base64) to decode before capture
+    const images = Array.from(host.querySelectorAll("img"));
+    await Promise.all(
+      images.map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete) return resolve();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }),
       ),
+    );
+
+    const canvas = await html2canvas(host, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+      windowWidth: 794,
     });
 
-    y = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y;
-    y += 10;
-  }
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    const pageCanvas = document.createElement("canvas");
+    const pageCtx = pageCanvas.getContext("2d");
+    if (!pageCtx) throw new Error("Could not create canvas context");
 
-  if (keyPoints.length) {
-    y = ensureSpace(doc, y, 14, margin);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("Key points", margin, y);
-    y += 8;
+    const pxPerMm = canvas.width / imgWidth;
+    const pageHeightPx = pageHeight * pxPerMm;
+    let renderedHeight = 0;
+    let pageIndex = 0;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    for (const kp of keyPoints) {
-      if (!kp.trim()) continue;
-      const lines = doc.splitTextToSize(`• ${kp.trim()}`, pageWidth - margin * 2);
-      y = ensureSpace(doc, y, lines.length * 5 + 2, margin);
-      doc.text(lines, margin, y);
-      y += lines.length * 5 + 3;
+    while (renderedHeight < canvas.height) {
+      const sliceHeight = Math.min(pageHeightPx, canvas.height - renderedHeight);
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+      pageCtx.clearRect(0, 0, pageCanvas.width, pageCanvas.height);
+      pageCtx.drawImage(
+        canvas,
+        0,
+        renderedHeight,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight,
+      );
+
+      const sliceData = pageCanvas.toDataURL("image/jpeg", 0.92);
+      const sliceHeightMm = sliceHeight / pxPerMm;
+      if (pageIndex > 0) pdf.addPage();
+      pdf.addImage(sliceData, "JPEG", 0, 0, imgWidth, sliceHeightMm);
+
+      renderedHeight += sliceHeight;
+      pageIndex += 1;
+      // safety against infinite loop on tiny remainders
+      if (sliceHeight < 1) break;
     }
-  }
 
-  if (detail.verbatimText.trim()) {
-    y = ensureSpace(doc, y, 16, margin);
-    doc.setDrawColor(226, 232, 240);
-    doc.line(margin, y, pageWidth - margin, y);
-    y += 8;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Verbatim source", margin, y);
-    y += 6;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    const verbatimLines = doc.splitTextToSize(detail.verbatimText.trim(), pageWidth - margin * 2);
-    for (const line of verbatimLines.slice(0, 80)) {
-      y = ensureSpace(doc, y, 5, margin);
-      doc.text(line, margin, y);
-      y += 4;
-    }
+    pdf.save(`${sanitizeFilename(conceptName)}.pdf`);
+  } finally {
+    host.remove();
   }
-
-  const pageCount = doc.getNumberOfPages();
-  const generated = new Date().toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text(`pgdiary.cloud · ${generated}`, margin, 290);
-    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin, 290, { align: "right" });
-  }
-
-  doc.save(`${sanitizeFilename(conceptName)}.pdf`);
 }

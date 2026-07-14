@@ -74,11 +74,11 @@ export function ConceptDetailsDialog({
     await onSave(draft);
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadPdf = async () => {
     const payload = editable ? draft : detail;
     setDownloadingPdf(true);
     try {
-      downloadConceptDetailPdf(
+      await downloadConceptDetailPdf(
         conceptName,
         payload,
         normalizedKps.map((kp) => kp.content),
