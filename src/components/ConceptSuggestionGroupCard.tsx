@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, ChevronDown, ChevronRight, GraduationCap } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, GraduationCap, Plus } from "lucide-react";
 import { SuggestionKeyPointCard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 
 export type ConceptSuggestionRow = {
@@ -32,6 +32,7 @@ type Props = {
   onDetails?: () => void;
   onEdit?: (row: ConceptSuggestionRow) => void;
   onDelete?: (row: ConceptSuggestionRow) => void;
+  onAdd?: () => void;
 };
 
 export function ConceptSuggestionGroupCard({
@@ -46,6 +47,7 @@ export function ConceptSuggestionGroupCard({
   onDetails,
   onEdit,
   onDelete,
+  onAdd,
 }: Props) {
   const pct = studyPct ?? 0;
 
@@ -143,6 +145,14 @@ export function ConceptSuggestionGroupCard({
               />
             ))}
           </div>
+          {adminView && onAdd ? (
+            <div className="mt-3">
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={onAdd}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Add box
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Card>

@@ -8,6 +8,10 @@ export type DetailTable = {
 };
 
 export type ConceptDetail = {
+  /** Full rich-text body — passthrough from source textbox without AI restructuring. */
+  bodyHtml: string;
+  /** Story-based learning content — author HTML preserved as written. */
+  storyHtml: string;
   summary: string;
   paragraphs: string[];
   table: DetailTable | null;
@@ -15,7 +19,80 @@ export type ConceptDetail = {
 };
 
 export function emptyConceptDetail(): ConceptDetail {
-  return { summary: "", paragraphs: [], table: null, verbatimText: "" };
+  return {
+    bodyHtml: "",
+    storyHtml: "",
+    summary: "",
+    paragraphs: [],
+    table: null,
+    verbatimText: "",
+  };
+}
+
+export function conceptDetailFromSourceHtml(
+  html: string,
+  preserve?: Pick<ConceptDetail, "storyHtml" | "verbatimText">,
+): ConceptDetail {
+  return {
+    bodyHtml: html,
+    storyHtml: preserve?.storyHtml ?? "",
+    summary: "",
+    paragraphs: [],
+    table: null,
+    verbatimText: preserve?.verbatimText ?? "",
+  };
+}
+
+export function withStoryHtml(detail: ConceptDetail, storyHtml: string): ConceptDetail {
+  return { ...detail, storyHtml };
+}
+
+export function hasStoryContent(detail: ConceptDetail): boolean {
+  return Boolean(detail.storyHtml.trim());
+}
+
+/** Body shown in the unified editor / preview (passthrough or legacy paragraphs). */
+export function resolveBodyHtml(detail: ConceptDetail): string {
+  if (detail.bodyHtml.trim()) return detail.bodyHtml;
+  const parts: string[] = [];
+  if (detail.summary.trim()) parts.push(detail.summary);
+  for (const p of detail.paragraphs) {
+    if (p.trim()) parts.push(p);
+  }
+  return parts.join("");
+}
+
+export function hasConceptDetailContent(detail: ConceptDetail): boolean {
+  return Boolean(
+    resolveBodyHtml(detail).trim() ||
+      detail.summary.trim() ||
+      detail.paragraphs.some((p) => p.trim()) ||
+      (detail.table?.rows?.length ?? 0) > 0,
+  );
+}
+
+export function conceptDetailToSavePayload(detail: ConceptDetail): {
+  detail_summary: string | null;
+  detail_paragraphs: string[];
+  detail_table: DetailTable | null;
+  story_html: string | null;
+} {
+  const body = resolveBodyHtml(detail).trim();
+  const story = detail.storyHtml.trim() || null;
+  if (body) {
+    return {
+      detail_summary: null,
+      detail_paragraphs: [body],
+      detail_table: null,
+      story_html: story,
+    };
+  }
+  return {
+    detail_summary: detail.summary.trim() || null,
+    detail_paragraphs: detail.paragraphs,
+    detail_table: detail.table,
+    story_html: story,
+  };
 }
 
 export function tableRowToSuggestionLine(cells: string[]): string {
@@ -82,12 +159,34 @@ export function conceptDetailFromApi(data: Record<string, unknown>): ConceptDeta
   const verbatimFromRaw =
     rawObj && typeof rawObj.verbatim_text === "string" ? rawObj.verbatim_text : "";
 
+  const bodyHtml =
+    paragraphs.length === 1 && !summary.trim() && !table ? paragraphs[0] ?? "" : "";
+
+  const storyHtml =
+    typeof rawObj?.story_html === "string"
+      ? rawObj.story_html
+      : typeof data.story_html === "string"
+        ? data.story_html
+        : "";
+
   return {
+    bodyHtml,
+    storyHtml,
     summary,
     paragraphs,
     table,
     verbatimText: verbatimFromRaw,
   };
+}
+
+export function clearConceptCaches(conceptId?: string) {
+  if (conceptId) {
+    conceptByIdCache.delete(conceptId);
+    return;
+  }
+  conceptByIdCache.clear();
+  conceptIdByTitleCache.clear();
+  conceptIdByPointCache.clear();
 }
 
 export type ConceptLookupFilters = {

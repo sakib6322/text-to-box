@@ -17,6 +17,7 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailCard } from "@/components/ConceptDetailCard";
 import { ConceptSuggestionsPanel } from "@/components/ConceptSuggestionsPanel";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import {
   ACCEPTED_SOURCE_TYPES,
   fileFromPasteEvent,
@@ -28,8 +29,10 @@ import {
 import { fetchSuggestionMatches, type SuggestionMatch } from "@/lib/suggestionMatch";
 import {
   buildSuggestionLines,
+  conceptDetailFromSourceHtml,
+  conceptDetailToSavePayload,
   emptyConceptDetail,
-  parseDetailTable,
+  resolveBodyHtml,
   type ConceptDetail,
 } from "@/lib/conceptDetail";
 
@@ -59,6 +62,24 @@ const Index = () => {
   const [suggestionMatches, setSuggestionMatches] = useState<Map<string, SuggestionMatch | null>>(new Map());
   const [deletePointIndex, setDeletePointIndex] = useState<number | null>(null);
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
+
+  const applySourceText = (html: string) => {
+    setSourceText(html);
+    setConceptDetail((prev) =>
+      conceptDetailFromSourceHtml(html, {
+        storyHtml: prev.storyHtml,
+        verbatimText: prev.verbatimText,
+      }),
+    );
+  };
+
+  const applyConceptDetail = (updater: ConceptDetailUpdater) => {
+    setConceptDetail((prev) => {
+      const next = updater(prev);
+      setSourceText(resolveBodyHtml(next));
+      return next;
+    });
+  };
 
   const requireTaxonomy = () => {
     if (!taxonomy.subjectId || !taxonomy.systemId || !taxonomy.chapterId || !taxonomy.topicId) {
@@ -157,18 +178,16 @@ const Index = () => {
         : [];
       setPoints(extractedPoints.length ? extractedPoints : [emptyKeyPoint()]);
 
-      const detail: ConceptDetail = {
-        summary: typeof data.detail_summary === "string" ? data.detail_summary : "",
-        paragraphs: Array.isArray(data.detail_paragraphs)
-          ? data.detail_paragraphs.filter((p: unknown): p is string => typeof p === "string")
-          : [],
-        table: parseDetailTable(data.detail_table),
-        verbatimText: typeof data.verbatim_text === "string" ? data.verbatim_text : "",
-      };
-      setConceptDetail(detail);
+      // Concept detail = exact source textbox HTML (no AI rewrite / restructure).
+      setConceptDetail((prev) =>
+        conceptDetailFromSourceHtml(sourceText, {
+          storyHtml: prev.storyHtml,
+          verbatimText: typeof data.verbatim_text === "string" ? data.verbatim_text : "",
+        }),
+      );
 
       const lines = buildSuggestionLines(
-        detail.table,
+        null,
         extractedPoints.map((p) => p.content),
       );
       await runSuggestionMatch(lines);
@@ -226,9 +245,7 @@ const Index = () => {
           topic: taxonomy.topicName,
           topic_id: taxonomy.topicId,
           high_yield_points: points.map((p) => p.content),
-          detail_summary: conceptDetail.summary || null,
-          detail_paragraphs: conceptDetail.paragraphs,
-          detail_table: conceptDetail.table,
+          ...conceptDetailToSavePayload(conceptDetail),
         }),
       });
       const data = (await resp.json().catch(() => ({}))) as {
@@ -272,8 +289,6 @@ const Index = () => {
     return parts.length ? parts.join(" → ") : null;
   }, [taxonomy]);
 
-  const keyPointTexts = useMemo(() => points.map((p) => p.content.trim()).filter(Boolean), [points]);
-
   return (
     <div className="min-h-screen bg-background text-foreground antialiased">
       <header className="border-b">
@@ -307,7 +322,7 @@ const Index = () => {
             </div>
             <CKEditorField
               value={sourceText}
-              onChange={setSourceText}
+              onChange={applySourceText}
               placeholder="Textbook notes লিখুন — heading, bold, underline, list…"
               minHeight="360px"
               className="w-full"
@@ -321,8 +336,8 @@ const Index = () => {
             <div>
               <h2 className="text-sm font-semibold">AI Extract</h2>
               <p className="text-xs text-muted-foreground mt-1">
-                Image, pdf <strong>অথবা</strong> source text দিয়ে extract করুন। Concept detail, table, key points ও
-                suggestions match একসাথে আসবে।
+                Image, PDF <strong>অথবা</strong> source text দিয়ে extract করুন — concept name ও key points AI তৈরি
+                করবে। Concept detail source textbox-এর exact format নিয়ে আসবে (AI rewrite নয়)।
               </p>
             </div>
 
@@ -441,6 +456,8 @@ const Index = () => {
             conceptName={conceptName}
             detail={conceptDetail}
             onOpenDetails={() => setDetailsOpen(true)}
+            editable
+            onDetailChange={applyConceptDetail}
           />
 
           <ConceptSuggestionsPanel lines={suggestionLines} matches={suggestionMatches} loading={matching} />
@@ -496,9 +513,10 @@ const Index = () => {
         onOpenChange={setDetailsOpen}
         conceptName={conceptName}
         detail={conceptDetail}
-        keyPoints={keyPointTexts}
+        keyPoints={[]}
+        showKeyPoints={false}
         editable
-        onDetailChange={setConceptDetail}
+        onDetailChange={applyConceptDetail}
       />
 
       <ConfirmDeleteDialog

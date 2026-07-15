@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { KeyPointList } from "@/components/KeyPointList";
+import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards } from "@/lib/conceptDetail";
 import { getStudyProgress, markKeyPointStudied, studyCompletionPct } from "@/lib/userProgress";
 import { toast } from "sonner";
@@ -105,7 +106,10 @@ export default function StudyConcept() {
       </Card>
 
       <Card className="mx-4 p-4 space-y-3">
-        <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+          <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+        </div>
         <ConceptDetailBody detail={detail} showVerbatim={false} />
         {taxonomyLine ? <p className="text-xs text-muted-foreground border-t pt-2">{taxonomyLine}</p> : null}
       </Card>

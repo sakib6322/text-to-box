@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
+import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import {
   getPracticeSessionsForConcept,
@@ -249,11 +250,14 @@ export default function ConceptLearn() {
           </Card>
 
           <Card className="p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
-              <Button type="button" variant="secondary" size="sm" className="h-7 text-[10px]" onClick={openConceptQuestions}>
-                <HelpCircle className="h-3 w-3 mr-1" /> Questions
-              </Button>
+              <div className="flex items-center gap-2">
+                <StoryBasedLearningButton detail={detail} conceptName={conceptName} size="sm" />
+                <Button type="button" variant="secondary" size="sm" className="h-7 text-[10px]" onClick={openConceptQuestions}>
+                  <HelpCircle className="h-3 w-3 mr-1" /> Questions
+                </Button>
+              </div>
             </div>
             <ConceptDetailBody detail={detail} showVerbatim={false} />
             {taxonomyLine ? <p className="text-xs text-muted-foreground border-t pt-2">{taxonomyLine}</p> : null}

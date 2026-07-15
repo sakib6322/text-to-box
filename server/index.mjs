@@ -188,6 +188,21 @@ async function linkKeyPointBoards(db, keyPointId, boardIds) {
   }
 }
 
+/** Replace board links for a key point (edit UI). Empty array clears all boards. */
+async function replaceKeyPointBoards(db, keyPointId, boardIds) {
+  if (!keyPointId) return;
+  const ids = Array.isArray(boardIds)
+    ? [...new Set(boardIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))]
+    : [];
+  const { error: delErr } = await db.from("key_point_boards").delete().eq("key_point_id", keyPointId);
+  if (delErr) throw new Error(delErr.message);
+  if (!ids.length) return;
+  const { error: insErr } = await db.from("key_point_boards").insert(
+    ids.map((board_id) => ({ key_point_id: keyPointId, board_id, mention_count: 1 })),
+  );
+  if (insErr) throw new Error(insErr.message);
+}
+
 function taxonomyTable(level) {
   if (level === "subjects") return "subjects";
   if (level === "systems") return "systems";
@@ -1767,22 +1782,38 @@ app.patch("/api/concepts/:id", async (req, res) => {
       detailUpdated = true;
     }
 
-    if (detailUpdated) {
+    let storyUpdated = false;
+    let nextStoryHtml = undefined;
+    if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "story_html")) {
+      const rawStory = req.body.story_html;
+      nextStoryHtml =
+        typeof rawStory === "string" && !isRichHtmlEmpty(rawStory)
+          ? sanitizeRichHtml(rawStory)
+          : null;
+      storyUpdated = true;
+    }
+
+    if (detailUpdated || storyUpdated) {
       const summary =
         patch.detail_summary !== undefined ? patch.detail_summary : existing.detail_summary;
       const paragraphs =
         patch.detail_paragraphs !== undefined ? patch.detail_paragraphs : existing.detail_paragraphs ?? [];
       const table =
         patch.detail_table !== undefined ? patch.detail_table : existing.detail_table;
-      const embedText = buildConceptDetailEmbedText(summary, paragraphs, table);
-      const detailEmbedding = embedText ? await embedTextRotating(db, embedText) : null;
-      patch.detail_embedding = toPgVector(detailEmbedding);
+      if (detailUpdated) {
+        const embedText = buildConceptDetailEmbedText(summary, paragraphs, table);
+        const detailEmbedding = embedText ? await embedTextRotating(db, embedText) : null;
+        patch.detail_embedding = toPgVector(detailEmbedding);
+      }
       const raw = existing.raw_extraction && typeof existing.raw_extraction === "object" ? existing.raw_extraction : {};
+      const prevStory =
+        typeof raw.story_html === "string" ? raw.story_html : null;
       patch.raw_extraction = {
         ...raw,
         detail_summary: summary,
         detail_paragraphs: paragraphs,
         detail_table: table,
+        story_html: storyUpdated ? nextStoryHtml : prevStory,
       };
     }
 
@@ -1793,7 +1824,7 @@ app.patch("/api/concepts/:id", async (req, res) => {
       .update(patch)
       .eq("id", id)
       .select(
-        "id, title, subject, system, chapter, topic, topic_id, detail_summary, detail_paragraphs, detail_table, created_at",
+        "id, title, subject, system, chapter, topic, topic_id, detail_summary, detail_paragraphs, detail_table, raw_extraction, created_at",
       );
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });
     const concept = Array.isArray(data) ? data[0] : null;
@@ -2014,9 +2045,15 @@ app.patch("/api/key-points/:id", async (req, res) => {
 
     const content = typeof req.body?.content === "string" ? req.body.content.trim() : null;
     const conceptTitle = typeof req.body?.concept_title === "string" ? req.body.concept_title.trim() : null;
-    if (!content && !conceptTitle) return res.status(400).json({ error: "content or concept_title required" });
-
-
+    const hasBoardIds = Object.prototype.hasOwnProperty.call(req.body ?? {}, "board_ids");
+    const boardIds = hasBoardIds
+      ? Array.isArray(req.body.board_ids)
+        ? req.body.board_ids.filter((x) => typeof x === "string" && x.trim())
+        : []
+      : null;
+    if (!content && !conceptTitle && !hasBoardIds) {
+      return res.status(400).json({ error: "content, concept_title, or board_ids required" });
+    }
 
     const { data: existing, error: findErr } = await db
       .from("key_points")
@@ -2042,7 +2079,66 @@ app.patch("/api/key-points/:id", async (req, res) => {
       if (cErr) return res.status(500).json({ error: cErr.message });
     }
 
+    if (hasBoardIds) {
+      await replaceKeyPointBoards(db, id, boardIds);
+    }
+
     return res.json({ ok: true, id });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+app.post("/api/concepts/:id/key-points", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const conceptId = String(req.params.id ?? "").trim();
+    if (!conceptId) return res.status(400).json({ error: "id required" });
+
+    const content = typeof req.body?.content === "string" ? req.body.content.trim() : "";
+    if (!content) return res.status(400).json({ error: "content required" });
+
+    const boardIds = Array.isArray(req.body?.board_ids)
+      ? req.body.board_ids.filter((x) => typeof x === "string" && x.trim())
+      : [];
+
+    const { data: concept, error: cErr } = await db
+      .from("concepts")
+      .select("id")
+      .eq("id", conceptId)
+      .maybeSingle();
+    if (cErr) return res.status(500).json({ error: cErr.message });
+    if (!concept) return res.status(404).json({ error: "Concept not found" });
+
+    const { data: maxRow } = await db
+      .from("key_points")
+      .select("position")
+      .eq("concept_id", conceptId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextPosition = Number(maxRow?.position ?? -1) + 1;
+
+    const emb = await embedTextRotating(db, content);
+    const { data: point, error: kpErr } = await db
+      .from("key_points")
+      .insert({
+        concept_id: conceptId,
+        content,
+        language: "mixed",
+        position: nextPosition,
+        embedding: toPgVector(emb),
+      })
+      .select("id, content, position, increment_count")
+      .single();
+    if (kpErr || !point) return res.status(500).json({ error: kpErr?.message ?? "Failed to create key point" });
+
+    if (boardIds.length) await replaceKeyPointBoards(db, point.id, boardIds);
+
+    const enriched = await enrichKeyPointsWithBoards(db, conceptId, [point]);
+    return res.json({ ok: true, key_point: enriched[0] ?? point });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -2340,6 +2436,10 @@ app.post("/api/save-concept", async (req, res) => {
     const detailTable = normalizeDetailTable(body?.detail_table);
     const detailEmbedText = buildConceptDetailEmbedText(detailSummary, detailParagraphs, detailTable);
     const detailEmbedding = detailEmbedText ? await embedTextRotating(db, detailEmbedText) : null;
+    const storyHtml =
+      typeof body?.story_html === "string" && !isRichHtmlEmpty(body.story_html)
+        ? sanitizeRichHtml(body.story_html)
+        : null;
 
     const { data: concept, error: cErr } = await db
       .from("concepts")
@@ -2361,6 +2461,7 @@ app.post("/api/save-concept", async (req, res) => {
           detail_summary: detailSummary,
           detail_paragraphs: detailParagraphs,
           detail_table: detailTable,
+          story_html: storyHtml,
         },
         source_image_path: null,
       })

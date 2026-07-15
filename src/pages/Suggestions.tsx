@@ -13,11 +13,13 @@ import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
-import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
+import { emptyConceptDetail, fetchConceptByIdWithBoards, conceptDetailToSavePayload, clearConceptCaches, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { isAdmin } from "@/lib/auth";
 import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
 import { mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
+import type { KeyPointSavePayload } from "@/components/EditableKeyPointSection";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +64,47 @@ function norm(s: string | null | undefined) {
   return (s ?? "").trim().toLowerCase();
 }
 
+function boardIdsFromLinks(links: BoardLink[] | null | undefined): string[] {
+  return (links ?? [])
+    .map((l) => l.boards?.id ?? l.board_id)
+    .filter((id): id is string => Boolean(id));
+}
+
+function boardLinksFromIds(ids: string[], boardList: BoardOption[]): BoardLink[] {
+  return ids.map((id) => {
+    const name = boardList.find((b) => b.id === id)?.name ?? "";
+    return {
+      board_id: id,
+      mention_count: 1,
+      boards: { id, name },
+    };
+  });
+}
+
+function apiKpToWithBoards(kp: {
+  id?: string;
+  content?: string;
+  increment_count?: number;
+  board_names?: string[];
+  board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+}): KeyPointWithBoards {
+  return {
+    id: kp.id,
+    content: kp.content ?? "",
+    incrementCount: Math.max(0, Number(kp.increment_count ?? 0)),
+    boardNames: Array.isArray(kp.board_names) ? kp.board_names.filter(Boolean) : [],
+    boardLinks: Array.isArray(kp.board_links)
+      ? kp.board_links
+          .filter((l) => l?.name?.trim())
+          .map((l) => ({
+            id: typeof l.board_id === "string" ? l.board_id : undefined,
+            name: l.name!.trim(),
+            mention_count: Number(l.mention_count ?? 1) || 1,
+          }))
+      : undefined,
+  };
+}
+
 const Suggestions = () => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +113,13 @@ const Suggestions = () => {
   const [editTarget, setEditTarget] = useState<Row | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editConceptTitle, setEditConceptTitle] = useState("");
+  const [editBoardIds, setEditBoardIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [addTarget, setAddTarget] = useState<{ conceptId: string; title: string } | null>(null);
+  const [addContent, setAddContent] = useState("");
+  const [addBoardIds, setAddBoardIds] = useState<string[]>([]);
+  const [savingAdd, setSavingAdd] = useState(false);
+  const [savingKeyPoint, setSavingKeyPoint] = useState(false);
   const [search, setSearch] = useState("");
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -265,6 +314,13 @@ const Suggestions = () => {
     setEditTarget(row);
     setEditContent(row.content);
     setEditConceptTitle((row.concepts?.title ?? "").trim());
+    setEditBoardIds(boardIdsFromLinks(row.key_point_boards));
+  };
+
+  const openAdd = (conceptId: string, title: string) => {
+    setAddTarget({ conceptId, title });
+    setAddContent("");
+    setAddBoardIds([]);
   };
 
   const openConceptDetails = async (conceptId: string, conceptTitle?: string) => {
@@ -303,14 +359,11 @@ const Suggestions = () => {
       const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(detailsConceptId)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          detail_summary: detail.summary || null,
-          detail_paragraphs: detail.paragraphs,
-          detail_table: detail.table,
-        }),
+        body: JSON.stringify(conceptDetailToSavePayload(detail)),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Save failed");
+      clearConceptCaches(detailsConceptId);
       setDetailsConceptDetail(detail);
       toast.success("Concept detail saved");
     } catch (e) {
@@ -330,10 +383,15 @@ const Suggestions = () => {
       const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(editTarget.id)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content, concept_title: conceptTitle || undefined }),
+        body: JSON.stringify({
+          content,
+          concept_title: conceptTitle || undefined,
+          board_ids: editBoardIds,
+        }),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Update failed");
+      const nextBoards = boardLinksFromIds(editBoardIds, boardList);
       setRows((prev) =>
         prev.map((row) =>
           row.id === editTarget.id
@@ -343,16 +401,232 @@ const Suggestions = () => {
                 concepts: row.concepts
                   ? { ...row.concepts, title: conceptTitle || row.concepts.title }
                   : row.concepts,
+                key_point_boards: nextBoards,
               }
             : row,
         ),
       );
+      if (detailsConceptId === editTarget.concept_id) {
+        setDetailsKeyPoints((prev) =>
+          prev.map((kp) =>
+            kp.id === editTarget.id
+              ? {
+                  ...kp,
+                  content,
+                  boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
+                  boardLinks: nextBoards.map((b) => ({
+                    id: b.board_id,
+                    name: b.boards?.name ?? "",
+                    mention_count: Number(b.mention_count ?? 1) || 1,
+                  })),
+                }
+              : kp,
+          ),
+        );
+      }
       toast.success("Updated");
       setEditTarget(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
       setSavingEdit(false);
+    }
+  };
+
+  const saveAdd = async () => {
+    if (!addTarget) return;
+    const content = addContent.trim();
+    if (!content) return toast.error("Content is required");
+    setSavingAdd(true);
+    try {
+      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, board_ids: addBoardIds }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        key_point?: {
+          id?: string;
+          content?: string;
+          increment_count?: number;
+          board_names?: string[];
+          board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+        };
+      };
+      if (!r.ok) throw new Error(j.error ?? "Add failed");
+      const created = j.key_point;
+      const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
+      const nextBoards = boardLinksFromIds(addBoardIds, boardList);
+      const template = rows.find((r) => r.concept_id === addTarget.conceptId);
+      setRows((prev) => [
+        {
+          id: newId,
+          content: created?.content ?? content,
+          language: "mixed",
+          increment_count: Number(created?.increment_count ?? 0),
+          concept_id: addTarget.conceptId,
+          concepts: template?.concepts ?? {
+            title: addTarget.title,
+            subject: null,
+            system: null,
+            chapter: null,
+            topic: null,
+          },
+          key_point_boards: nextBoards,
+        },
+        ...prev,
+      ]);
+      if (detailsConceptId === addTarget.conceptId) {
+        setDetailsKeyPoints((prev) => [
+          ...prev,
+          {
+            ...apiKpToWithBoards({ ...created, content, id: newId }),
+            boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
+            boardLinks: nextBoards.map((b) => ({
+              id: b.board_id,
+              name: b.boards?.name ?? "",
+              mention_count: Number(b.mention_count ?? 1) || 1,
+            })),
+          },
+        ]);
+      }
+      toast.success("Key point added");
+      setAddTarget(null);
+      setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Add failed");
+    } finally {
+      setSavingAdd(false);
+    }
+  };
+
+  const saveDetailsKeyPoint = async (payload: KeyPointSavePayload) => {
+    if (!payload.id) {
+      toast.error("Key point id missing");
+      return;
+    }
+    setSavingKeyPoint(true);
+    try {
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(payload.id)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: payload.content, board_ids: payload.boardIds }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Update failed");
+      const nextBoards = boardLinksFromIds(payload.boardIds, boardList);
+      setRows((prev) =>
+        prev.map((row) =>
+          row.id === payload.id
+            ? { ...row, content: payload.content, key_point_boards: nextBoards }
+            : row,
+        ),
+      );
+      setDetailsKeyPoints((prev) =>
+        prev.map((kp) =>
+          kp.id === payload.id
+            ? {
+                ...kp,
+                content: payload.content,
+                boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
+                boardLinks: nextBoards.map((b) => ({
+                  id: b.board_id,
+                  name: b.boards?.name ?? "",
+                  mention_count: Number(b.mention_count ?? 1) || 1,
+                })),
+              }
+            : kp,
+        ),
+      );
+      if (detailsConceptId) clearConceptCaches(detailsConceptId);
+      toast.success("Key point updated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Update failed");
+      throw e;
+    } finally {
+      setSavingKeyPoint(false);
+    }
+  };
+
+  const addDetailsKeyPoint = async (payload: { content: string; boardIds: string[] }) => {
+    if (!detailsConceptId) return;
+    setSavingKeyPoint(true);
+    try {
+      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(detailsConceptId)}/key-points`), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: payload.content, board_ids: payload.boardIds }),
+      });
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        key_point?: {
+          id?: string;
+          content?: string;
+          increment_count?: number;
+          board_names?: string[];
+          board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+        };
+      };
+      if (!r.ok) throw new Error(j.error ?? "Add failed");
+      const created = j.key_point;
+      const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
+      const nextBoards = boardLinksFromIds(payload.boardIds, boardList);
+      const template = rows.find((row) => row.concept_id === detailsConceptId);
+      setRows((prev) => [
+        {
+          id: newId,
+          content: created?.content ?? payload.content,
+          language: "mixed",
+          increment_count: Number(created?.increment_count ?? 0),
+          concept_id: detailsConceptId,
+          concepts: template?.concepts ?? {
+            title: detailsConceptName,
+            subject: null,
+            system: null,
+            chapter: null,
+            topic: null,
+          },
+          key_point_boards: nextBoards,
+        },
+        ...prev,
+      ]);
+      setDetailsKeyPoints((prev) => [
+        ...prev,
+        {
+          ...apiKpToWithBoards({ ...created, content: payload.content, id: newId }),
+          boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
+          boardLinks: nextBoards.map((b) => ({
+            id: b.board_id,
+            name: b.boards?.name ?? "",
+            mention_count: Number(b.mention_count ?? 1) || 1,
+          })),
+        },
+      ]);
+      clearConceptCaches(detailsConceptId);
+      toast.success("Key point added");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Add failed");
+      throw e;
+    } finally {
+      setSavingKeyPoint(false);
+    }
+  };
+
+  const deleteDetailsKeyPoint = async (id: string) => {
+    setSavingKeyPoint(true);
+    try {
+      const { error } = await supabase.from("key_points").delete().eq("id", id);
+      if (error) throw new Error(error.message);
+      setRows((prev) => prev.filter((r) => r.id !== id));
+      setDetailsKeyPoints((prev) => prev.filter((kp) => kp.id !== id));
+      if (detailsConceptId) clearConceptCaches(detailsConceptId);
+      toast.success("Deleted");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+      throw e;
+    } finally {
+      setSavingKeyPoint(false);
     }
   };
 
@@ -654,6 +928,7 @@ const Suggestions = () => {
                         }
                       : undefined
                   }
+                  onAdd={adminView ? () => openAdd(g.conceptId, g.title) : undefined}
                 />
               );
             })}
@@ -693,14 +968,59 @@ const Suggestions = () => {
               <Label>Key point content</Label>
               <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={5} className="resize-y" />
             </div>
+            <div className="space-y-2">
+              <Label>Boards (optional)</Label>
+              <BoardCheckboxGroup
+                boardOptions={boardList}
+                selectedIds={editBoardIds}
+                onChange={setEditBoardIds}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
               Cancel
             </Button>
-            <Button type="button" onClick={saveEdit} disabled={savingEdit || !editContent.trim()}>
+            <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit || !editContent.trim()}>
               {savingEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(addTarget)} onOpenChange={(open) => !open && setAddTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add key point{addTarget?.title ? `: ${addTarget.title}` : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Key point content</Label>
+              <Textarea
+                value={addContent}
+                onChange={(e) => setAddContent(e.target.value)}
+                rows={5}
+                className="resize-y"
+                placeholder="New key point…"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Boards (optional)</Label>
+              <BoardCheckboxGroup
+                boardOptions={boardList}
+                selectedIds={addBoardIds}
+                onChange={setAddBoardIds}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAddTarget(null)} disabled={savingAdd}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void saveAdd()} disabled={savingAdd || !addContent.trim()}>
+              {savingAdd ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Add
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -717,6 +1037,12 @@ const Suggestions = () => {
         onDetailChange={setDetailsConceptDetail}
         onSave={saveConceptDetail}
         saving={savingConceptDetail}
+        keyPointsEditable
+        boardOptions={boardList}
+        onSaveKeyPoint={saveDetailsKeyPoint}
+        onAddKeyPoint={addDetailsKeyPoint}
+        onDeleteKeyPoint={deleteDetailsKeyPoint}
+        savingKeyPoint={savingKeyPoint}
       />
     </div>
   );

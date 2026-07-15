@@ -1,22 +1,28 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import type { ConceptDetail } from "@/lib/conceptDetail";
+import { hasConceptDetailContent } from "@/lib/conceptDetail";
+import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { BookOpen } from "lucide-react";
 
 type Props = {
   conceptName: string;
   detail: ConceptDetail;
   onOpenDetails: () => void;
+  editable?: boolean;
+  onDetailChange?: (updater: ConceptDetailUpdater) => void;
 };
 
-export function ConceptDetailCard({ conceptName, detail, onOpenDetails }: Props) {
-  const hasContent =
-    detail.summary.trim() ||
-    detail.paragraphs.length > 0 ||
-    (detail.table?.rows?.length ?? 0) > 0;
-
-  if (!hasContent) return null;
+export function ConceptDetailCard({
+  conceptName,
+  detail,
+  onOpenDetails,
+  editable = false,
+  onDetailChange,
+}: Props) {
+  if (!hasConceptDetailContent(detail)) return null;
 
   return (
     <Card className="p-4 space-y-4">
@@ -24,11 +30,22 @@ export function ConceptDetailCard({ conceptName, detail, onOpenDetails }: Props)
         <div>
           <p className="text-xs uppercase tracking-wide text-muted-foreground">Concept detail</p>
           <h2 className="text-lg font-bold text-primary mt-1">{conceptName || "Untitled concept"}</h2>
+          <p className="text-[11px] text-muted-foreground mt-1">
+            Source textbox-এর exact format preview
+          </p>
         </div>
-        <Button variant="outline" size="sm" onClick={onOpenDetails}>
-          <BookOpen className="mr-2 h-4 w-4" />
-          Concept details
-        </Button>
+        <div className="flex flex-col items-end gap-2 shrink-0">
+          <Button variant="outline" size="sm" onClick={onOpenDetails}>
+            <BookOpen className="mr-2 h-4 w-4" />
+            Concept details
+          </Button>
+          <StoryBasedLearningButton
+            detail={detail}
+            conceptName={conceptName}
+            editable={editable}
+            onDetailChange={onDetailChange}
+          />
+        </div>
       </div>
 
       <ConceptDetailBody detail={detail} showVerbatim={false} />

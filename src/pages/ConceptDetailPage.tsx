@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
+import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { toast } from "sonner";
 
@@ -80,6 +81,10 @@ export default function ConceptDetailPage() {
       </div>
 
       <Card className="mx-4 p-4 space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+          <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+        </div>
         <ConceptDetailBody detail={detail} showVerbatim />
         {keyPoints.length ? (
           <div className="space-y-2 border-t pt-4">

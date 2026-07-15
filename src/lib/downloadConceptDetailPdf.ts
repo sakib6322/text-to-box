@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { looksLikeHtml } from "@/lib/htmlContent";
+import { resolveBodyHtml } from "@/lib/conceptDetail";
 
 function sanitizeFilename(name: string): string {
   const cleaned = name
@@ -49,9 +50,16 @@ function buildConceptHtml(
   detail: ConceptDetail,
   keyPoints: string[],
 ): string {
-  const summary = richHtml(detail.summary);
-  const paragraphs = detail.paragraphs.map(richHtml).filter(Boolean);
-  const table = detail.table;
+  const body = richHtml(resolveBodyHtml(detail));
+  const hasLegacy =
+    Boolean(detail.summary.trim()) ||
+    detail.paragraphs.length > 1 ||
+    (detail.table?.rows?.length ?? 0) > 0;
+  const summary = !body || hasLegacy ? richHtml(detail.summary) : "";
+  const paragraphs =
+    !body || hasLegacy ? detail.paragraphs.map(richHtml).filter(Boolean) : [];
+  const table = !body || hasLegacy ? detail.table : null;
+  const story = richHtml(detail.storyHtml);
 
   let tableHtml = "";
   if (table?.rows?.length) {
@@ -59,7 +67,7 @@ function buildConceptHtml(
       ? table.headers
       : Array.from({ length: table.rows[0]?.cells?.length ?? 3 }, (_, i) => `Column ${i + 1}`);
     const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
-    const body = table.rows
+    const bodyRows = table.rows
       .map((row) => {
         const cells = row.cells ?? [];
         return `<tr>${headers
@@ -70,7 +78,7 @@ function buildConceptHtml(
     tableHtml = `
       <section class="block">
         ${table.title?.trim() ? `<h2>${escapeHtml(table.title.trim())}</h2>` : "<h2>Table</h2>"}
-        <table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+        <table><thead><tr>${head}</tr></thead><tbody>${bodyRows}</tbody></table>
       </section>`;
   }
 
@@ -90,6 +98,7 @@ function buildConceptHtml(
         <p class="eyebrow">Concept details</p>
         <h1>${escapeHtml(conceptName || "Untitled concept")}</h1>
       </header>
+      ${body && !hasLegacy ? `<section class="block">${body}</section>` : ""}
       ${summary ? `<section class="block summary">${summary}</section>` : ""}
       ${
         paragraphs.length
@@ -97,6 +106,7 @@ function buildConceptHtml(
           : ""
       }
       ${tableHtml}
+      ${story ? `<section class="block"><h2>Story-based learning</h2>${story}</section>` : ""}
       ${kpHtml ? `<section class="block"><h2>Key points</h2><ul>${kpHtml}</ul></section>` : ""}
       ${verbatim}
       <footer>pgdiary.cloud · ${escapeHtml(
