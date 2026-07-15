@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
+import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
@@ -38,10 +39,18 @@ import { useHeaderSearch } from "@/components/AppShellContext";
 import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
-type McqPayload = { stem?: string; trueFalse?: TfItem[] };
-type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
+type McqPayload = { stem?: string; trueFalse?: TfItem[]; boardIds?: string[] };
+type SbaPayload = {
+  stem?: string;
+  options?: string[];
+  correctIndex?: number;
+  optionExplanations?: string[];
+  boardIds?: string[];
+};
 
 type ConceptOption = { id: string; title: string | null };
+type BoardOption = { id: string; name: string };
+type QuestionBoard = { id?: string | null; name: string; mention_count?: number };
 
 type QuestionRow = {
   id: string;
@@ -55,6 +64,7 @@ type QuestionRow = {
   questionMode: "mcq" | "sba";
   marks?: number;
   metadata?: { status?: string; difficulty?: string };
+  boards?: QuestionBoard[];
   mcq?: McqPayload | null;
   sba?: SbaPayload | null;
 };
@@ -73,6 +83,7 @@ export default function AllQuestions() {
   const [editTopic, setEditTopic] = useState("");
   const [editMcqItems, setEditMcqItems] = useState<TfItem[]>([]);
   const [editSbaExplanations, setEditSbaExplanations] = useState<string[]>(["", "", "", "", ""]);
+  const [editBoardIds, setEditBoardIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
   const [type, setType] = useState("all");
@@ -83,6 +94,7 @@ export default function AllQuestions() {
   const [systems, setSystems] = useState<TaxonomyItem[]>([]);
   const [chapters, setChapters] = useState<TaxonomyItem[]>([]);
   const [topics, setTopics] = useState<TaxonomyItem[]>([]);
+  const [boardList, setBoardList] = useState<BoardOption[]>([]);
   const [filterSubject, setFilterSubject] = useState("all");
   const [filterSystem, setFilterSystem] = useState("all");
   const [filterChapter, setFilterChapter] = useState("all");
@@ -113,6 +125,23 @@ export default function AllQuestions() {
     fetchTaxonomy("subjects")
       .then(setSubjects)
       .catch(() => setSubjects([]));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(apiUrl("/api/boards"));
+        const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
+        if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
+        setBoardList(j.boards.map((b) => ({ id: b.id, name: b.name })));
+      } catch {
+        if (!cancelled) setBoardList([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -258,6 +287,9 @@ export default function AllQuestions() {
       if (i < 5) expls[i] = e ?? "";
     });
     setEditSbaExplanations(expls);
+    const fromRow = (row.boards ?? []).map((b) => b.id).filter((id): id is string => Boolean(id));
+    const fromPayload = row.mcq?.boardIds ?? row.sba?.boardIds ?? [];
+    setEditBoardIds(fromRow.length ? fromRow : fromPayload.filter(Boolean));
   };
 
   const openConceptDetails = async (row: QuestionRow) => {
@@ -325,10 +357,16 @@ export default function AllQuestions() {
           marks: editTarget.marks,
           question_mode: editTarget.questionMode,
           payload,
+          board_ids: editBoardIds,
         }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.error ?? "Update failed");
+      const nextBoards = editBoardIds.map((id) => ({
+        id,
+        name: boardList.find((b) => b.id === id)?.name ?? id,
+        mention_count: 1,
+      }));
       setRows((prev) =>
         prev.map((r) =>
           r.id === editTarget.id
@@ -339,13 +377,24 @@ export default function AllQuestions() {
                 system: editSystem.trim(),
                 chapter: editChapter.trim(),
                 topic: editTopic.trim(),
+                boards: nextBoards,
                 mcq:
                   r.questionMode === "mcq"
-                    ? { ...(r.mcq ?? {}), stem: editStem, trueFalse: editMcqItems }
+                    ? {
+                        ...(r.mcq ?? {}),
+                        stem: editStem,
+                        trueFalse: editMcqItems,
+                        boardIds: editBoardIds,
+                      }
                     : null,
                 sba:
                   r.questionMode === "sba"
-                    ? { ...(r.sba ?? {}), stem: editStem, optionExplanations: editSbaExplanations }
+                    ? {
+                        ...(r.sba ?? {}),
+                        stem: editStem,
+                        optionExplanations: editSbaExplanations,
+                        boardIds: editBoardIds,
+                      }
                     : null,
               }
             : r,
@@ -532,6 +581,7 @@ export default function AllQuestions() {
                 topic={r.topic}
                 concept={r.concept}
                 marks={r.marks}
+                boards={r.boards}
                 mcq={r.mcq}
                 sba={r.sba}
               />
@@ -667,6 +717,14 @@ export default function AllQuestions() {
                 })}
               </div>
             ) : null}
+            <div className="space-y-2 border-t pt-3">
+              <Label>Boards (optional)</Label>
+              <BoardCheckboxGroup
+                boardOptions={boardList}
+                selectedIds={editBoardIds}
+                onChange={setEditBoardIds}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>

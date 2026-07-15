@@ -23,6 +23,7 @@ export function RichHtmlContent({ content, className, as: Tag = "div" }: Props) 
           "[&_em]:italic [&_i]:italic",
           "[&_img]:max-w-full [&_img]:h-auto [&_img]:rounded-md [&_img]:my-2",
           "[&_figure]:my-3 [&_figcaption]:text-xs [&_figcaption]:text-muted-foreground",
+          "[&_span]:align-baseline",
           className,
         )}
         dangerouslySetInnerHTML={{ __html: content }}

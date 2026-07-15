@@ -16,6 +16,8 @@ function MiniBar({ pct, variant }: { pct: number; variant: "correct" | "wrong" |
   );
 }
 
+type QuestionBoard = { id?: string | null; name: string; mention_count?: number };
+
 type Props = {
   questionMode: "mcq" | "sba";
   subject: string;
@@ -24,6 +26,7 @@ type Props = {
   topic: string;
   concept?: string;
   marks?: number;
+  boards?: QuestionBoard[];
   mcq?: McqPayload | null;
   sba?: SbaPayload | null;
   index?: number;
@@ -43,6 +46,7 @@ export function QuestionPaperCard({
   topic,
   concept,
   marks,
+  boards = [],
   mcq,
   sba,
   index,
@@ -61,6 +65,7 @@ export function QuestionPaperCard({
 
   const mcqHasExplanations = (mcq?.trueFalse ?? []).some((item) => (item.explanation ?? "").trim());
   const sbaHasExplanations = (sba?.optionExplanations ?? []).some((e) => (e ?? "").trim());
+  const boardList = boards.filter((b) => (b.name ?? "").trim());
 
   return (
     <article className="question-paper bg-white text-neutral-900 border border-neutral-300 shadow-sm rounded-sm p-5 sm:p-6 print:shadow-none print:border-neutral-400">
@@ -71,6 +76,19 @@ export function QuestionPaperCard({
           ) : null}
           {taxonomy ? <p className="text-[10px] leading-snug text-neutral-600">{taxonomy}</p> : null}
           {concept ? <p className="text-[11px] font-semibold text-neutral-800">{concept}</p> : null}
+          {boardList.length ? (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {boardList.map((b) => (
+                <Badge
+                  key={`${b.id ?? b.name}`}
+                  variant="outline"
+                  className="text-[9px] font-normal text-red-600 border-red-300 bg-red-50"
+                >
+                  {b.name}
+                </Badge>
+              ))}
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant="outline" className="text-[9px] font-normal uppercase tracking-wide px-1.5 py-0">

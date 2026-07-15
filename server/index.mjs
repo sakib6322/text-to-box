@@ -273,17 +273,64 @@ async function enrichKeyPointsWithBoards(db, _conceptId, keyPoints) {
 async function enrichQuestionsWithBoards(db, rows) {
   const pointIds = [...new Set((rows ?? []).map((q) => q.sourcePointId).filter(Boolean))];
   const boardsByKp = await fetchBoardsByKeyPointIds(db, pointIds);
+
+  const payloadBoardIds = [
+    ...new Set(
+      (rows ?? [])
+        .flatMap((q) => {
+          const payload =
+            q.questionMode === "mcq" ? q.mcq : q.questionMode === "sba" ? q.sba : q.payload;
+          return Array.isArray(payload?.boardIds) ? payload.boardIds : [];
+        })
+        .filter((id) => typeof id === "string" && id.trim())
+        .map((id) => id.trim()),
+    ),
+  ];
+
+  let boardsById = new Map();
+  if (payloadBoardIds.length) {
+    const { data: boardRows } = await db.from("boards").select("id, name").in("id", payloadBoardIds);
+    boardsById = new Map((boardRows ?? []).map((b) => [b.id, b.name]));
+  }
+
   return (rows ?? []).map((q) => {
-    const links = q.sourcePointId ? boardsByKp.get(q.sourcePointId) ?? [] : [];
-    return {
-      ...q,
-      boards: links.map((l) => ({
-        id: l.board_id,
-        name: l.name,
-        mention_count: l.mention_count,
-      })),
-    };
+    const payload = q.questionMode === "mcq" ? q.mcq : q.questionMode === "sba" ? q.sba : q.payload;
+    const fromPayload = Array.isArray(payload?.boardIds)
+      ? payload.boardIds
+          .filter((id) => typeof id === "string" && id.trim())
+          .map((id) => ({
+            id,
+            name: boardsById.get(id) ?? id,
+            mention_count: 1,
+          }))
+      : [];
+    const fromKp = q.sourcePointId
+      ? (boardsByKp.get(q.sourcePointId) ?? []).map((l) => ({
+          id: l.board_id,
+          name: l.name,
+          mention_count: l.mention_count,
+        }))
+      : [];
+    // Prefer boards saved on the question itself; fall back to linked key-point boards.
+    const boards = fromPayload.length ? fromPayload : fromKp;
+    return { ...q, boards };
   });
+}
+
+function withBoardIdsOnPayload(payload, boardIds) {
+  const base = payload && typeof payload === "object" ? { ...payload } : {};
+  const ids = Array.isArray(boardIds)
+    ? [...new Set(boardIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))]
+    : [];
+  if (ids.length) base.boardIds = ids;
+  else delete base.boardIds;
+  return base;
+}
+
+function stripBoardIdsFromPayload(payload) {
+  if (!payload || typeof payload !== "object") return payload;
+  const { boardIds: _ignored, ...rest } = payload;
+  return rest;
 }
 
 function parseGeminiJson(rawText) {
@@ -2581,7 +2628,7 @@ app.post("/api/save-question", async (req, res) => {
       source_point_id: q.sourcePointId,
       question_mode: q.questionMode,
       stem: q.questionMode === "mcq" ? q.mcq?.stem ?? "" : q.sba?.stem ?? "",
-      payload: q.questionMode === "mcq" ? q.mcq : q.sba,
+      payload: withBoardIdsOnPayload(q.questionMode === "mcq" ? q.mcq : q.sba, q.boardIds),
       embedding: q.embedding,
       explanation_embedding: q.explanationEmbedding,
       status: q.metadata?.status ?? "published",
@@ -2727,13 +2774,31 @@ app.patch("/api/questions/:id", async (req, res) => {
     }
 
     if (payload) {
-      patch.payload = stem ? { ...payload, stem } : payload;
+      const hasBoardIds = Object.prototype.hasOwnProperty.call(body, "board_ids");
+      const nextPayload = hasBoardIds
+        ? withBoardIdsOnPayload(payload, Array.isArray(body.board_ids) ? body.board_ids : [])
+        : payload;
+      patch.payload = stem ? { ...nextPayload, stem } : nextPayload;
       const mode = questionMode === "mcq" || questionMode === "sba" ? questionMode : null;
       if (mode) {
-        const mcq = mode === "mcq" ? patch.payload : null;
-        const sba = mode === "sba" ? patch.payload : null;
+        const clean = stripBoardIdsFromPayload(patch.payload);
+        const mcq = mode === "mcq" ? clean : null;
+        const sba = mode === "sba" ? clean : null;
         patch.explanation_embedding = await embedExplanationRotating(db, mode, mcq, sba);
       }
+    } else if (Object.prototype.hasOwnProperty.call(body, "board_ids")) {
+      const { data: existing, error: loadErr } = await db
+        .from("questions")
+        .select("payload, question_mode, stem")
+        .eq("id", id)
+        .maybeSingle();
+      if (loadErr) return res.status(500).json({ error: loadErr.message });
+      if (!existing) return res.status(404).json({ error: "Question not found" });
+      const current =
+        existing.payload && typeof existing.payload === "object"
+          ? existing.payload
+          : { stem: existing.stem };
+      patch.payload = withBoardIdsOnPayload(current, Array.isArray(body.board_ids) ? body.board_ids : []);
     }
 
     if (Object.keys(patch).length === 0) return res.status(400).json({ error: "Nothing to update" });
@@ -2775,6 +2840,8 @@ function computeScheduledEnd(scheduledStart, durationMinutes, scheduledEnd) {
 
 function formatQuestionRow(q) {
   const mode = q.question_mode;
+  const payload = q.payload && typeof q.payload === "object" ? q.payload : {};
+  const boardIds = Array.isArray(payload.boardIds) ? payload.boardIds.filter((id) => typeof id === "string") : [];
   return {
     id: q.id,
     sourcePointId: q.source_point_id ?? null,
@@ -2786,8 +2853,9 @@ function formatQuestionRow(q) {
     concept: q.concept ?? "",
     marks: Number(q.marks ?? 1),
     metadata: { status: q.status ?? "", difficulty: q.difficulty ?? "" },
-    mcq: mode === "mcq" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
-    sba: mode === "sba" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+    boardIds,
+    mcq: mode === "mcq" ? payload : null,
+    sba: mode === "sba" ? payload : null,
   };
 }
 
