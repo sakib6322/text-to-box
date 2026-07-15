@@ -23,8 +23,15 @@ import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { ConceptPickerDialog, ConceptSelectButton } from "@/components/ConceptPickerDialog";
 import { SuggestionMatchPanel } from "@/components/SuggestionMatchPanel";
-import { emptyConceptDetail, fetchConceptByIdWithBoards, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import {
+  emptyConceptDetail,
+  fetchConceptByIdWithBoards,
+  fetchConceptByTitle,
+  type ConceptDetail,
+  type KeyPointWithBoards,
+} from "@/lib/conceptDetail";
 import {
   ACCEPTED_SOURCE_TYPES,
   fileFromPasteEvent,
@@ -224,6 +231,8 @@ async function fetchLegacySuggestionMatches(texts: string[]): Promise<Map<string
 
 export default function CreateQuestionAI() {
   const [conceptTitle, setConceptTitle] = useState("");
+  const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
+  const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
   const [taxonomy, setTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection());
 
   const [enableBijoyPaste, setEnableBijoyPaste] = useState(false);
@@ -320,8 +329,70 @@ export default function CreateQuestionAI() {
     return true;
   };
 
-  const applyAutofillFromExtract = (extracted: ExtractResult) => {
-    setConceptTitle(extracted.concept_name);
+  const requireSelectedConcept = () => {
+    if (!selectedConceptId) {
+      toast.error("Select an existing concept first");
+      return false;
+    }
+    return true;
+  };
+
+  const selectExistingConcept = async (concept: {
+    id: string;
+    title: string | null;
+    topic_id?: string | null;
+  }) => {
+    setSelectedConceptId(concept.id);
+    setConceptTitle((concept.title ?? "").trim());
+    const topicId = (concept.topic_id ?? "").trim();
+    if (!topicId) return;
+    try {
+      const r = await fetch(apiUrl(`/api/taxonomy/resolve/${encodeURIComponent(topicId)}`));
+      const j = (await r.json().catch(() => ({}))) as {
+        subject?: { id: string; name: string };
+        system?: { id: string; name: string };
+        chapter?: { id: string; name: string };
+        topic?: { id: string; name: string };
+      };
+      if (!r.ok) return;
+      setTaxonomy({
+        subjectId: j.subject?.id ?? "",
+        systemId: j.system?.id ?? "",
+        chapterId: j.chapter?.id ?? "",
+        topicId: j.topic?.id ?? "",
+        subjectName: j.subject?.name ?? "",
+        systemName: j.system?.name ?? "",
+        chapterName: j.chapter?.name ?? "",
+        topicName: j.topic?.name ?? "",
+      });
+    } catch {
+      // keep current taxonomy
+    }
+  };
+
+  const applyAutofillFromExtract = async (extracted: ExtractResult) => {
+    const name = (extracted.concept_name ?? "").trim();
+    if (!name) return;
+    try {
+      const loaded = await fetchConceptByTitle(name, {
+        subject: taxonomy.subjectName || undefined,
+        system: taxonomy.systemName || undefined,
+        chapter: taxonomy.chapterName || undefined,
+        topic: taxonomy.topicName || undefined,
+      });
+      if (loaded.conceptId) {
+        await selectExistingConcept({
+          id: loaded.conceptId,
+          title: loaded.conceptName || name,
+        });
+        return;
+      }
+    } catch {
+      // not found — user must pick from list
+    }
+    setSelectedConceptId(null);
+    setConceptTitle("");
+    toast.message(`Concept "${name}" not found in list — select an existing concept`);
   };
 
   const buildMetadata = (boardIds: string[] = selectedBoardIds): DraftQuestion["metadata"] => ({
@@ -622,7 +693,7 @@ export default function CreateQuestionAI() {
 
       setResult(extracted);
       void applyExtractedPoints(extracted.high_yield_points);
-      applyAutofillFromExtract(extracted);
+      await applyAutofillFromExtract(extracted);
       await applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       const questionMsg =
         extractedQuestions.length > 0
@@ -657,7 +728,6 @@ export default function CreateQuestionAI() {
       return toast.error("No match to approve. Use Save to add this as a new key point.");
     }
     if (!requireTaxonomy()) return;
-    const t = taxonomyNames();
     const text = p.text.trim();
     if (!text) return toast.error("Point text is required");
     if (queuedQuestions.length > 0) updateActiveDraftFromForm();
@@ -670,17 +740,15 @@ export default function CreateQuestionAI() {
         body: JSON.stringify({
           mode: "approve",
           matched_key_point_id: p.match.key_point_id,
-          concept: conceptTitle,
-          subject: t.subject,
-          system: t.system,
-          chapter: t.chapter,
-          topic: t.topic,
-          topic_id: t.topicId,
           question_text: text,
           board_ids: boardIds,
         }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string; point_id?: string };
+      const data = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        point_id?: string;
+        board_count_added?: number;
+      };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Approval failed");
 
       const pointId = typeof data?.point_id === "string" ? data.point_id : p.match.key_point_id;
@@ -698,9 +766,11 @@ export default function CreateQuestionAI() {
         ),
       );
       linkPointToQuestions(pointId);
+      const added = Number(data.board_count_added ?? boardIds.length);
       toast.success(
-        "Approved — linked matched key point to question(s)" +
-          (boardIds.length ? " with boards from selected question" : ""),
+        added > 0
+          ? `Approved — matched key point count +${added} (per board); no new key point created`
+          : "Approved — linked matched key point (no boards → count unchanged)",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Approval failed";
@@ -713,10 +783,9 @@ export default function CreateQuestionAI() {
     const p = points[idx];
     if (!p) return;
     if (!requireTaxonomy()) return;
-    const t = taxonomyNames();
+    if (!requireSelectedConcept()) return;
     const text = p.text.trim();
     if (!text) return toast.error("Point text is required");
-    // Boards come from the active/selected question (same as before), not per key point
     if (queuedQuestions.length > 0) updateActiveDraftFromForm();
     const boardIds = selectedBoardIds;
     setPoints((ps) => ps.map((x, i) => (i === idx ? { ...x, saving: true, saveError: null } : x)));
@@ -726,14 +795,8 @@ export default function CreateQuestionAI() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "save",
-          // Never pass matched id on save — boards must only attach to the newly created KP
           matched_key_point_id: null,
-          concept: conceptTitle,
-          subject: t.subject,
-          system: t.system,
-          chapter: t.chapter,
-          topic: t.topic,
-          topic_id: t.topicId,
+          concept_id: selectedConceptId,
           question_text: text,
           board_ids: boardIds,
         }),
@@ -742,6 +805,7 @@ export default function CreateQuestionAI() {
         error?: string;
         created_new_point?: boolean;
         point_id?: string;
+        board_count_added?: number;
       };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
 
@@ -760,12 +824,12 @@ export default function CreateQuestionAI() {
         ),
       );
 
-
       linkPointToQuestions(pointId);
+      const added = Number(data.board_count_added ?? boardIds.length);
       toast.success(
-        "Saved new key point to database" +
-          (boardIds.length ? " with boards from selected question" : "") +
-          " and linked to question(s)",
+        added > 0
+          ? `Saved new key point under selected concept (count ${added})`
+          : "Saved new key point under selected concept (count 0 — no boards)",
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Save failed";
@@ -814,7 +878,6 @@ export default function CreateQuestionAI() {
     const q = index === activeQuestionIndex ? buildCurrentDraftFromForm() : queuedQuestions[index];
     if (!q?.match?.key_point_id) return false;
     if (!requireTaxonomy()) return false;
-    const t = taxonomyNames();
     const stem = questionStem(q);
     if (!stem) {
       if (!options?.quiet) toast.error("Question stem is required to approve match");
@@ -827,23 +890,22 @@ export default function CreateQuestionAI() {
       ),
     );
     try {
+      const boardIds = q.boardIds ?? [];
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "approve",
           matched_key_point_id: q.match!.key_point_id,
-          concept: q.concept || conceptTitle,
-          subject: t.subject,
-          system: t.system,
-          chapter: t.chapter,
-          topic: t.topic,
-          topic_id: t.topicId,
           question_text: stem,
-          board_ids: q.boardIds ?? [],
+          board_ids: boardIds,
         }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string; point_id?: string };
+      const data = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        point_id?: string;
+        board_count_added?: number;
+      };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Approval failed");
 
       setQueuedQuestions((prev) =>
@@ -860,9 +922,11 @@ export default function CreateQuestionAI() {
         ),
       );
       if (!options?.quiet) {
+        const added = Number(data.board_count_added ?? boardIds.length);
         toast.success(
-          "Match approved — linked to key point" +
-            ((q.boardIds?.length ?? 0) > 0 ? " with boards" : ""),
+          added > 0
+            ? `Match approved — count +${added} on matched key point`
+            : "Match approved — linked key point (no boards)",
         );
       }
       return true;
@@ -940,6 +1004,7 @@ export default function CreateQuestionAI() {
     setExtractedQuestionSummary(null);
     setSourceText("");
     setConceptTitle("");
+    setSelectedConceptId(null);
     setTaxonomy(emptyTaxonomySelection());
   };
 
@@ -966,6 +1031,7 @@ export default function CreateQuestionAI() {
   const saveQuestion = async () => {
     if (!questionMode) return toast.error("Select a question type");
     if (!requireTaxonomy()) return;
+    if (!requireSelectedConcept()) return;
     const toSave = questionsForSave();
     setSaving(true);
     try {
@@ -1105,7 +1171,15 @@ export default function CreateQuestionAI() {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Concept *</Label>
-            <Input value={conceptTitle} onChange={(e) => setConceptTitle(e.target.value)} placeholder="Concept title" />
+            <ConceptSelectButton
+              conceptTitle={conceptTitle}
+              selectedId={selectedConceptId}
+              onOpen={() => setConceptPickerOpen(true)}
+              onClear={() => {
+                setSelectedConceptId(null);
+                setConceptTitle("");
+              }}
+            />
           </div>
           <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
         </div>
@@ -1227,7 +1301,7 @@ export default function CreateQuestionAI() {
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
-                    Approve links the matched key point to selected questions and applies boards from the selected question (no new KP)
+                    Approve = matched KP-এর count বাড়ায় (board সংখ্যা অনুযায়ী) — নতুন KP তৈরি হয় না। Save = selected concept-এ নতুন KP সেভ (boards থাকলে count, না থাকলে 0)।
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -1672,6 +1746,20 @@ export default function CreateQuestionAI() {
           });
           setDeleteQuestionTarget(null);
         }}
+      />
+
+      <ConceptPickerDialog
+        open={conceptPickerOpen}
+        onOpenChange={setConceptPickerOpen}
+        selectedId={selectedConceptId}
+        filters={{
+          subject: taxonomy.subjectName || undefined,
+          system: taxonomy.systemName || undefined,
+          chapter: taxonomy.chapterName || undefined,
+          topic: taxonomy.topicName || undefined,
+          topicId: taxonomy.topicId || undefined,
+        }}
+        onSelect={(c) => void selectExistingConcept(c)}
       />
 
       <ConceptDetailsDialog

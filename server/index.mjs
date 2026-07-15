@@ -2164,8 +2164,8 @@ app.post("/api/approve-point", async (req, res) => {
       board_ids,
       mode: rawMode,
     } = req.body ?? {};
-    // approve = link existing match (increment + boards if provided, no new KP)
-    // save = always insert a new KP (+ boards on the NEW KP only; never touch matched_key_point boards)
+    // approve = bump matched KP board counts only (no new KP / no new concept)
+    // save = insert new KP under existing concept_id (count = board count, or 0)
     const mode = rawMode === "save" ? "save" : "approve";
     const boardIds = Array.isArray(board_ids) ? board_ids.filter((id) => typeof id === "string" && id.trim()) : [];
     if (typeof question_text !== "string" || !question_text.trim()) return res.status(400).json({ error: "question_text required" });
@@ -2202,78 +2202,84 @@ app.post("/api/approve-point", async (req, res) => {
         });
       }
 
-      const conceptPatch = {};
-      if (typeof subject === "string") conceptPatch.subject = subject.trim() || null;
-      if (typeof system === "string") conceptPatch.system = system.trim() || null;
-      if (typeof chapter === "string") conceptPatch.chapter = chapter.trim() || null;
-      if (typeof topic === "string") conceptPatch.topic = topic.trim() || null;
-      if (typeof topic_id === "string" && topic_id.trim()) conceptPatch.topic_id = topic_id.trim();
-      if (typeof concept === "string" && concept.trim()) conceptPatch.title = concept.trim();
-      if (Object.keys(conceptPatch).length) {
-        const { error: upErr } = await db.from("concepts").update(conceptPatch).eq("id", point.concept_id);
-        if (upErr) return res.status(500).json({ error: upErr.message });
+      // Count rises by number of boards on this suggestion (0 boards → no count change).
+      // Do not insert a new key point.
+      const bump = boardIds.length;
+      if (bump > 0) {
+        const { error: incErr } = await db
+          .from("key_points")
+          .update({ increment_count: Number(point.increment_count || 0) + bump })
+          .eq("id", point.id);
+        if (incErr) return res.status(500).json({ error: incErr.message });
+        await linkKeyPointBoards(db, point.id, boardIds);
       }
-
-      const { error: incErr } = await db
-        .from("key_points")
-        .update({ increment_count: Number(point.increment_count || 0) + 1 })
-        .eq("id", point.id);
-      if (incErr) return res.status(500).json({ error: incErr.message });
-
-      await linkKeyPointBoards(db, point.id, boardIds);
 
       return res.json({
         ok: true,
         point_id: targetId,
-        incremented: true,
+        incremented: bump > 0,
+        board_count_added: bump,
         saved_question: false,
         created_new_point: false,
         mode: "approve",
       });
     }
 
-    // mode === "save": always create a brand-new concept + key point; boards only on this new KP
-    const conceptTitle = typeof concept === "string" && concept.trim() ? concept.trim() : "Auto-added from save";
-    const { data: newConcept, error: conceptErr } = await db
-      .from("concepts")
-      .insert({
-        title: conceptTitle,
-        detected_language: "mixed",
-        subject: typeof subject === "string" ? subject.trim() || null : null,
-        system: typeof system === "string" ? system.trim() || null : null,
-        chapter: typeof chapter === "string" ? chapter.trim() || null : null,
-        topic: typeof topic === "string" ? topic.trim() || null : null,
-        topic_id: typeof topic_id === "string" && topic_id.trim() ? topic_id.trim() : null,
-        raw_extraction: {
-          source: "create-ai-save-point",
-          text: question_text.trim(),
-        },
-      })
-      .select("id")
-      .single();
-    if (conceptErr || !newConcept) return res.status(500).json({ error: conceptErr?.message ?? "Failed to create concept" });
+    // mode === "save": insert new key point under an EXISTING concept only — never create a concept.
+    const conceptId =
+      typeof req.body?.concept_id === "string" && req.body.concept_id.trim()
+        ? req.body.concept_id.trim()
+        : null;
+    if (!conceptId) {
+      return res.status(400).json({
+        error: "concept_id required — select an existing concept before saving a new key point",
+      });
+    }
 
+    const { data: existingConcept, error: conceptLoadErr } = await db
+      .from("concepts")
+      .select("id, title")
+      .eq("id", conceptId)
+      .maybeSingle();
+    if (conceptLoadErr) return res.status(500).json({ error: conceptLoadErr.message });
+    if (!existingConcept) return res.status(404).json({ error: "Selected concept not found" });
+
+    const { data: maxRow } = await db
+      .from("key_points")
+      .select("position")
+      .eq("concept_id", conceptId)
+      .order("position", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextPosition = Number(maxRow?.position ?? -1) + 1;
+
+    // Boards present → count = board count; no boards → count 0
+    const saveBump = boardIds.length;
     const emb = await embedTextRotating(db, question_text);
     const { data: newPoint, error: kpErr } = await db
       .from("key_points")
       .insert({
-        concept_id: newConcept.id,
+        concept_id: conceptId,
         content: question_text.trim(),
         language: "mixed",
-        position: 0,
-        increment_count: 1,
+        position: nextPosition,
+        increment_count: saveBump,
         embedding: toPgVector(emb),
       })
       .select("id, concept_id, increment_count")
       .single();
     if (kpErr || !newPoint) return res.status(500).json({ error: kpErr?.message ?? "Failed to save key point" });
 
-    await linkKeyPointBoards(db, newPoint.id, boardIds);
+    if (saveBump > 0) {
+      await linkKeyPointBoards(db, newPoint.id, boardIds);
+    }
 
     return res.json({
       ok: true,
       point_id: newPoint.id,
+      concept_id: conceptId,
       incremented: false,
+      board_count_added: saveBump,
       saved_question: false,
       created_new_point: true,
       mode: "save",
@@ -2590,12 +2596,7 @@ app.post("/api/save-question", async (req, res) => {
     const { data: inserted, error: qErr } = await db.from("questions").insert(questionsToInsert).select("id");
     if (qErr) return res.status(500).json({ error: qErr.message });
 
-    // On save (not approve-only): link each question's boards to its linked key point
-    for (const q of normalized) {
-      if (q.sourcePointId && q.boardIds?.length) {
-        await linkKeyPointBoards(db, q.sourcePointId, q.boardIds);
-      }
-    }
+    // Boards are linked only via approve/save key-point flows — do not bump again here.
 
     const explanationEmbeddingsSaved = normalized.filter((q) => q.explanationEmbedding != null).length;
     return res.json({
