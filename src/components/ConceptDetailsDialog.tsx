@@ -97,7 +97,7 @@ export function ConceptDetailsDialog({
       <KeyPointList keyPoints={normalizedKps} />
     </div>
   );
-
+  
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
