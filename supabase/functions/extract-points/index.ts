@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? Deno.env.get("LOVABLE_API_KEY");
     if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not configured in Edge Function secrets");
 
-    const PRIMARY_AI_MODEL = Deno.env.get("PRIMARY_AI_MODEL") ?? "gemini-2.5-pro";
+    const PRIMARY_AI_MODEL = Deno.env.get("PRIMARY_AI_MODEL") ?? "gemini-3.5-flash";
     const { imageBase64, mimeType } = await resolveImagePayload(req);
 
     const prompt = `You are an expert Medical Professor. Analyze the uploaded medical textbook image.

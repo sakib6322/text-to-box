@@ -89,23 +89,23 @@ export default function PracticeSetup() {
   }
 
   return (
-    <div className="mx-auto max-w-lg pb-24 space-y-4">
-      <div className="sticky top-0 z-20 bg-background/95 border-b px-4 py-3 flex items-center gap-2">
+    <div className="mx-auto w-full max-w-lg space-y-4 px-0 pb-24 md:max-w-3xl md:px-2 lg:max-w-5xl">
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3 md:px-2 md:py-4 md:rounded-lg">
         <Button asChild variant="ghost" size="icon">
-          <Link to="/suggestions">
+          <Link to="/my-suggestions">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground">Practice setup</p>
-          <h1 className="font-semibold text-sm truncate">{conceptName}</h1>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted-foreground md:text-sm">Practice setup</p>
+          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
         </div>
-        <Button asChild variant="outline" size="sm" className="text-xs h-8">
+        <Button asChild variant="outline" size="sm" className="h-8 text-xs">
           <Link to={`/study/${conceptId}`}>Study</Link>
         </Button>
       </div>
 
-      <Card className="mx-4 p-4 space-y-3">
+      <Card className="mx-4 space-y-3 p-4 md:mx-0 md:p-6">
         <div className="space-y-2">
           <Label className="text-xs">Practice exam title</Label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />

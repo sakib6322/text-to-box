@@ -32,7 +32,7 @@ export default function StudyProgressPage() {
             <p className="text-[10px] text-muted-foreground sm:text-xs">Study & practice report</p>
           </div>
           <Button asChild variant="outline" size="sm" className="text-xs h-8 shrink-0">
-            <Link to="/suggestions">Suggestions</Link>
+            <Link to="/my-suggestions">My Suggestions</Link>
           </Button>
         </div>
       </div>

@@ -3,7 +3,6 @@
   margin: 0 auto;
   padding: 2rem;
   text-align: center;
-  scroll-behavior: smooth;
 }
 
 .logo {
@@ -13,11 +12,12 @@
   transition: filter 300ms;
 }
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  filter: drop-shadow(0 0 2em #7076eeaa);
 }
 .logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+  filter: drop-shadow(0 0 2em #05b9ebaa);
 }
+
 
 @keyframes logo-spin {
   from {
@@ -41,3 +41,6 @@
 .read-the-docs {
   color: #888;
 }
+
+
+

@@ -19,11 +19,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
-import { KeyPointList } from "@/components/KeyPointList";
-import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
-import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
+import { fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import {
   getPracticeSessionsForConcept,
   getStudyProgress,
@@ -34,6 +32,12 @@ import {
 } from "@/lib/userProgress";
 import { apiUrl } from "@/lib/apiBase";
 import { toast } from "sonner";
+import {
+  userBottomBar,
+  userBottomBarInner,
+  userPageShell,
+  userStickyHeader,
+} from "@/lib/userShell";
 
 type QRow = {
   id: string;
@@ -56,9 +60,9 @@ export default function ConceptLearn() {
   const [loading, setLoading] = useState(true);
   const [conceptName, setConceptName] = useState("");
   const [topicName, setTopicName] = useState("");
-  const [detail, setDetail] = useState(emptyConceptDetail());
   const [keyPoints, setKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [step, setStep] = useState(0);
+  const [slideDir, setSlideDir] = useState<"forward" | "back">("forward");
   const [progressPct, setProgressPct] = useState(0);
   const [studiedIds, setStudiedIds] = useState<Set<string>>(new Set());
 
@@ -78,7 +82,6 @@ export default function ConceptLearn() {
       const data = await fetchConceptByIdWithBoards(conceptId);
       setConceptName(data.conceptName);
       setTopicName(data.taxonomy.topic);
-      setDetail(data.detail);
       setKeyPoints(data.keyPoints);
       setPracticeTitle(`${data.conceptName} — Practice ${getPracticeSessionsForConcept(conceptId).length + 1}`);
       const p = getStudyProgress(conceptId);
@@ -91,7 +94,7 @@ export default function ConceptLearn() {
       setPastSessions(getPracticeSessionsForConcept(conceptId));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Load failed");
-      navigate("/suggestions");
+      navigate("/my-suggestions");
     } finally {
       setLoading(false);
     }
@@ -132,12 +135,17 @@ export default function ConceptLearn() {
   };
 
   const currentKp = keyPoints[step];
-  const taxonomyLine = useMemo(() => detail.summary, [detail.summary]);
 
   const visibleQuestions = useMemo(() => {
     if (!conceptOnlyFilter) return questions;
     return questions.filter((q) => q.concept.trim().toLowerCase() === conceptName.trim().toLowerCase());
   }, [questions, conceptOnlyFilter, conceptName]);
+
+  const goPrev = () => {
+    if (step <= 0) return;
+    setSlideDir("back");
+    setStep((s) => Math.max(0, s - 1));
+  };
 
   const goNext = () => {
     if (!conceptId || !currentKp?.id) return;
@@ -145,8 +153,12 @@ export default function ConceptLearn() {
     const p = getStudyProgress(conceptId);
     setProgressPct(studyCompletionPct(p));
     setStudiedIds(new Set(p?.studiedKeyPointIds ?? []));
-    if (step < keyPoints.length - 1) setStep((s) => s + 1);
-    else toast.success("All key points studied!");
+    if (step < keyPoints.length - 1) {
+      setSlideDir("forward");
+      setStep((s) => s + 1);
+    } else {
+      toast.success("All key points studied!");
+    }
   };
 
   const toggleQuestion = (id: string) => {
@@ -194,101 +206,109 @@ export default function ConceptLearn() {
   }
 
   return (
-    <div className="mx-auto max-w-lg min-h-[80vh] pb-24">
-      <div className="sticky top-0 z-20 bg-background/95 border-b px-4 py-3 flex items-center gap-2">
+    <div className={userPageShell}>
+      <div className={userStickyHeader}>
         <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to="/suggestions">
+          <Link to="/my-suggestions">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground truncate">{topicName || "Concept"}</p>
-          <h1 className="font-semibold text-sm truncate">{conceptName}</h1>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-muted-foreground md:text-sm">{topicName || "Concept"}</p>
+          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="shrink-0 text-xs h-8"
+          className="h-8 shrink-0 text-xs"
           onClick={openConceptQuestions}
         >
-          <HelpCircle className="h-3 w-3 mr-1" /> Questions
+          <HelpCircle className="mr-1 h-3 w-3" /> Questions
         </Button>
-        <Button asChild variant="outline" size="sm" className="shrink-0 text-xs h-8">
+        <Button asChild variant="outline" size="sm" className="h-8 shrink-0 text-xs">
           <Link to={`/concept/${conceptId}/details`}>
-            <BookOpen className="h-3 w-3 mr-1" /> Details
+            <BookOpen className="mr-1 h-3 w-3" /> Details
           </Link>
         </Button>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="px-4 pt-4">
-        <TabsList className="grid w-full grid-cols-2 h-10">
-          <TabsTrigger value="study" className="text-xs">Study</TabsTrigger>
-          <TabsTrigger value="practice" className="text-xs">
-            <Target className="h-3 w-3 mr-1" /> Practice
+      <Tabs value={tab} onValueChange={setTab} className="px-4 pt-4 md:px-0">
+        <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
+          <TabsTrigger value="study" className="text-xs md:text-sm">Study</TabsTrigger>
+          <TabsTrigger value="practice" className="text-xs md:text-sm">
+            <Target className="mr-1 h-3 w-3" /> Practice
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="study" className="space-y-4 mt-4">
+        <TabsContent value="study" className="mt-4 space-y-5 pb-28 md:pb-4">
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Progress</span>
+            <div className="flex items-center justify-between text-xs text-muted-foreground md:text-sm">
+              <span>
+                Studied {studiedIds.size}/{keyPoints.length || 0}
+              </span>
               <span className="tabular-nums">{progressPct}%</span>
             </div>
             <Progress value={progressPct} className="h-2" />
           </div>
 
-          <Card className="p-4 space-y-3">
-            <Badge variant="outline" className="text-[10px]">
-              Key point {step + 1} / {keyPoints.length || 1}
-            </Badge>
+          <div className="mx-auto w-full max-w-2xl">
             {currentKp ? (
-              <KeyPointList keyPoints={[currentKp]} onBoardClick={openBoardQuestions} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No key points for this concept.</p>
-            )}
-          </Card>
-
-          <Card className="p-4 space-y-3">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
-              <div className="flex items-center gap-2">
-                <StoryBasedLearningButton detail={detail} conceptName={conceptName} size="sm" />
-                <Button type="button" variant="secondary" size="sm" className="h-7 text-[10px]" onClick={openConceptQuestions}>
-                  <HelpCircle className="h-3 w-3 mr-1" /> Questions
-                </Button>
-              </div>
-            </div>
-            <ConceptDetailBody detail={detail} showVerbatim={false} />
-            {taxonomyLine ? <p className="text-xs text-muted-foreground border-t pt-2">{taxonomyLine}</p> : null}
-          </Card>
-
-          {keyPoints.length > 1 ? (
-            <Card className="p-3">
-              <p className="text-xs font-medium mb-2">All key points</p>
-              <KeyPointList
-                keyPoints={keyPoints}
-                compact
-                studiedIds={studiedIds}
-                currentId={currentKp?.id}
+              <KeyPointStudySlide
+                key={`${currentKp.id ?? step}-${step}-${slideDir}`}
+                keyPoint={currentKp}
+                index={step}
+                total={keyPoints.length}
+                direction={slideDir}
                 onBoardClick={openBoardQuestions}
               />
-            </Card>
+            ) : (
+              <Card className="p-6 text-center text-sm text-muted-foreground">No key points for this concept.</Card>
+            )}
+          </div>
+
+          {keyPoints.length > 1 ? (
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              {keyPoints.map((kp, i) => {
+                const done = kp.id ? studiedIds.has(kp.id) : false;
+                const active = i === step;
+                return (
+                  <button
+                    key={kp.id ?? i}
+                    type="button"
+                    aria-label={`Go to key point ${i + 1}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      active ? "w-6 bg-primary" : done ? "w-2 bg-primary/50" : "w-2 bg-muted-foreground/25"
+                    }`}
+                    onClick={() => {
+                      setSlideDir(i >= step ? "forward" : "back");
+                      setStep(i);
+                    }}
+                  />
+                );
+              })}
+            </div>
           ) : null}
 
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 border-t flex gap-2 safe-area-pb max-w-lg mx-auto">
-            <Button
-              variant="outline"
-              className="flex-1"
-              disabled={step <= 0}
-              onClick={() => setStep((s) => Math.max(0, s - 1))}
-            >
-              Previous
+          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground md:text-xs">
+            <span>Swipe-style slides · Next marks as studied</span>
+            <Button asChild variant="ghost" size="sm" className="h-7 text-[10px] md:text-xs">
+              <Link to={`/concept/${conceptId}/details`}>
+                <BookOpen className="mr-1 h-3 w-3" /> Details
+              </Link>
             </Button>
-            <Button className="flex-1" onClick={goNext} disabled={!currentKp?.id}>
-              {step >= keyPoints.length - 1 ? "Complete" : "Next"}
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+          </div>
+
+          <div className={userBottomBar}>
+            <div className={userBottomBarInner}>
+              <Button variant="outline" className="flex-1" disabled={step <= 0} onClick={goPrev}>
+                Previous
+              </Button>
+              <Button className="flex-1" onClick={goNext} disabled={!currentKp?.id}>
+                {step >= keyPoints.length - 1 ? "Complete" : "Next"}
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </TabsContent>
 
@@ -375,10 +395,12 @@ export default function ConceptLearn() {
             </Card>
           ) : null}
 
-          <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 border-t safe-area-pb max-w-lg mx-auto">
-            <Button className="w-full h-12" onClick={startPractice} disabled={selected.size === 0}>
-              <Play className="mr-2 h-4 w-4" /> Start practice ({selected.size})
-            </Button>
+          <div className={userBottomBar}>
+            <div className={userBottomBarInner}>
+              <Button className="h-12 w-full" onClick={startPractice} disabled={selected.size === 0}>
+                <Play className="mr-2 h-4 w-4" /> Start practice ({selected.size})
+              </Button>
+            </div>
           </div>
         </TabsContent>
       </Tabs>

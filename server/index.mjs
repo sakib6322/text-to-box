@@ -39,6 +39,12 @@ import {
   validateSession,
   logoutSession,
 } from "./appSettings.mjs";
+import { getUiAppearance, saveUiAppearance, resetUiAppearance } from "./uiAppearance.mjs";
+import {
+  getGeminiModelSettings,
+  saveGeminiModelSettings,
+  resolveAiModels,
+} from "./geminiModels.mjs";
 import { getDefaultMatchingPrompt } from "./promptDefaults.mjs";
 
 const app = express();
@@ -622,9 +628,8 @@ async function embedExplanationRotating(db, questionMode, mcq, sba) {
   return toPgVector(emb);
 }
 
-async function scoreMatchesWithGemini(apiKey, sourceText, candidates, customPrompt) {
+async function scoreMatchesWithGemini(apiKey, sourceText, candidates, customPrompt, modelName = "gemini-3.5-flash") {
   if (!Array.isArray(candidates) || candidates.length === 0) return {};
-  const modelName = process.env.MATCH_AI_MODEL || process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
 
@@ -695,8 +700,9 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
 
-    const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
-    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
+    const models = await resolveAiModels(db);
+    const modelName = models.primary;
+    const fallbackModelName = models.fallback;
     const inputText = String(req.body?.input_text ?? "").trim();
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
@@ -840,8 +846,9 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
 
-    const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
-    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
+    const models = await resolveAiModels(db);
+    const modelName = models.primary;
+    const fallbackModelName = models.fallback;
     const inputText = String(req.body?.input_text ?? "").trim();
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
@@ -1040,8 +1047,9 @@ app.post("/api/generate-question-explanations", async (req, res) => {
       return res.status(400).json({ error: "At least one valid MCQ or SBA question with stem and options is required" });
     }
 
-    const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
-    const fallbackModelName = process.env.FALLBACK_AI_MODEL || "gemini-2.5-flash";
+    const models = await resolveAiModels(db);
+    const modelName = models.primary;
+    const fallbackModelName = models.fallback;
     const concept = typeof req.body?.concept === "string" ? req.body.concept.trim() : "";
 
     const responseSchema = {
@@ -1185,6 +1193,7 @@ app.get("/api/debug/env", async (_req, res) => {
     const db = requireSupabase(res);
     if (!db) return;
     const info = await listGeminiKeysForSettings(db);
+    const models = await resolveAiModels(db);
     const envKey = process.env.GEMINI_API_KEY || "";
     return res.json({
       hasKey: info.count > 0 || Boolean(envKey),
@@ -1192,8 +1201,9 @@ app.get("/api/debug/env", async (_req, res) => {
       keysInDb: info.count,
       keyMasked: info.keys?.[0]?.masked ?? (envKey ? maskKey(envKey) : null),
       envFallbackMasked: info.env_fallback_masked,
-      primaryModel: process.env.PRIMARY_AI_MODEL || null,
-      fallbackModel: process.env.FALLBACK_AI_MODEL || null,
+      primaryModel: models.primary,
+      fallbackModel: models.fallback,
+      matchModel: models.match,
     });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -1204,7 +1214,8 @@ app.get("/api/debug/env", async (_req, res) => {
 app.get("/api/debug/test-gemini", async (_req, res) => {
   const db = requireSupabase(res);
   if (!db) return;
-  const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+  const models = await resolveAiModels(db);
+  const modelName = models.primary;
   if (!(await hasGeminiKeys(db))) {
     return res.status(500).json({ ok: false, kind: "missing_key", message: "No Gemini API keys configured" });
   }
@@ -1250,6 +1261,41 @@ app.get("/api/settings/prompts/extract-questions", async (_req, res) => {
     const db = requireSupabase(res);
     if (!db) return;
     return res.json(await getExtractQuestionsPrompt(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.get("/api/settings/appearance", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await getUiAppearance(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.put("/api/settings/appearance", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await saveUiAppearance(db, req.body);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) || (e instanceof Error ? e.message : "Save failed") });
+  }
+});
+
+app.post("/api/settings/appearance/reset", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await resetUiAppearance(db);
+    return res.json({ ok: true, ...result });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: formatSupabaseError(e) });
@@ -1537,6 +1583,28 @@ app.get("/api/settings/gemini-keys", async (_req, res) => {
   }
 });
 
+app.get("/api/settings/gemini-models", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await getGeminiModelSettings(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.put("/api/settings/gemini-models", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const result = await saveGeminiModelSettings(db, req.body ?? {});
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Save failed" });
+  }
+});
 
 app.put("/api/settings/gemini-keys", async (req, res) => {
   try {
@@ -2346,6 +2414,7 @@ app.post("/api/match-key-points", async (req, res) => {
     const useVector = matchingConfig.vector_enabled;
     const useAi = matchingConfig.ai_enabled;
     const matchingPrompt = matchingConfig.prompt;
+    const models = await resolveAiModels(db);
 
     if (!useVector && !useAi) {
       return res.status(400).json({
@@ -2410,7 +2479,7 @@ app.post("/api/match-key-points", async (req, res) => {
       if (useAi) {
         try {
           aiScoreById = await withGeminiKeyRotation(db, (key) =>
-            scoreMatchesWithGemini(key, text, enrichedMatches.slice(0, 5), matchingPrompt),
+            scoreMatchesWithGemini(key, text, enrichedMatches.slice(0, 5), matchingPrompt, models.match),
           );
         } catch (err) {
           console.error("Gemini match scoring failed, using vector similarity fallback", err);

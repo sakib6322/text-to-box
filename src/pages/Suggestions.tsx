@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,7 +105,7 @@ function apiKpToWithBoards(kp: {
   };
 }
 
-const Suggestions = () => {
+const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState<string | null>(null);
@@ -710,8 +710,12 @@ const Suggestions = () => {
     boardFilter !== "all" ||
     conceptFilter !== "all";
 
-  const adminView = isAdmin();
-  const homeLink = adminView ? "/" : "/study/progress";
+  const adminView = mode === "admin";
+  const homeLink = isAdmin() ? "/" : "/study/progress";
+
+  if (adminView && !isAdmin()) {
+    return <Navigate to="/my-suggestions" replace />;
+  }
 
   return (
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
@@ -723,7 +727,9 @@ const Suggestions = () => {
             </Link>
           </Button>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Suggestions</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-balance page-title">
+              {adminView ? "Suggestions" : "My Suggestions"}
+            </h1>
             <p className="text-muted-foreground mt-1">
               {adminView
                 ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."

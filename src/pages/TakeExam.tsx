@@ -137,7 +137,7 @@ export default function TakeExam() {
   }
 
   return (
-    <div className="mx-auto max-w-lg pb-28">
+    <div className="mx-auto w-full max-w-lg pb-28 md:max-w-3xl md:px-2 lg:max-w-4xl">
       <div className="sticky top-0 z-30 bg-background/95 border-b px-4 py-3 space-y-3">
         <div className="flex items-center gap-3">
           <Button asChild variant="ghost" size="icon">

@@ -51,12 +51,12 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
       {hasTable && table ? (
         <div className="space-y-2">
           {table.title ? <p className="font-semibold">{table.title}</p> : null}
-          <div className="rounded-md border overflow-x-auto">
-            <Table className="table-fixed w-full border-collapse concept-detail-table">
+          <div className="overflow-x-auto">
+            <Table className="concept-detail-table table-fixed w-full border-collapse text-xs">
               <TableHeader>
-                <TableRow className="bg-amber-100/80 hover:bg-amber-100/80">
+                <TableRow className="hover:bg-transparent">
                   {headers.map((h, i) => (
-                    <TableHead key={i} className="text-foreground font-semibold h-auto px-1.5 py-1.5">
+                    <TableHead key={i} className="h-auto px-2 py-2 text-left font-bold text-slate-800">
                       {h}
                     </TableHead>
                   ))}
@@ -64,9 +64,9 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
               </TableHeader>
               <TableBody>
                 {(table.rows ?? []).map((row, ri) => (
-                  <TableRow key={ri}>
+                  <TableRow key={ri} className="hover:bg-transparent">
                     {headers.map((_, ci) => (
-                      <TableCell key={ci} className="align-top px-1.5 py-1 whitespace-normal">
+                      <TableCell key={ci} className="whitespace-normal px-2 py-2 align-top">
                         <RichHtmlContent content={row.cells?.[ci] ?? ""} className="text-xs" />
                       </TableCell>
                     ))}
@@ -113,12 +113,12 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
   const unifiedBody = resolveBodyHtml(detail).trim();
   if (unifiedBody && !hasLegacyStructuredContent(detail)) {
     return (
-      <div className="space-y-4 text-sm leading-relaxed">
+      <div className="concept-detail-rich space-y-4 text-sm leading-relaxed">
         <RichHtmlContent content={unifiedBody} />
         {showVerbatim && detail.verbatimText ? (
-          <div className="space-y-2 pt-2 border-t">
+          <div className="space-y-2 border-t pt-2">
             <p className="font-semibold text-muted-foreground">Verbatim source</p>
-            <p className="text-muted-foreground whitespace-pre-wrap">{detail.verbatimText}</p>
+            <p className="whitespace-pre-wrap text-muted-foreground">{detail.verbatimText}</p>
           </div>
         ) : null}
       </div>

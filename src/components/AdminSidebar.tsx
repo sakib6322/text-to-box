@@ -42,13 +42,14 @@ type NavItem = {
 
 const userItems: NavItem[] = [
   { label: "My progress", to: "/study/progress", icon: BarChart3 },
-  { label: "Suggestions", to: "/suggestions", icon: Target },
+  { label: "My Suggestions", to: "/my-suggestions", icon: Target },
   { label: "My exams", to: "/my-exams", icon: FileCheck },
 ];
 
 const adminUserItems: NavItem[] = [
   { label: "Home", to: "/", icon: School },
   { label: "Suggestions", to: "/suggestions", icon: Target },
+  { label: "My Suggestions", to: "/my-suggestions", icon: Target },
   { label: "My progress", to: "/study/progress", icon: BarChart3 },
   { label: "My exams", to: "/my-exams", icon: FileCheck },
 ];
@@ -74,7 +75,14 @@ const adminItems: NavItem[] = [
   { label: "Student", to: "/admin/students", icon: GraduationCap },
   { label: "Teacher", to: "/admin/teachers", icon: Users },
   { label: "Organization", to: "/admin/organization", icon: Bell },
-  { label: "Settings", to: "/admin/settings", icon: Settings },
+  {
+    label: "Settings",
+    icon: Settings,
+    children: [
+      { label: "General", to: "/admin/settings" },
+      { label: "Appearance", to: "/admin/settings/appearance" },
+    ],
+  },
 ];
 
 const items: NavItem[] = [...adminUserItems, ...adminItems];

@@ -64,7 +64,7 @@ export default function ExamResult() {
   const wrongCount = questions.length - correctCount;
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-8">
+    <div className="mx-auto w-full max-w-lg space-y-4 px-0 pb-8 md:max-w-3xl md:px-2 lg:max-w-4xl">
       <div className="flex items-center gap-3 px-1">
         <Button asChild variant="ghost" size="icon">
           <Link to="/my-exams">

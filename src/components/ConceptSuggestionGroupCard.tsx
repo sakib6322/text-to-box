@@ -101,7 +101,7 @@ export function ConceptSuggestionGroupCard({
                 </Button>
               ) : null}
               <Button asChild variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none">
-                <Link to={`/concept/${group.conceptId}/learn`}>
+                <Link to={`/concept/${group.conceptId}/details`}>
                   <GraduationCap className="mr-1 h-3.5 w-3.5" />
                   Study & Practice
                 </Link>
@@ -110,7 +110,7 @@ export function ConceptSuggestionGroupCard({
           ) : (
             <>
               <Button asChild size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
-                <Link to={`/concept/${group.conceptId}/learn`}>
+                <Link to={`/concept/${group.conceptId}/details`}>
                   <GraduationCap className="mr-1.5 h-4 w-4" />
                   Study & Practice
                 </Link>

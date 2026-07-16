@@ -615,7 +615,8 @@ export default function CreateQuestionAI() {
     if (f) onPickImage(f);
   };
 
-  const applyExtractedPoints = async (texts: string[]) => {
+  const applyExtractedPoints = async (texts: string[], options?: { skipMatching?: boolean }) => {
+    const skipMatching = options?.skipMatching === true;
     const initial: ApprovedPoint[] = texts.map((text) => ({
       point_id: mkId(),
       text,
@@ -624,9 +625,11 @@ export default function CreateQuestionAI() {
       approveError: null,
       saveError: null,
       match: null,
-      matching: true,
+      matching: !skipMatching,
     }));
     setPoints(initial);
+
+    if (skipMatching) return;
 
     try {
       const bestByText = await fetchLegacySuggestionMatches(texts);
@@ -642,7 +645,8 @@ export default function CreateQuestionAI() {
     }
   };
 
-  const handleExtract = async () => {
+  const handleExtract = async (options?: { skipMatching?: boolean }) => {
+    const skipMatching = options?.skipMatching === true;
     if (!imageFile && !sourceText.trim()) return toast.error("Please upload image or paste text");
     setExtracting(true);
     setExtractedQuestionSummary(null);
@@ -692,14 +696,15 @@ export default function CreateQuestionAI() {
         : [];
 
       setResult(extracted);
-      void applyExtractedPoints(extracted.high_yield_points);
+      void applyExtractedPoints(extracted.high_yield_points, { skipMatching });
       await applyAutofillFromExtract(extracted);
       await applyExtractedQuestions(extractedQuestions, extracted.concept_name);
       const questionMsg =
         extractedQuestions.length > 0
           ? ` · ${extractedQuestions.length} question${extractedQuestions.length > 1 ? "s" : ""} (verbatim MCQ/SBA)`
           : "";
-      toast.success(`Extracted ${extracted.high_yield_points.length} points${questionMsg}`);
+      const matchMsg = skipMatching ? " (no key-point matching)" : "";
+      toast.success(`Extracted ${extracted.high_yield_points.length} points${questionMsg}${matchMsg}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Extraction failed");
     } finally {
@@ -1236,10 +1241,19 @@ export default function CreateQuestionAI() {
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={handleExtract} disabled={(!imageFile && !sourceText.trim()) || extracting} type="button">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <Button onClick={() => void handleExtract()} disabled={(!imageFile && !sourceText.trim()) || extracting} type="button">
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {extracting ? "Extracting…" : "Extract concept"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleExtract({ skipMatching: true })}
+              disabled={(!imageFile && !sourceText.trim()) || extracting}
+              type="button"
+            >
+              {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {extracting ? "Extracting…" : "Extract concept without matching"}
             </Button>
           </div>
         </div>

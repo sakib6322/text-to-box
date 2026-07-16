@@ -222,7 +222,7 @@ export function ConceptQuestionsPanel({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg sm:max-w-xl max-h-[85vh] overflow-hidden flex flex-col">
+      <DialogContent className="flex max-h-[85vh] max-w-lg flex-col overflow-hidden sm:max-w-2xl lg:max-w-3xl">
         <DialogHeader className="space-y-2">
           <DialogTitle className="text-base pr-6 leading-snug">{heading}</DialogTitle>
           {boardId && conceptName && onClearBoardFilter ? (

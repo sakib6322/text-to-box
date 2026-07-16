@@ -121,6 +121,7 @@ export default function AllQuestions() {
   useHeaderSearch(headerSearch);
   const filtersVisible = useScrollUpVisible() && !searchFocused;
 
+  
   useEffect(() => {
     fetchTaxonomy("subjects")
       .then(setSubjects)

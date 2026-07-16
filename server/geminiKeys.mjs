@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { resolveAiModels } from "./geminiModels.mjs";
 
 export function maskKey(k) {
   const s = String(k ?? "");
@@ -225,8 +226,7 @@ export async function deleteGeminiKey(db, id) {
   return { ok: true };
 }
 
-async function runKeyTest(apiKey) {
-  const modelName = process.env.PRIMARY_AI_MODEL || "gemini-2.5-pro";
+async function runKeyTest(apiKey, modelName = "gemini-3.5-flash") {
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: modelName });
   const result = await model.generateContent({
@@ -254,7 +254,8 @@ export async function testGeminiKeyById(db, id) {
   if (!data?.api_key) throw new Error("Key not found");
 
   try {
-    const snippet = await runKeyTest(data.api_key);
+    const models = await resolveAiModels(db);
+    const snippet = await runKeyTest(data.api_key, models.primary);
     const now = new Date().toISOString();
     await setKeyStatus(db, keyId, "active", {
       last_success_at: now,
@@ -264,7 +265,13 @@ export async function testGeminiKeyById(db, id) {
       error_count: 0,
     });
     invalidateKeyCache();
-    return { ok: true, status: "active", masked: maskKey(data.api_key), snippet: snippet.slice(0, 120) };
+    return {
+      ok: true,
+      status: "active",
+      masked: maskKey(data.api_key),
+      model: models.primary,
+      snippet: snippet.slice(0, 120),
+    };
   } catch (err) {
     const { status, message } = classifyError(err);
     const now = new Date().toISOString();

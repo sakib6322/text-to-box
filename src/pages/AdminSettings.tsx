@@ -114,6 +114,7 @@ function TaxonomySection({
     }
   };
 
+  
   const openEdit = (item: TaxonomyItem) => {
     setEditTarget({ id: item.id, name: item.name });
     setEditName(item.name);
@@ -422,6 +423,9 @@ export default function AdminSettings() {
           <ChevronRight className="h-4 w-4" />
           <span className="text-foreground">Settings</span>
         </div>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/admin/settings/appearance">Appearance · UI Master</Link>
+        </Button>
         <Button asChild variant="outline" size="sm">
           <Link to="/admin/question-bank/create-ai">Create Question (AI)</Link>
         </Button>

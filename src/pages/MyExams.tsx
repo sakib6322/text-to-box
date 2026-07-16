@@ -18,9 +18,9 @@ import { ExamTimeline } from "@/components/ExamTimeline";
 import { useAppShell, useHeaderSearch } from "@/components/AppShellContext";
 
 const liveColors: Record<string, string> = {
-  scheduled: "bg-blue-500/15 text-blue-700",
-  active: "bg-emerald-500/15 text-emerald-700",
-  completed: "bg-muted text-muted-foreground",
+  scheduled: "bg-blue-600 text-white hover:bg-blue-600",
+  active: "bg-emerald-600 text-white hover:bg-emerald-600",
+  completed: "bg-slate-600 text-white hover:bg-slate-600",
 };
 
 export default function MyExams() {
@@ -88,10 +88,10 @@ export default function MyExams() {
   };
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 pb-8">
-      <div className="px-1">
-        <h1 className="page-title-static text-xl">My exams</h1>
-        <p className="text-xs text-muted-foreground mt-0.5">Schedule অনুযায়ী exam · Attend · Result review</p>
+    <div className="mx-auto w-full max-w-lg space-y-4 px-0 pb-8 md:max-w-3xl md:px-2 lg:max-w-5xl">
+      <div className="px-4 md:px-1">
+        <h1 className="page-title-static text-xl md:text-2xl">My exams</h1>
+        <p className="mt-0.5 text-xs text-muted-foreground md:text-sm">Schedule অনুযায়ী exam · Attend · Result review</p>
       </div>
 
       {loading ? (
@@ -120,7 +120,7 @@ export default function MyExams() {
                 <div className="p-4 space-y-3">
                   <div className="flex items-start justify-between gap-2">
                     <h2 className="font-semibold leading-snug">{exam.title}</h2>
-                    <Badge className={liveColors[live] ?? "bg-muted"}>{live}</Badge>
+                    <Badge className={liveColors[live] ?? "bg-slate-600 text-white hover:bg-slate-600"}>{live}</Badge>
                   </div>
 
                   <ExamTimeline

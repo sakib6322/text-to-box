@@ -153,7 +153,8 @@ const Index = () => {
     }
   };
 
-  const handleExtract = async () => {
+  const handleExtract = async (options?: { skipMatching?: boolean }) => {
+    const skipMatching = options?.skipMatching === true;
     if (!imageFile && isHtmlEmpty(sourceText)) {
       return toast.error("Upload an image or paste source text");
     }
@@ -186,15 +187,20 @@ const Index = () => {
         }),
       );
 
-      const lines = buildSuggestionLines(
-        null,
-        extractedPoints.map((p) => p.content),
-      );
-      await runSuggestionMatch(lines);
-
-      toast.success(
-        `Extracted concept · ${extractedPoints.length} key points · ${lines.length} suggestion line(s)`,
-      );
+      if (skipMatching) {
+        setSuggestionLines([]);
+        setSuggestionMatches(new Map());
+        toast.success(`Extracted concept · ${extractedPoints.length} key points (no suggestion matching)`);
+      } else {
+        const lines = buildSuggestionLines(
+          null,
+          extractedPoints.map((p) => p.content),
+        );
+        await runSuggestionMatch(lines);
+        toast.success(
+          `Extracted concept · ${extractedPoints.length} key points · ${lines.length} suggestion line(s)`,
+        );
+      }
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "Extraction failed");
     } finally {
@@ -413,12 +419,21 @@ const Index = () => {
             </div>
 
             <Button
-              onClick={handleExtract}
+              onClick={() => void handleExtract()}
               disabled={(!imageFile && isHtmlEmpty(sourceText)) || extracting}
               className="w-full"
             >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {extracting ? "Extracting…" : "Extract Concept"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void handleExtract({ skipMatching: true })}
+              disabled={(!imageFile && isHtmlEmpty(sourceText)) || extracting}
+              className="w-full"
+            >
+              {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
+              {extracting ? "Extracting…" : "Extract Concept Without Matching"}
             </Button>
           </Card>
         </section>

@@ -6,6 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -24,6 +31,13 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
+import {
+  DEFAULT_FALLBACK_AI_MODEL,
+  DEFAULT_MATCH_AI_MODEL,
+  DEFAULT_PRIMARY_AI_MODEL,
+  GEMINI_MODEL_OPTIONS,
+  type GeminiModelOption,
+} from "@/lib/geminiModels";
 
 type KeyStatus = "active" | "idle" | "quota_exceeded" | "invalid" | "disabled" | "error";
 
@@ -49,6 +63,27 @@ type KeysResponse = {
   env_fallback_masked?: string | null;
   error?: string;
 };
+
+type ModelsResponse = {
+  primary?: string;
+  fallback?: string;
+  match?: string;
+  options?: GeminiModelOption[];
+  source?: { primary?: string; fallback?: string; match?: string };
+  error?: string;
+};
+
+function mergeModelOptions(apiOptions?: GeminiModelOption[], selectedIds: string[] = []): GeminiModelOption[] {
+  const map = new Map<string, GeminiModelOption>();
+  for (const m of GEMINI_MODEL_OPTIONS) map.set(m.id, m);
+  for (const m of apiOptions ?? []) {
+    if (m?.id) map.set(m.id, { id: m.id, label: m.label || m.id });
+  }
+  for (const id of selectedIds) {
+    if (id && !map.has(id)) map.set(id, { id, label: id });
+  }
+  return Array.from(map.values());
+}
 
 function formatWhen(iso?: string | null) {
   if (!iso) return "—";
@@ -93,7 +128,14 @@ export function GeminiKeysPanel() {
   const [testingId, setTestingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
+  const [savingModels, setSavingModels] = useState(false);
   const [saved, setSaved] = useState<KeysResponse | null>(null);
+
+  const [modelOptions, setModelOptions] = useState<GeminiModelOption[]>(GEMINI_MODEL_OPTIONS);
+  const [primaryModel, setPrimaryModel] = useState(DEFAULT_PRIMARY_AI_MODEL);
+  const [fallbackModel, setFallbackModel] = useState(DEFAULT_FALLBACK_AI_MODEL);
+  const [matchModel, setMatchModel] = useState(DEFAULT_MATCH_AI_MODEL);
+  const [modelSource, setModelSource] = useState<ModelsResponse["source"]>();
 
   const [keyCount, setKeyCount] = useState(1);
   const [keyInputs, setKeyInputs] = useState<string[]>([""]);
@@ -109,12 +151,34 @@ export function GeminiKeysPanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/gemini-keys"));
-      const j = (await r.json().catch(() => ({}))) as KeysResponse;
-      if (!r.ok) throw new Error(j.error ?? `Failed (${r.status})`);
-      setSaved(j);
+      const [keysRes, modelsRes] = await Promise.all([
+        fetch(apiUrl("/api/settings/gemini-keys")),
+        fetch(apiUrl("/api/settings/gemini-models")),
+      ]);
+      const keysJson = (await keysRes.json().catch(() => ({}))) as KeysResponse;
+      const modelsJson = (await modelsRes.json().catch(() => ({}))) as ModelsResponse;
+      if (!keysRes.ok) throw new Error(keysJson.error ?? `Failed (${keysRes.status})`);
+
+      setSaved(keysJson);
+
+      const primary = modelsJson.primary || DEFAULT_PRIMARY_AI_MODEL;
+      const fallback = modelsJson.fallback || DEFAULT_FALLBACK_AI_MODEL;
+      const match = modelsJson.match || DEFAULT_MATCH_AI_MODEL;
+      setPrimaryModel(primary);
+      setFallbackModel(fallback);
+      setMatchModel(match);
+      setModelOptions(mergeModelOptions(modelsJson.options, [primary, fallback, match]));
+      setModelSource(modelsRes.ok ? modelsJson.source : undefined);
+
+      if (!modelsRes.ok) {
+        toast.error(modelsJson.error ?? `Models load failed (${modelsRes.status}) — defaults দেখানো হচ্ছে`);
+      }
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load Gemini keys");
+      setModelOptions(GEMINI_MODEL_OPTIONS);
+      setPrimaryModel(DEFAULT_PRIMARY_AI_MODEL);
+      setFallbackModel(DEFAULT_FALLBACK_AI_MODEL);
+      setMatchModel(DEFAULT_MATCH_AI_MODEL);
+      toast.error(e instanceof Error ? e.message : "Failed to load Gemini settings");
     } finally {
       setLoading(false);
     }
@@ -123,6 +187,39 @@ export function GeminiKeysPanel() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const saveModels = async () => {
+    setSavingModels(true);
+    try {
+      const r = await fetch(apiUrl("/api/settings/gemini-models"), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          primary: primaryModel,
+          fallback: fallbackModel,
+          match: matchModel,
+        }),
+      });
+      const j = (await r.json().catch(() => ({}))) as ModelsResponse & { ok?: boolean };
+      if (!r.ok) throw new Error(j.error ?? "Model save failed");
+      if (j.primary) setPrimaryModel(j.primary);
+      if (j.fallback) setFallbackModel(j.fallback);
+      if (j.match) setMatchModel(j.match);
+      setModelOptions(
+        mergeModelOptions(j.options, [
+          j.primary || primaryModel,
+          j.fallback || fallbackModel,
+          j.match || matchModel,
+        ]),
+      );
+      setModelSource(j.source);
+      toast.success("Gemini models সেভ হয়েছে — এখন থেকে এই models ব্যবহার হবে");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Model সেভ ব্যর্থ");
+    } finally {
+      setSavingModels(false);
+    }
+  };
 
   const applyCount = () => {
     const n = Math.max(1, Math.min(20, Math.floor(Number(keyCount) || 1)));
@@ -285,6 +382,80 @@ export function GeminiKeysPanel() {
           এডিট ও ডিলিট করতে পারবেন।
         </p>
       </div>
+
+      <Card className="p-4 space-y-4">
+        <div>
+          <h4 className="text-sm font-semibold">Gemini API Models</h4>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Primary = extract / generate; Fallback = primary fail হলে; Match = key-point matching AI score।
+            সেভ করলে database-এ থাকবে এবং সার্ভার সেই model ব্যবহার করবে।
+          </p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>Primary model</Label>
+            <Select value={primaryModel} onValueChange={setPrimaryModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {modelSource?.primary ? (
+              <p className="text-xs text-muted-foreground">Source: {modelSource.primary}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Fallback model</Label>
+            <Select value={fallbackModel} onValueChange={setFallbackModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((m) => (
+                  <SelectItem key={`fb-${m.id}`} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {modelSource?.fallback ? (
+              <p className="text-xs text-muted-foreground">Source: {modelSource.fallback}</p>
+            ) : null}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Match model</Label>
+            <Select value={matchModel} onValueChange={setMatchModel}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {modelOptions.map((m) => (
+                  <SelectItem key={`match-${m.id}`} value={m.id}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {modelSource?.match ? (
+              <p className="text-xs text-muted-foreground">Source: {modelSource.match}</p>
+            ) : null}
+          </div>
+        </div>
+
+        <Button type="button" onClick={saveModels} disabled={savingModels}>
+          {savingModels ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+          Models সেভ করুন
+        </Button>
+      </Card>
 
       {saved?.source === "env_fallback" ? (
         <Card className="p-4 border-dashed bg-amber-500/5">

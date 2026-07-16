@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, HelpCircle, Loader2, Target } from "lucide-react";
+import { ArrowLeft, HelpCircle, Loader2, Play, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
@@ -8,6 +8,7 @@ import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import { userContentCard, userPageShellTight, userStickyHeader } from "@/lib/userShell";
 import { toast } from "sonner";
 
 export default function ConceptDetailPage() {
@@ -36,7 +37,7 @@ export default function ConceptDetailPage() {
       })
       .catch((e) => {
         toast.error(e instanceof Error ? e.message : "Load failed");
-        navigate("/suggestions");
+        navigate("/my-suggestions");
       })
       .finally(() => setLoading(false));
   }, [conceptId, navigate]);
@@ -50,37 +51,37 @@ export default function ConceptDetailPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg pb-8 space-y-4">
-      <div className="sticky top-0 z-20 bg-background/95 border-b px-4 py-3 flex items-center gap-2">
+    <div className={userPageShellTight}>
+      <div className={userStickyHeader}>
         <Button asChild variant="ghost" size="icon">
-          <Link to="/suggestions">
+          <Link to="/my-suggestions">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="flex-1 min-w-0">
-          <h1 className="font-semibold text-sm truncate">{conceptName}</h1>
-          {taxonomy ? <p className="text-[10px] text-muted-foreground truncate">{taxonomy}</p> : null}
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
+          {taxonomy ? <p className="truncate text-[10px] text-muted-foreground md:text-xs">{taxonomy}</p> : null}
         </div>
         <Button
           type="button"
           variant="outline"
           size="sm"
-          className="shrink-0 text-xs h-8"
+          className="h-8 shrink-0 text-xs"
           onClick={() => {
             setBoardFilter(null);
             setQuestionsOpen(true);
           }}
         >
-          <HelpCircle className="h-3 w-3 mr-1" /> Questions
+          <HelpCircle className="mr-1 h-3 w-3" /> Questions
         </Button>
-        <Button asChild size="sm" className="shrink-0 text-xs h-8">
+        <Button asChild size="sm" className="h-8 shrink-0 text-xs">
           <Link to={`/concept/${conceptId}/learn`}>
-            <Target className="h-3 w-3 mr-1" /> Study & Practice
+            <Target className="mr-1 h-3 w-3" /> Key Point Study
           </Link>
         </Button>
       </div>
 
-      <Card className="mx-4 p-4 space-y-4">
+      <Card className={userContentCard}>
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
           <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
@@ -88,7 +89,23 @@ export default function ConceptDetailPage() {
         <ConceptDetailBody detail={detail} showVerbatim />
         {keyPoints.length ? (
           <div className="space-y-2 border-t pt-4">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" className="h-8 text-xs">
+                  <Link to={`/concept/${conceptId}/learn`}>
+                    <Target className="mr-1 h-3 w-3" />
+                    Key Point Study
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+                  <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+                    <Play className="mr-1 h-3 w-3" />
+                    Practice
+                  </Link>
+                </Button>
+              </div>
+            </div>
             <KeyPointList
               keyPoints={keyPoints}
               onBoardClick={(board) => {
