@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, RotateCcw } from "lucide-react";
+import { ArrowLeft, ChevronRight, Loader2, RotateCcw } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -19,6 +19,7 @@ import { isAdmin } from "@/lib/auth";
 import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
 import { mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
+import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
 import type { KeyPointSavePayload } from "@/components/EditableKeyPointSection";
 import {
   Dialog,
@@ -106,8 +107,11 @@ function apiKpToWithBoards(kp: {
 }
 
 const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
+  const adminView = mode === "admin";
+  type BrowseStep = "subjects" | "systems" | "chapters" | "topics" | "concepts";
+
   const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(mode === "admin");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [editTarget, setEditTarget] = useState<Row | null>(null);
@@ -136,6 +140,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [boardList, setBoardList] = useState<BoardOption[]>([]);
   const [conceptOptions, setConceptOptions] = useState<ConceptOption[]>([]);
   const [loadingConcepts, setLoadingConcepts] = useState(false);
+  const [browseLoading, setBrowseLoading] = useState(false);
+  const [browseStep, setBrowseStep] = useState<BrowseStep>("subjects");
 
   const [subjectId, setSubjectId] = useState("all");
   const [systemId, setSystemId] = useState("all");
@@ -149,11 +155,15 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     () => ({
       value: search,
       onChange: setSearch,
-      placeholder: "Search suggestions, concept, taxonomy...",
+      placeholder: adminView
+        ? "Search suggestions, concept, taxonomy..."
+        : browseStep === "concepts"
+          ? "Search concepts…"
+          : "Search…",
       onFocus: () => setSearchFocused(true),
       onBlur: () => setSearchFocused(false),
     }),
-    [search],
+    [search, adminView, browseStep],
   );
   useHeaderSearch(headerSearch);
   const filtersVisible = useScrollUpVisible() && !searchFocused;
@@ -209,44 +219,65 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (!adminView && browseStep !== "concepts") return;
+    void load();
+  }, [adminView, browseStep]);
 
   useEffect(() => {
+    if (!adminView && browseStep !== "subjects") return;
+    setBrowseLoading(true);
     fetchTaxonomy("subjects")
       .then(setSubjects)
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load subjects"));
-  }, []);
+      .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load subjects"))
+      .finally(() => setBrowseLoading(false));
+  }, [adminView, browseStep]);
+
+  useEffect(() => {
+    if (adminView) {
+      fetchTaxonomy("subjects")
+        .then(setSubjects)
+        .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load subjects"));
+    }
+  }, [adminView]);
 
   useEffect(() => {
     if (subjectId === "all") {
       setSystems([]);
       return;
     }
+    if (!adminView && browseStep !== "systems") return;
+    setBrowseLoading(true);
     fetchTaxonomy("systems", subjectId)
       .then(setSystems)
-      .catch(() => setSystems([]));
-  }, [subjectId]);
+      .catch(() => setSystems([]))
+      .finally(() => setBrowseLoading(false));
+  }, [subjectId, adminView, browseStep]);
 
   useEffect(() => {
     if (systemId === "all") {
       setChapters([]);
       return;
     }
+    if (!adminView && browseStep !== "chapters") return;
+    setBrowseLoading(true);
     fetchTaxonomy("chapters", systemId)
       .then(setChapters)
-      .catch(() => setChapters([]));
-  }, [systemId]);
+      .catch(() => setChapters([]))
+      .finally(() => setBrowseLoading(false));
+  }, [systemId, adminView, browseStep]);
 
   useEffect(() => {
     if (chapterId === "all") {
       setTopics([]);
       return;
     }
+    if (!adminView && browseStep !== "topics") return;
+    setBrowseLoading(true);
     fetchTaxonomy("topics", chapterId)
       .then(setTopics)
-      .catch(() => setTopics([]));
-  }, [chapterId]);
+      .catch(() => setTopics([]))
+      .finally(() => setBrowseLoading(false));
+  }, [chapterId, adminView, browseStep]);
 
   useEffect(() => {
     let cancelled = false;
@@ -631,6 +662,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   };
 
   const filteredRows = useMemo(() => {
+    if (!adminView && browseStep !== "concepts") return [];
+
     const q = search.toLowerCase().trim();
     const list = rows.filter((r) => {
       const c = r.concepts;
@@ -662,7 +695,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       });
     }
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
-  }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search]);
+  }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search, adminView, browseStep]);
 
   type ConceptGroup = {
     conceptId: string;
@@ -710,8 +743,76 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     boardFilter !== "all" ||
     conceptFilter !== "all";
 
-  const adminView = mode === "admin";
   const homeLink = isAdmin() ? "/" : "/study/progress";
+
+  const goBrowse = (step: BrowseStep) => {
+    setSearch("");
+    setBrowseStep(step);
+    if (step === "subjects") {
+      setSubjectId("all");
+      setSystemId("all");
+      setChapterId("all");
+      setTopicId("all");
+      setConceptFilter("all");
+    } else if (step === "systems") {
+      setSystemId("all");
+      setChapterId("all");
+      setTopicId("all");
+      setConceptFilter("all");
+    } else if (step === "chapters") {
+      setChapterId("all");
+      setTopicId("all");
+      setConceptFilter("all");
+    } else if (step === "topics") {
+      setTopicId("all");
+      setConceptFilter("all");
+    }
+  };
+
+  const pickSubject = (item: TaxonomyItem) => {
+    setSubjectId(item.id);
+    setSystemId("all");
+    setChapterId("all");
+    setTopicId("all");
+    setConceptFilter("all");
+    setBrowseStep("systems");
+  };
+  const pickSystem = (item: TaxonomyItem) => {
+    setSystemId(item.id);
+    setChapterId("all");
+    setTopicId("all");
+    setConceptFilter("all");
+    setBrowseStep("chapters");
+  };
+  const pickChapter = (item: TaxonomyItem) => {
+    setChapterId(item.id);
+    setTopicId("all");
+    setConceptFilter("all");
+    setBrowseStep("topics");
+  };
+  const pickTopic = (item: TaxonomyItem) => {
+    setTopicId(item.id);
+    setConceptFilter("all");
+    setBrowseStep("concepts");
+  };
+
+  const browseBack = () => {
+    if (browseStep === "concepts") goBrowse("topics");
+    else if (browseStep === "topics") goBrowse("chapters");
+    else if (browseStep === "chapters") goBrowse("systems");
+    else if (browseStep === "systems") goBrowse("subjects");
+  };
+
+  const browseTitle =
+    browseStep === "subjects"
+      ? "Subjects"
+      : browseStep === "systems"
+        ? "Systems"
+        : browseStep === "chapters"
+          ? "Chapters"
+          : browseStep === "topics"
+            ? "Topics"
+            : "Concepts";
 
   if (adminView && !isAdmin()) {
     return <Navigate to="/my-suggestions" replace />;
@@ -733,158 +834,256 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             <p className="text-muted-foreground mt-1">
               {adminView
                 ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."
-                : "Browse concepts — tap a concept to expand its key points. Study, practice, and track progress."}
+                : "Pick a subject, then system, chapter, and topic to open concepts for study & practice."}
             </p>
           </div>
         </div>
       </header>
 
       <main className="app-mesh-content container mx-auto max-w-7xl px-4 py-6 sm:py-8">
-        <Card
-          className={`filter-card sticky-filter-card scroll-aware-panel mb-4 space-y-3 ${
-            filtersVisible ? "" : "hidden-on-scroll-down"
-          }`}
-        >
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <ConnectionStatus compact />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={resetFilters}
-              disabled={!hasActiveFilters}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              Reset filters
-            </Button>
+        {adminView ? (
+          <Card
+            className={`filter-card sticky-filter-card scroll-aware-panel mb-4 space-y-3 ${
+              filtersVisible ? "" : "hidden-on-scroll-down"
+            }`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <ConnectionStatus compact />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={resetFilters}
+                disabled={!hasActiveFilters}
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                Reset filters
+              </Button>
+            </div>
+            <div className="filter-grid-mobile xl:grid-cols-6">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Subject</Label>
+                <Select
+                  value={subjectId}
+                  onValueChange={(v) => {
+                    setSubjectId(v);
+                    setSystemId("all");
+                    setChapterId("all");
+                    setTopicId("all");
+                    setConceptFilter("all");
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All subjects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All subjects</SelectItem>
+                    {subjects.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">System</Label>
+                <Select
+                  value={systemId}
+                  onValueChange={(v) => {
+                    setSystemId(v);
+                    setChapterId("all");
+                    setTopicId("all");
+                    setConceptFilter("all");
+                  }}
+                  disabled={subjectId === "all"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All systems" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All systems</SelectItem>
+                    {systems.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Chapter</Label>
+                <Select
+                  value={chapterId}
+                  onValueChange={(v) => {
+                    setChapterId(v);
+                    setTopicId("all");
+                    setConceptFilter("all");
+                  }}
+                  disabled={systemId === "all"}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All chapters" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All chapters</SelectItem>
+                    {chapters.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Topic</Label>
+                <Select value={topicId} onValueChange={(v) => { setTopicId(v); setConceptFilter("all"); }} disabled={chapterId === "all"}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All topics" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All topics</SelectItem>
+                    {topics.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Concept</Label>
+                <Select value={conceptFilter} onValueChange={setConceptFilter} disabled={loadingConcepts}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingConcepts ? "Loading…" : "All concepts"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All concepts</SelectItem>
+                    {conceptOptions.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {(c.title ?? "").trim() || "Untitled concept"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Board</Label>
+                <Select value={boardFilter} onValueChange={setBoardFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All boards" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All boards</SelectItem>
+                    {boardList.map((b) => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {b.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </Card>
+        ) : (
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => goBrowse("subjects")}
+              >
+                Subjects
+              </button>
+              {subjectName ? (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <button
+                    type="button"
+                    className={browseStep === "systems" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    onClick={() => goBrowse("systems")}
+                  >
+                    {subjectName}
+                  </button>
+                </>
+              ) : null}
+              {systemName ? (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <button
+                    type="button"
+                    className={browseStep === "chapters" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    onClick={() => goBrowse("chapters")}
+                  >
+                    {systemName}
+                  </button>
+                </>
+              ) : null}
+              {chapterName ? (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <button
+                    type="button"
+                    className={browseStep === "topics" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    onClick={() => goBrowse("topics")}
+                  >
+                    {chapterName}
+                  </button>
+                </>
+              ) : null}
+              {topicName ? (
+                <>
+                  <ChevronRight className="h-3 w-3" />
+                  <span className="font-semibold text-foreground">{topicName}</span>
+                </>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">{browseTitle}</h2>
+              {browseStep !== "subjects" ? (
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={browseBack}>
+                  <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
+                </Button>
+              ) : (
+                <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
+                  <Link to="/study/progress">My progress →</Link>
+                </Button>
+              )}
+            </div>
           </div>
-          <div className="filter-grid-mobile xl:grid-cols-6">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Subject</Label>
-              <Select
-                value={subjectId}
-                onValueChange={(v) => {
-                  setSubjectId(v);
-                  setSystemId("all");
-                  setChapterId("all");
-                  setTopicId("all");
-                  setConceptFilter("all");
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All subjects" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All subjects</SelectItem>
-                  {subjects.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">System</Label>
-              <Select
-                value={systemId}
-                onValueChange={(v) => {
-                  setSystemId(v);
-                  setChapterId("all");
-                  setTopicId("all");
-                  setConceptFilter("all");
-                }}
-                disabled={subjectId === "all"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All systems" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All systems</SelectItem>
-                  {systems.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Chapter</Label>
-              <Select
-                value={chapterId}
-                onValueChange={(v) => {
-                  setChapterId(v);
-                  setTopicId("all");
-                  setConceptFilter("all");
-                }}
-                disabled={systemId === "all"}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All chapters" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All chapters</SelectItem>
-                  {chapters.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Topic</Label>
-              <Select value={topicId} onValueChange={(v) => { setTopicId(v); setConceptFilter("all"); }} disabled={chapterId === "all"}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All topics" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All topics</SelectItem>
-                  {topics.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Concept</Label>
-              <Select value={conceptFilter} onValueChange={setConceptFilter} disabled={loadingConcepts}>
-                <SelectTrigger>
-                  <SelectValue placeholder={loadingConcepts ? "Loading…" : "All concepts"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All concepts</SelectItem>
-                  {conceptOptions.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {(c.title ?? "").trim() || "Untitled concept"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Board</Label>
-              <Select value={boardFilter} onValueChange={setBoardFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All boards" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All boards</SelectItem>
-                  {boardList.map((b) => (
-                    <SelectItem key={b.id} value={b.id}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </Card>
+        )}
 
-        {loading ? (
+        {!adminView && browseStep !== "concepts" ? (
+          browseStep === "subjects" ? (
+            <TaxonomyBrowseList
+              items={subjects}
+              loading={browseLoading}
+              emptyLabel="No subjects yet"
+              onSelect={pickSubject}
+            />
+          ) : browseStep === "systems" ? (
+            <TaxonomyBrowseList
+              items={systems}
+              loading={browseLoading}
+              emptyLabel="No systems in this subject"
+              onSelect={pickSystem}
+            />
+          ) : browseStep === "chapters" ? (
+            <TaxonomyBrowseList
+              items={chapters}
+              loading={browseLoading}
+              emptyLabel="No chapters in this system"
+              onSelect={pickChapter}
+            />
+          ) : (
+            <TaxonomyBrowseList
+              items={topics}
+              loading={browseLoading}
+              emptyLabel="No topics in this chapter"
+              onSelect={pickTopic}
+            />
+          )
+        ) : loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
           </div>

@@ -19,6 +19,7 @@ import {
   userStickyHeader,
   userStickyHeaderActions,
 } from "@/lib/userShell";
+import { StickyTopBar } from "@/components/StickyTopBar";
 import { toast } from "sonner";
 
 type QRow = {
@@ -99,25 +100,27 @@ export default function PracticeSetup() {
 
   return (
     <div className={userPageShellTight}>
-      <div className={userStickyHeader}>
-        <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to="/my-suggestions">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
-          <p className="text-xs text-muted-foreground md:text-sm">Practice setup</p>
-          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
-        </div>
-        <div className={userStickyHeaderActions}>
-          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Study">
-            <Link to={`/study/${conceptId}`}>
-              <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
-              <span className={userHeaderActionLabel}>Study</span>
+      <StickyTopBar>
+        <div className={userStickyHeader}>
+          <Button asChild variant="ghost" size="icon" className="shrink-0">
+            <Link to="/my-suggestions">
+              <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
+          <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
+            <p className="text-xs text-muted-foreground md:text-sm">Practice setup</p>
+            <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
+          </div>
+          <div className={userStickyHeaderActions}>
+            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Study">
+              <Link to={`/study/${conceptId}`}>
+                <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+                <span className={userHeaderActionLabel}>Study</span>
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </StickyTopBar>
 
       <Card className="mx-3 space-y-3 p-4 md:mx-0 md:p-6">
         <div className="space-y-2">

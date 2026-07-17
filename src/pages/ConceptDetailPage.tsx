@@ -8,7 +8,8 @@ import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
-import { userContentCard, userHeaderActionBtn, userHeaderActionLabel, userPageShellTight, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
+import { StickyTopBar } from "@/components/StickyTopBar";
+import { userContentCard, userHeaderActionBtn, userPageShellTight, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
 
 export default function ConceptDetailPage() {
@@ -52,39 +53,49 @@ export default function ConceptDetailPage() {
 
   return (
     <div className={userPageShellTight}>
-      <div className={userStickyHeader}>
-        <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to="/my-suggestions">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
-          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
-          {taxonomy ? <p className="truncate text-[10px] text-muted-foreground md:text-xs">{taxonomy}</p> : null}
-        </div>
-        <div className={userStickyHeaderActions}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={userHeaderActionBtn}
-            title="Questions"
-            onClick={() => {
-              setBoardFilter(null);
-              setQuestionsOpen(true);
-            }}
-          >
-            <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
-            <span className={userHeaderActionLabel}>Questions</span>
-          </Button>
-          <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
-            <Link to={`/concept/${conceptId}/learn`}>
-              <Target className="h-3.5 w-3.5 sm:mr-1" />
-              <span className={userHeaderActionLabel}>Study</span>
+      <StickyTopBar>
+        <div className={userStickyHeader}>
+          <Button asChild variant="ghost" size="icon" className="shrink-0">
+            <Link to="/my-suggestions">
+              <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
+          <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
+            <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
+            {taxonomy ? <p className="truncate text-[10px] text-muted-foreground md:text-xs">{taxonomy}</p> : null}
+          </div>
+          <div className={userStickyHeaderActions}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={userHeaderActionBtn}
+              title="Questions"
+              onClick={() => {
+                setBoardFilter(null);
+                setQuestionsOpen(true);
+              }}
+            >
+              <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Qtns</span>
+              <span className="hidden sm:inline">Questions</span>
+            </Button>
+            <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
+              <Link to={`/concept/${conceptId}/learn`}>
+                <Target className="h-3.5 w-3.5 shrink-0" />
+                <span className="sm:hidden">Study</span>
+                <span className="hidden sm:inline">Key Point Study</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
+              <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+                <Play className="h-3.5 w-3.5 shrink-0" />
+                <span>Practice</span>
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </StickyTopBar>
 
       <Card className={userContentCard}>
         <div className="flex items-center justify-between gap-2">

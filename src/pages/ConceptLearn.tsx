@@ -21,6 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
+import { StickyTopBar } from "@/components/StickyTopBar";
 import { fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import {
   getPracticeSessionsForConcept,
@@ -42,13 +43,27 @@ import {
   userStickyHeaderActions,
 } from "@/lib/userShell";
 
+
+
+
+
 type QRow = {
   id: string;
   questionMode: "mcq" | "sba";
   concept: string;
+  sourcePointId?: string | null;
+  incrementCount?: number;
+  count?: number;
+  boards?: { id?: string | null; name: string; mention_count?: number }[];
   mcq?: { stem?: string } | null;
   sba?: { stem?: string } | null;
 };
+
+function questionImportance(q: QRow) {
+  if (typeof q.count === "number") return q.count;
+  if (typeof q.incrementCount === "number") return q.incrementCount;
+  return (q.boards ?? []).reduce((s, b) => s + Math.max(1, Number(b.mention_count ?? 1)), 0);
+}
 
 export default function ConceptLearn() {
   const { conceptId } = useParams<{ conceptId: string }>();
@@ -74,6 +89,8 @@ export default function ConceptLearn() {
   const [practiceTitle, setPracticeTitle] = useState("");
   const [loadingQuestions, setLoadingQuestions] = useState(false);
   const [conceptOnlyFilter, setConceptOnlyFilter] = useState(false);
+  const [importantFirst, setImportantFirst] = useState(false);
+  const [selectCountInput, setSelectCountInput] = useState("");
   const [pastSessions, setPastSessions] = useState<PracticeSession[]>([]);
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
@@ -140,9 +157,25 @@ export default function ConceptLearn() {
   const currentKp = keyPoints[step];
 
   const visibleQuestions = useMemo(() => {
-    if (!conceptOnlyFilter) return questions;
-    return questions.filter((q) => q.concept.trim().toLowerCase() === conceptName.trim().toLowerCase());
-  }, [questions, conceptOnlyFilter, conceptName]);
+    const filtered = conceptOnlyFilter
+      ? questions.filter((q) => q.concept.trim().toLowerCase() === conceptName.trim().toLowerCase())
+      : questions;
+    if (!importantFirst) return filtered;
+    return [...filtered].sort((a, b) => questionImportance(b) - questionImportance(a));
+  }, [questions, conceptOnlyFilter, conceptName, importantFirst]);
+
+  const selectAllVisible = () => setSelected(new Set(visibleQuestions.map((q) => q.id)));
+  const clearSelection = () => setSelected(new Set());
+
+  const selectByCount = () => {
+    const n = Math.floor(Number(selectCountInput));
+    if (!Number.isFinite(n) || n <= 0) {
+      return toast.error("কতটা question select করবেন সেই সংখ্যা দিন");
+    }
+    const take = Math.min(n, visibleQuestions.length);
+    setSelected(new Set(visibleQuestions.slice(0, take).map((q) => q.id)));
+    toast.success(`${take}টি question select হয়েছে`);
+  };
 
   const goPrev = () => {
     if (step <= 0) return;
@@ -172,9 +205,6 @@ export default function ConceptLearn() {
       return next;
     });
   };
-
-  const selectAllVisible = () => setSelected(new Set(visibleQuestions.map((q) => q.id)));
-  const clearSelection = () => setSelected(new Set());
 
   const startPractice = () => {
     if (!conceptId || selected.size === 0) return toast.error("Select at least one question");
@@ -210,36 +240,38 @@ export default function ConceptLearn() {
 
   return (
     <div className={userPageShell}>
-      <div className={userStickyHeader}>
-        <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to="/my-suggestions">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
-          <p className="truncate text-xs text-muted-foreground md:text-sm">{topicName || "Concept"}</p>
-          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
-        </div>
-        <div className={userStickyHeaderActions}>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className={userHeaderActionBtn}
-            onClick={openConceptQuestions}
-            title="Questions"
-          >
-            <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
-            <span className={userHeaderActionLabel}>Questions</span>
-          </Button>
-          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Details">
-            <Link to={`/concept/${conceptId}/details`}>
-              <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
-              <span className={userHeaderActionLabel}>Details</span>
+      <StickyTopBar>
+        <div className={userStickyHeader}>
+          <Button asChild variant="ghost" size="icon" className="shrink-0">
+            <Link to="/my-suggestions">
+              <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
+          <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
+            <p className="truncate text-xs text-muted-foreground md:text-sm">{topicName || "Concept"}</p>
+            <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
+          </div>
+          <div className={userStickyHeaderActions}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={userHeaderActionBtn}
+              onClick={openConceptQuestions}
+              title="Questions"
+            >
+              <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
+              <span className={userHeaderActionLabel}>Questions</span>
+            </Button>
+            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Details">
+              <Link to={`/concept/${conceptId}/details`}>
+                <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+                <span className={userHeaderActionLabel}>Details</span>
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </StickyTopBar>
 
       <Tabs value={tab} onValueChange={setTab} className="min-w-0 px-3 pt-3 md:px-0 md:pt-4">
         <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
@@ -338,13 +370,39 @@ export default function ConceptLearn() {
               <Badge variant="secondary">{selected.size} selected</Badge>
               <Badge variant="outline">{visibleQuestions.length} available</Badge>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={selectAllVisible}>
-                <CheckSquare className="h-3 w-3 mr-1" /> Select all
+                <CheckSquare className="mr-1 h-3 w-3" /> Select all
               </Button>
               <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearSelection}>
-                <Square className="h-3 w-3 mr-1" /> Clear
+                <Square className="mr-1 h-3 w-3" /> Clear
               </Button>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  type="number"
+                  min={1}
+                  max={visibleQuestions.length || 1}
+                  inputMode="numeric"
+                  placeholder="N"
+                  value={selectCountInput}
+                  onChange={(e) => setSelectCountInput(e.target.value)}
+                  className="h-8 w-16 text-xs"
+                  aria-label="Select how many questions"
+                />
+                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={selectByCount}>
+                  Select N
+                </Button>
+              </div>
+              <div className="flex items-center gap-2 rounded-md border px-2 py-1">
+                <Checkbox
+                  id="important-first"
+                  checked={importantFirst}
+                  onCheckedChange={(v) => setImportantFirst(Boolean(v))}
+                />
+                <Label htmlFor="important-first" className="cursor-pointer text-xs">
+                  Important (count বেশি আগে)
+                </Label>
+              </div>
             </div>
           </Card>
 
@@ -361,10 +419,17 @@ export default function ConceptLearn() {
                   <label className="flex gap-3 cursor-pointer items-start">
                     <Checkbox checked={selected.has(q.id)} onCheckedChange={() => toggleQuestion(q.id)} className="mt-0.5" />
                     <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex gap-2 items-center flex-wrap">
-                        <Badge variant="outline" className="text-[9px] uppercase">{q.questionMode}</Badge>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline" className="text-[9px] uppercase">
+                          {q.questionMode}
+                        </Badge>
+                        {questionImportance(q) > 0 ? (
+                          <Badge variant="secondary" className="text-[9px] tabular-nums">
+                            Count {questionImportance(q)}
+                          </Badge>
+                        ) : null}
                         {q.concept ? (
-                          <span className="text-[10px] text-muted-foreground truncate">{q.concept}</span>
+                          <span className="truncate text-[10px] text-muted-foreground">{q.concept}</span>
                         ) : null}
                       </div>
                       <p className="text-xs leading-snug line-clamp-3">{q.mcq?.stem ?? q.sba?.stem ?? "—"}</p>

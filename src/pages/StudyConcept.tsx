@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
+import { StickyTopBar } from "@/components/StickyTopBar";
 import { fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { getStudyProgress, markKeyPointStudied, studyCompletionPct } from "@/lib/userProgress";
 import {
@@ -83,25 +84,27 @@ export default function StudyConcept() {
 
   return (
     <div className={userPageShell}>
-      <div className={userStickyHeader}>
-        <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to={`/concept/${conceptId}/details`}>
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
-          <p className="text-xs text-muted-foreground md:text-sm">Key point study</p>
-          <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
-        </div>
-        <div className={userStickyHeaderActions}>
-          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
-            <Link to={`/concept/${conceptId}/learn?tab=practice`}>
-              <Target className="h-3.5 w-3.5 sm:mr-1" />
-              <span className={userHeaderActionLabel}>Practice</span>
+      <StickyTopBar>
+        <div className={userStickyHeader}>
+          <Button asChild variant="ghost" size="icon" className="shrink-0">
+            <Link to={`/concept/${conceptId}/details`}>
+              <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
+          <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
+            <p className="text-xs text-muted-foreground md:text-sm">Key point study</p>
+            <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
+          </div>
+          <div className={userStickyHeaderActions}>
+            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
+              <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+                <Target className="h-3.5 w-3.5 sm:mr-1" />
+                <span className={userHeaderActionLabel}>Practice</span>
+              </Link>
+            </Button>
+          </div>
         </div>
-      </div>
+      </StickyTopBar>
 
       <div className="space-y-2 px-3 md:px-0">
         <div className="flex items-center justify-between text-xs text-muted-foreground md:text-sm">

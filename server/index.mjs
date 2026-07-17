@@ -280,6 +280,14 @@ async function enrichQuestionsWithBoards(db, rows) {
   const pointIds = [...new Set((rows ?? []).map((q) => q.sourcePointId).filter(Boolean))];
   const boardsByKp = await fetchBoardsByKeyPointIds(db, pointIds);
 
+  const incrementByKp = new Map();
+  if (pointIds.length) {
+    const { data: kpRows } = await db.from("key_points").select("id, increment_count").in("id", pointIds);
+    for (const kp of kpRows ?? []) {
+      if (kp?.id) incrementByKp.set(kp.id, Math.max(0, Number(kp.increment_count ?? 0)));
+    }
+  }
+
   const payloadBoardIds = [
     ...new Set(
       (rows ?? [])
@@ -319,7 +327,14 @@ async function enrichQuestionsWithBoards(db, rows) {
       : [];
     // Prefer boards saved on the question itself; fall back to linked key-point boards.
     const boards = fromPayload.length ? fromPayload : fromKp;
-    return { ...q, boards };
+    const boardCount = boards.reduce((s, b) => s + Math.max(1, Number(b.mention_count ?? 1)), 0);
+    const incrementCount = q.sourcePointId ? Number(incrementByKp.get(q.sourcePointId) ?? 0) : 0;
+    return {
+      ...q,
+      boards,
+      incrementCount,
+      count: Math.max(incrementCount, boardCount),
+    };
   });
 }
 
