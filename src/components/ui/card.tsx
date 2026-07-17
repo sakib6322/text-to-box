@@ -2,11 +2,13 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+const cardPad = "p-[var(--ui-density-card-padding,var(--ui-card-padding,1.5rem))]";
+
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
-      "glass-card rounded-xl border bg-card text-card-foreground shadow-sm transition-colors duration-200",
+      "glass-card border bg-card text-card-foreground shadow-sm transition-colors duration-200",
       className,
     )}
     {...props}
@@ -16,7 +18,7 @@ Card.displayName = "Card";
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex flex-col space-y-1.5 p-6", className)} {...props} />
+    <div ref={ref} className={cn("flex flex-col space-y-1.5", cardPad, className)} {...props} />
   ),
 );
 CardHeader.displayName = "CardHeader";
@@ -36,13 +38,15 @@ const CardDescription = React.forwardRef<HTMLParagraphElement, React.HTMLAttribu
 CardDescription.displayName = "CardDescription";
 
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} className={cn("p-6 pt-0", className)} {...props} />,
+  ({ className, ...props }, ref) => (
+    <div ref={ref} className={cn(cardPad, "pt-0", className)} {...props} />
+  ),
 );
 CardContent.displayName = "CardContent";
 
 const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn("flex items-center p-6 pt-0", className)} {...props} />
+    <div ref={ref} className={cn("flex items-center", cardPad, "pt-0", className)} {...props} />
   ),
 );
 CardFooter.displayName = "CardFooter";

@@ -141,6 +141,29 @@
     min-width: 0;
   }
 
+  .app-page-pad {
+    padding: var(--ui-density-page-padding, var(--ui-page-padding, 1.5rem));
+  }
+
+  .app-section-stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-density-section-gap, var(--ui-section-gap, 1rem));
+  }
+
+  html[data-density="compact"] {
+    --ui-density-card-padding: calc(var(--ui-card-padding, 24px) * 0.85);
+    --ui-density-page-padding: calc(var(--ui-page-padding, 24px) * 0.85);
+    --ui-density-section-gap: calc(var(--ui-section-gap, 16px) * 0.85);
+  }
+
+  html[data-density="comfortable"],
+  html:not([data-density]) {
+    --ui-density-card-padding: var(--ui-card-padding, 24px);
+    --ui-density-page-padding: var(--ui-page-padding, 24px);
+    --ui-density-section-gap: var(--ui-section-gap, 16px);
+  }
+
   .app-header-bar {
     @apply border-b;
     background: hsl(var(--background));
@@ -167,9 +190,11 @@
   }
 
   .glass-card {
-    @apply rounded-xl border shadow-sm transition-colors duration-200;
+    @apply border shadow-sm transition-colors duration-200;
+    border-radius: var(--radius, 0.625rem);
+    border-width: var(--ui-card-border-width, 1px);
     background: hsl(var(--card));
-    border-color: hsl(var(--border) / 0.9);
+    border-color: hsl(var(--border) / var(--ui-card-border-opacity, 0.9));
   }
 
   html[data-card-shadow="0"] .glass-card {
@@ -181,8 +206,13 @@
     background: hsl(var(--card) / 0.9);
   }
 
-  .glass-card:hover {
+  html[data-card-hover="1"] .glass-card:hover,
+  html:not([data-card-hover]) .glass-card:hover {
     border-color: hsl(var(--primary) / 0.28);
+  }
+
+  html[data-card-hover="0"] .glass-card:hover {
+    border-color: hsl(var(--border) / var(--ui-card-border-opacity, 0.9));
   }
 
   html[data-card-shadow="1"] .glass-card:hover,
@@ -195,7 +225,8 @@
   }
 
   .filter-card {
-    @apply glass-card p-4;
+    @apply glass-card;
+    padding: var(--ui-density-card-padding, var(--ui-card-padding, 1rem));
   }
 
   .sticky-filter-card {
@@ -234,7 +265,8 @@
   }
 
   .suggestion-card {
-    @apply glass-card p-4 h-full space-y-2;
+    @apply glass-card h-full space-y-2;
+    padding: var(--ui-density-card-padding, var(--ui-card-padding, 1rem));
   }
 
   .user-mobile-shell {
@@ -517,3 +549,83 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   margin-bottom: 0;
 }
 
+
+/* -- Story-based learning (dynamic via --sbl-*) -- */
+.story-based-learning {
+  font-family: var(--sbl-font-family, Georgia, 'Times New Roman', serif);
+  font-size: var(--sbl-font-size, 16px);
+  line-height: var(--sbl-line-height, 1.75);
+  color: var(--sbl-body-color, #1e293b);
+  background: var(--sbl-bg, #fffbeb);
+  border: 1px solid var(--sbl-border, #fde68a);
+  border-radius: var(--sbl-radius, 12px);
+  padding: var(--sbl-pad, 16px);
+}
+
+.story-based-learning-dialog {
+  background: var(--sbl-bg, #fffbeb);
+  border-color: var(--sbl-border, #fde68a);
+}
+
+.story-based-learning-dialog [data-sbl-title] {
+  font-family: var(--sbl-font-family, Georgia, 'Times New Roman', serif);
+  font-size: var(--sbl-title-size, 18px);
+  color: var(--sbl-title-color, #0f172a);
+}
+
+.story-based-learning-panel {
+  background: var(--sbl-panel-bg, #ffffff);
+  border: 1px solid var(--sbl-border, #fde68a);
+  border-radius: var(--sbl-radius, 12px);
+}
+
+.story-based-learning-rich,
+.story-based-learning-rich.prose,
+.story-based-learning .prose {
+  font-family: var(--sbl-font-family, Georgia, 'Times New Roman', serif);
+  font-size: var(--sbl-font-size, 16px);
+  line-height: var(--sbl-line-height, 1.75);
+  color: var(--sbl-body-color, #1e293b);
+  max-width: none;
+}
+
+.story-based-learning-rich h1,
+.story-based-learning-rich h2,
+.story-based-learning-rich h3,
+.story-based-learning-rich .prose h1,
+.story-based-learning-rich .prose h2,
+.story-based-learning-rich .prose h3,
+.story-based-learning .prose h1,
+.story-based-learning .prose h2,
+.story-based-learning .prose h3 {
+  color: var(--sbl-heading-color, #0f766e);
+  font-family: inherit;
+}
+
+.story-based-learning-rich a,
+.story-based-learning-rich .prose a,
+.story-based-learning .prose a {
+  color: var(--sbl-link-color, #0d9488);
+}
+
+.story-based-learning-rich strong,
+.story-based-learning .prose strong {
+  color: var(--sbl-heading-color, #0f766e);
+}
+
+.story-based-learning-accent {
+  color: var(--sbl-accent, #0d9488);
+}
+
+.story-based-learning-empty {
+  color: var(--sbl-body-color, #1e293b);
+  opacity: 0.65;
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+html[data-sbl-dialog-width='md'] .story-based-learning-dialog { max-width: 42rem; }
+html[data-sbl-dialog-width='lg'] .story-based-learning-dialog { max-width: 56rem; }
+html[data-sbl-dialog-width='xl'] .story-based-learning-dialog { max-width: 64rem; }
+html[data-sbl-dialog-width='2xl'] .story-based-learning-dialog { max-width: 72rem; }
+html[data-sbl-dialog-width='full'] .story-based-learning-dialog { max-width: min(96vw, 90rem); }

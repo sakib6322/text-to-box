@@ -66,9 +66,9 @@ export function ConceptSuggestionGroupCard({
           </button>
 
           <button type="button" onClick={onToggle} className="min-w-0 flex-1 text-left">
-            <p className="font-semibold text-base leading-snug sm:text-lg lg:text-xl">{group.title}</p>
+            <p className="break-words text-base font-semibold leading-snug sm:text-lg lg:text-xl">{group.title}</p>
             {group.taxonomy ? (
-              <p className="mt-1 text-[11px] leading-snug text-muted-foreground sm:text-xs">{group.taxonomy}</p>
+              <p className="mt-1 break-words text-[11px] leading-snug text-muted-foreground sm:text-xs">{group.taxonomy}</p>
             ) : null}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Badge variant="secondary" className="text-[10px] sm:text-xs">

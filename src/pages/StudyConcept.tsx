@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
-import { StickyTopBar } from "@/components/StickyTopBar";
 import { fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { getStudyProgress, markKeyPointStudied, studyCompletionPct } from "@/lib/userProgress";
 import {
@@ -14,6 +13,7 @@ import {
   userHeaderActionBtn,
   userHeaderActionLabel,
   userPageShell,
+  userPageTopBar,
   userStickyHeader,
   userStickyHeaderActions,
 } from "@/lib/userShell";
@@ -84,7 +84,7 @@ export default function StudyConcept() {
 
   return (
     <div className={userPageShell}>
-      <StickyTopBar>
+      <div className={userPageTopBar}>
         <div className={userStickyHeader}>
           <Button asChild variant="ghost" size="icon" className="shrink-0">
             <Link to={`/concept/${conceptId}/details`}>
@@ -104,7 +104,7 @@ export default function StudyConcept() {
             </Button>
           </div>
         </div>
-      </StickyTopBar>
+      </div>
 
       <div className="space-y-2 px-3 md:px-0">
         <div className="flex items-center justify-between text-xs text-muted-foreground md:text-sm">

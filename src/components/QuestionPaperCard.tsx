@@ -46,6 +46,7 @@ export function QuestionPaperCard({
   topic,
   concept,
   marks,
+  boards,
   mcq,
   sba,
   index,
@@ -74,6 +75,25 @@ export function QuestionPaperCard({
           ) : null}
           {taxonomy ? <p className="text-[10px] leading-snug text-neutral-600">{taxonomy}</p> : null}
           {concept ? <p className="text-[11px] font-semibold text-neutral-800">{concept}</p> : null}
+          {boards?.length ? (
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              {boards.map((b, idx) => {
+                const name = b.name?.trim();
+                if (!name) return null;
+                const cnt = Number(b.mention_count ?? 1);
+                return (
+                  <Badge
+                    key={b.id ?? `${name}-${idx}`}
+                    variant="outline"
+                    className="text-[9px] font-normal tabular-nums border-neutral-300 px-1.5 py-0 text-neutral-600"
+                  >
+                    {name}
+                    {cnt > 1 ? ` ×${cnt}` : ""}
+                  </Badge>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Badge variant="outline" className="text-[9px] font-normal uppercase tracking-wide px-1.5 py-0">

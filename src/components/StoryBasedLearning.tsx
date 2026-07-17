@@ -10,10 +10,21 @@ import {
 } from "@/components/ui/dialog";
 import { CKEditorField } from "@/components/CKEditorField";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
+import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { isHtmlEmpty } from "@/lib/htmlContent";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasStoryContent, withStoryHtml } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
+import { cn } from "@/lib/utils";
+import { resolveDeviceTheme, type StoryDialogWidth } from "@/lib/uiAppearance";
+
+const DIALOG_WIDTH_CLASS: Record<StoryDialogWidth, string> = {
+  md: "max-w-3xl",
+  lg: "max-w-4xl",
+  xl: "max-w-5xl",
+  "2xl": "max-w-6xl",
+  full: "max-w-[min(96vw,90rem)]",
+};
 
 type StoryBasedLearningButtonProps = {
   detail: ConceptDetail;
@@ -38,6 +49,8 @@ export function StoryBasedLearningButton({
   size = "sm",
   className,
 }: StoryBasedLearningButtonProps) {
+  const { appearance, activeDevice } = useUiAppearance();
+  const sbl = resolveDeviceTheme(appearance, activeDevice).storyBasedLearning;
   const [open, setOpen] = useState(false);
   const [draftStory, setDraftStory] = useState(detail.storyHtml);
 
@@ -59,6 +72,9 @@ export function StoryBasedLearningButton({
 
   const showPreview = editable;
   const empty = isHtmlEmpty(draftStory) && isHtmlEmpty(detail.storyHtml);
+  const widthClass = DIALOG_WIDTH_CLASS[sbl.dialogMaxWidth] ?? DIALOG_WIDTH_CLASS.lg;
+  const editWidthClass =
+    sbl.dialogMaxWidth === "full" || sbl.dialogMaxWidth === "2xl" ? widthClass : "max-w-6xl";
 
   return (
     <>
@@ -69,32 +85,35 @@ export function StoryBasedLearningButton({
         className={className}
         onClick={() => setOpen(true)}
       >
-        <BookMarked className="mr-2 h-4 w-4" />
-        Story-based learning
+        {sbl.showButtonIcon ? <BookMarked className="mr-2 h-4 w-4" /> : null}
+        {sbl.buttonLabel}
         {hasStoryContent(detail) ? (
-          <span className="ml-1.5 h-1.5 w-1.5 rounded-full bg-primary" aria-hidden />
+          <span
+            className="ml-1.5 h-1.5 w-1.5 rounded-full story-based-learning-accent"
+            style={{ background: "var(--sbl-accent, hsl(var(--primary)))" }}
+            aria-hidden
+          />
         ) : null}
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className={
-            editable
-              ? "max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
-              : "max-w-3xl max-h-[85vh] overflow-y-auto"
-          }
+          className={cn(
+            "story-based-learning-dialog overflow-hidden flex flex-col",
+            editable ? `${editWidthClass} max-h-[90vh]` : `${widthClass} max-h-[85vh] overflow-y-auto`,
+          )}
         >
           <DialogHeader>
-            <DialogTitle>
-              Story-based learning
+            <DialogTitle data-sbl-title>
+              {sbl.buttonLabel}
               {conceptName ? `: ${conceptName}` : ""}
             </DialogTitle>
           </DialogHeader>
 
           {editable ? (
             <div className="grid lg:grid-cols-2 gap-4 min-h-0 flex-1 overflow-hidden">
-              <div className="flex flex-col min-h-0 rounded-lg border bg-background">
-                <div className="shrink-0 border-b px-4 py-2">
+              <div className="flex flex-col min-h-0 story-based-learning-panel">
+                <div className="shrink-0 border-b px-4 py-2" style={{ borderColor: "var(--sbl-border)" }}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Edit
                   </p>
@@ -114,29 +133,29 @@ export function StoryBasedLearningButton({
               </div>
 
               {showPreview ? (
-                <div className="flex flex-col min-h-0 rounded-lg border bg-muted/30">
-                  <div className="shrink-0 border-b px-4 py-2 bg-muted/50">
+                <div className="flex flex-col min-h-0 story-based-learning-panel">
+                  <div className="shrink-0 border-b px-4 py-2" style={{ borderColor: "var(--sbl-border)" }}>
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Preview
                     </p>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-4 max-h-[58vh] text-sm leading-relaxed">
+                  <div className="flex-1 overflow-y-auto max-h-[58vh]">
                     {isHtmlEmpty(draftStory) ? (
-                      <p className="text-muted-foreground text-sm">Story এখনো খালি।</p>
+                      <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
                     ) : (
-                      <RichHtmlContent content={draftStory} />
+                      <div className="story-based-learning m-3">
+                        <RichHtmlContent content={draftStory} className="story-based-learning-rich" />
+                      </div>
                     )}
                   </div>
                 </div>
               ) : null}
             </div>
           ) : empty ? (
-            <p className="text-sm text-muted-foreground py-8 text-center">
-              এই concept-এ এখনো কোনো story নেই।
-            </p>
+            <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
           ) : (
-            <div className="text-sm leading-relaxed">
-              <RichHtmlContent content={detail.storyHtml} />
+            <div className="story-based-learning">
+              <RichHtmlContent content={detail.storyHtml} className="story-based-learning-rich" />
             </div>
           )}
 

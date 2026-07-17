@@ -5,9 +5,11 @@ export const userPageShell =
 export const userPageShellTight =
   "mx-auto w-full max-w-lg md:max-w-3xl lg:max-w-5xl pb-8 md:pb-10 space-y-4 md:space-y-6 px-0 md:px-2 min-w-0";
 
-/** Inner flex row for sticky / fixed top bars */
+/** Inner flex row for page top bars (scrolls with content) */
 export const userStickyHeader =
   "flex flex-wrap items-center gap-x-2 gap-y-2 min-w-0 bg-background px-3 py-2.5 md:px-4 md:py-3";
+
+export const userPageTopBar = "border-b bg-background shadow-sm -mx-3 md:-mx-6";
 
 export const userStickyHeaderActions =
   "flex items-center justify-end gap-1.5 w-full sm:w-auto sm:ml-auto shrink-0";

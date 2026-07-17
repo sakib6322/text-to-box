@@ -22,7 +22,7 @@ export default function AppSidebarLayout() {
             </>
           }
         />
-        <div className="app-mesh-content min-w-0 flex-1 p-3 md:p-6">
+        <div className="app-mesh-content app-page-pad min-w-0 flex-1">
           <Outlet />
         </div>
       </SidebarInset>

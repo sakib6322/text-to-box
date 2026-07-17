@@ -25,6 +25,12 @@ function defaultGlobal(overrides = {}) {
     cardShadow: true,
     density: "comfortable",
     contentMaxWidthPx: 1280,
+    cardBorderWidthPx: 1,
+    cardBorderOpacity: 0.9,
+    cardPaddingPx: 24,
+    cardHoverHighlight: true,
+    pagePaddingPx: 24,
+    sectionGapPx: 16,
     ...overrides,
   };
 }
@@ -60,22 +66,68 @@ function defaultConcept(overrides = {}) {
   };
 }
 
+function defaultStory(overrides = {}) {
+  return {
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontSizePx: 16,
+    lineHeight: 1.75,
+    titleSizePx: 18,
+    titleColor: "#0f172a",
+    bodyColor: "#1e293b",
+    headingColor: "#0f766e",
+    linkColor: "#0d9488",
+    backgroundColor: "#fffbeb",
+    panelBg: "#ffffff",
+    accentColor: "#0d9488",
+    borderColor: "#fde68a",
+    borderRadiusPx: 12,
+    contentPaddingPx: 16,
+    dialogMaxWidth: "lg",
+    buttonLabel: "Story-based learning",
+    showButtonIcon: true,
+    emptyMessage: "এই concept-এ এখনো কোনো story নেই।",
+    ...overrides,
+  };
+}
+
 function defaultDevice(kind) {
   if (kind === "mobile") {
     return {
-      global: defaultGlobal({ baseFontSizePx: 15, contentMaxWidthPx: 512, density: "compact" }),
+      global: defaultGlobal({
+        baseFontSizePx: 15,
+        contentMaxWidthPx: 512,
+        density: "compact",
+        cardPaddingPx: 12,
+        pagePaddingPx: 12,
+        sectionGapPx: 12,
+      }),
       conceptDetails: defaultConcept({ fontSizePx: 14, heading1SizePx: 20, heading2SizePx: 17, heading3SizePx: 15 }),
+      storyBasedLearning: defaultStory({
+        fontSizePx: 15,
+        titleSizePx: 16,
+        contentPaddingPx: 12,
+        dialogMaxWidth: "md",
+        borderRadiusPx: 10,
+      }),
     };
   }
   if (kind === "tablet") {
     return {
-      global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 840 }),
+      global: defaultGlobal({
+        baseFontSizePx: 16,
+        contentMaxWidthPx: 840,
+        cardPaddingPx: 16,
+        pagePaddingPx: 20,
+        sectionGapPx: 14,
+      }),
       conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 22, heading2SizePx: 18 }),
+      storyBasedLearning: defaultStory({ fontSizePx: 16, dialogMaxWidth: "xl" }),
     };
   }
   return {
     global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 1120, density: "comfortable" }),
     conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 24, heading2SizePx: 20, heading3SizePx: 17 }),
+    storyBasedLearning: defaultStory({ fontSizePx: 17, titleSizePx: 20, dialogMaxWidth: "2xl" }),
   };
 }
 
@@ -94,6 +146,7 @@ function mergeDevice(base, patch) {
   return {
     global: { ...base.global, ...(p.global ?? {}) },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
+    storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
   };
 }
 
@@ -101,20 +154,25 @@ function fromV1(raw) {
   const base = getDefaultUiAppearance();
   const global = raw?.global && typeof raw.global === "object" ? raw.global : {};
   const conceptDetails = raw?.conceptDetails && typeof raw.conceptDetails === "object" ? raw.conceptDetails : {};
+  const storyBasedLearning =
+    raw?.storyBasedLearning && typeof raw.storyBasedLearning === "object" ? raw.storyBasedLearning : {};
   const performance = raw?.performance && typeof raw.performance === "object" ? raw.performance : {};
   const shared = {
     global: { ...base.desktop.global, ...global },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
+    storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
   };
   return {
     version: 2,
     mobile: {
       global: { ...shared.global, contentMaxWidthPx: 512, density: "compact" },
       conceptDetails: shared.conceptDetails,
+      storyBasedLearning: { ...shared.storyBasedLearning, fontSizePx: 15, titleSizePx: 16, dialogMaxWidth: "md" },
     },
     tablet: {
       global: { ...shared.global, contentMaxWidthPx: 840 },
       conceptDetails: shared.conceptDetails,
+      storyBasedLearning: { ...shared.storyBasedLearning, dialogMaxWidth: "xl" },
     },
     desktop: shared,
     performance: { ...base.performance, ...performance },

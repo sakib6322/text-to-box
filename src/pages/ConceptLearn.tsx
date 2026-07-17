@@ -21,7 +21,6 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
-import { StickyTopBar } from "@/components/StickyTopBar";
 import { fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import {
   getPracticeSessionsForConcept,
@@ -39,6 +38,7 @@ import {
   userHeaderActionBtn,
   userHeaderActionLabel,
   userPageShell,
+  userPageTopBar,
   userStickyHeader,
   userStickyHeaderActions,
 } from "@/lib/userShell";
@@ -240,7 +240,7 @@ export default function ConceptLearn() {
 
   return (
     <div className={userPageShell}>
-      <StickyTopBar>
+      <div className={userPageTopBar}>
         <div className={userStickyHeader}>
           <Button asChild variant="ghost" size="icon" className="shrink-0">
             <Link to="/my-suggestions">
@@ -271,7 +271,7 @@ export default function ConceptLearn() {
             </Button>
           </div>
         </div>
-      </StickyTopBar>
+      </div>
 
       <Tabs value={tab} onValueChange={setTab} className="min-w-0 px-3 pt-3 md:px-0 md:pt-4">
         <TabsList className="grid h-10 w-full max-w-md grid-cols-2">

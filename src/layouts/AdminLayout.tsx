@@ -22,7 +22,7 @@ export default function AdminLayout() {
             </>
           }
         />
-        <div className="app-mesh-content flex-1 p-4 md:p-6">
+        <div className="app-mesh-content app-page-pad flex-1">
           <Outlet />
         </div>
       </SidebarInset>

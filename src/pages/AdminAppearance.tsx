@@ -15,6 +15,7 @@ import {
   defaultUiAppearance,
   detectDeviceKey,
   type DeviceKey,
+  type StoryDialogWidth,
   type UiAppearance,
 } from "@/lib/uiAppearance";
 
@@ -101,6 +102,18 @@ const GLOBAL_COLOR_KEYS = [
   "sidebarFgHsl",
 ] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
 
+const GLOBAL_LAYOUT_KEYS = [
+  "radiusRem",
+  "cardBorderWidthPx",
+  "cardBorderOpacity",
+  "cardPaddingPx",
+  "pagePaddingPx",
+  "sectionGapPx",
+  "cardHoverHighlight",
+  "cardShadow",
+  "cardBackdropBlur",
+] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
+
 export default function AdminAppearance() {
   const {
     appearance,
@@ -168,6 +181,19 @@ export default function AdminAppearance() {
     });
   };
 
+  const updateSbl = <K extends keyof UiAppearance["desktop"]["storyBasedLearning"]>(
+    key: K,
+    value: UiAppearance["desktop"]["storyBasedLearning"][K],
+  ) => {
+    commit({
+      ...theme,
+      [editDevice]: {
+        ...deviceTheme,
+        storyBasedLearning: { ...deviceTheme.storyBasedLearning, [key]: value },
+      },
+    });
+  };
+
   const updatePerf = <K extends keyof UiAppearance["performance"]>(
     key: K,
     value: UiAppearance["performance"][K],
@@ -204,6 +230,45 @@ export default function AdminAppearance() {
     toast.message(`Colors applied to ${labels} (unsaved)`);
   };
 
+  /** Copy card & layout settings from current device onto targets (preview until Save). */
+  const applyLayoutTo = (targets: DeviceKey[]) => {
+    const layout = Object.fromEntries(
+      GLOBAL_LAYOUT_KEYS.map((key) => [key, deviceTheme.global[key]]),
+    ) as Pick<UiAppearance["desktop"]["global"], (typeof GLOBAL_LAYOUT_KEYS)[number]>;
+
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          global: { ...next[target].global, ...layout },
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Card & layout applied to ${labels} (unsaved)`);
+  };
+
+  /** Copy current device Story-based learning settings onto targets (preview until Save). */
+  const applyStoryTo = (targets: DeviceKey[]) => {
+    const story = structuredClone(deviceTheme.storyBasedLearning);
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          storyBasedLearning: structuredClone(story),
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Story design applied to ${labels} (unsaved)`);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -233,35 +298,46 @@ export default function AdminAppearance() {
 
   const preview = useMemo(
     () => (
-      <div className="concept-detail-rich space-y-3 rounded-lg border p-4" style={{ background: "hsl(var(--card))" }}>
-        <h1>Heading 1 sample</h1>
-        <h2>Heading 2 sample</h2>
-        <h3>Heading 3 sample</h3>
-        <p>
-          Paragraph with <strong>bold</strong>, <em>italic</em>, and a <a href="#preview">link</a>.
-        </p>
-        <ul>
-          <li>Bullet one</li>
-          <li>Bullet two</li>
-        </ul>
-        <table>
-          <thead>
-            <tr>
-              <th>Column A</th>
-              <th>Column B</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Cell 1</td>
-              <td>Cell 2</td>
-            </tr>
-            <tr>
-              <td>Cell 3</td>
-              <td>Cell 4</td>
-            </tr>
-          </tbody>
-        </table>
+      <div className="space-y-4">
+        <div className="concept-detail-rich space-y-3 rounded-lg border p-4" style={{ background: "hsl(var(--card))" }}>
+          <p className="text-xs font-semibold uppercase text-muted-foreground">Concept details</p>
+          <h1>Heading 1 sample</h1>
+          <h2>Heading 2 sample</h2>
+          <h3>Heading 3 sample</h3>
+          <p>
+            Paragraph with <strong>bold</strong>, <em>italic</em>, and a <a href="#preview">link</a>.
+          </p>
+          <ul>
+            <li>Bullet one</li>
+            <li>Bullet two</li>
+          </ul>
+          <table>
+            <thead>
+              <tr>
+                <th>Column A</th>
+                <th>Column B</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Cell 1</td>
+                <td>Cell 2</td>
+              </tr>
+              <tr>
+                <td>Cell 3</td>
+                <td>Cell 4</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="story-based-learning space-y-2">
+          <p className="text-xs font-semibold uppercase opacity-70">Story-based learning</p>
+          <h2>Once upon a concept…</h2>
+          <p>
+            A short story paragraph with <strong>emphasis</strong> and a{" "}
+            <a href="#story-preview">story link</a>.
+          </p>
+        </div>
       </div>
     ),
     [],
@@ -277,6 +353,7 @@ export default function AdminAppearance() {
 
   const g = deviceTheme.global;
   const c = deviceTheme.conceptDetails;
+  const s = deviceTheme.storyBasedLearning;
   const p = theme.performance;
 
   return (
@@ -366,6 +443,7 @@ export default function AdminAppearance() {
           <TabsList className="flex h-auto flex-wrap gap-1">
             <TabsTrigger value="global">{deviceMeta[editDevice].label} · Website UI</TabsTrigger>
             <TabsTrigger value="concept">{deviceMeta[editDevice].label} · Concept details</TabsTrigger>
+            <TabsTrigger value="story">{deviceMeta[editDevice].label} · Story learning</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
@@ -389,6 +467,84 @@ export default function AdminAppearance() {
                 </Select>
               </Field>
             </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Cards &amp; layout</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyLayoutTo(["mobile"])}>
+                    Set to Phone
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyLayoutTo(["tablet"])}>
+                    Set to Tablet
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyLayoutTo(["desktop"])}>
+                    Set to Computer
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyLayoutTo(["mobile", "tablet", "desktop"])}
+                  >
+                    Set to all
+                  </Button>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <NumberField
+                  label="Card border width (px)"
+                  value={g.cardBorderWidthPx}
+                  min={0}
+                  max={4}
+                  step={0.5}
+                  onChange={(n) => updateGlobal("cardBorderWidthPx", n)}
+                />
+                <NumberField
+                  label="Card border opacity"
+                  value={g.cardBorderOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  hint="0 = invisible, 1 = solid"
+                  onChange={(n) => updateGlobal("cardBorderOpacity", n)}
+                />
+                <NumberField
+                  label="Card padding (px)"
+                  value={g.cardPaddingPx}
+                  min={8}
+                  max={48}
+                  onChange={(n) => updateGlobal("cardPaddingPx", n)}
+                />
+                <NumberField
+                  label="Page padding (px)"
+                  value={g.pagePaddingPx}
+                  min={8}
+                  max={48}
+                  onChange={(n) => updateGlobal("pagePaddingPx", n)}
+                />
+                <NumberField
+                  label="Section gap (px)"
+                  value={g.sectionGapPx}
+                  min={4}
+                  max={48}
+                  onChange={(n) => updateGlobal("sectionGapPx", n)}
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="glass-card sm:col-span-2 lg:col-span-1">
+                  <div className="space-y-1" style={{ padding: "var(--ui-density-card-padding, var(--ui-card-padding, 1rem))" }}>
+                    <p className="text-sm font-semibold">Card preview</p>
+                    <p className="text-xs text-muted-foreground">Border, padding, radius from current draft.</p>
+                  </div>
+                </div>
+                <div className="app-section-stack sm:col-span-2">
+                  <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">Section one</div>
+                  <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">Section two (gap preview)</div>
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-end justify-between gap-2 pt-2">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Colors (HSL without hsl())</p>
               <div className="flex flex-wrap gap-2">
@@ -432,6 +588,12 @@ export default function AdminAppearance() {
               <BoolField label="Card backdrop blur" checked={g.cardBackdropBlur} onChange={(v) => updateGlobal("cardBackdropBlur", v)} hint="Can cause scroll lag" />
               <BoolField label="Sticky bar backdrop blur" checked={g.stickyBackdropBlur} onChange={(v) => updateGlobal("stickyBackdropBlur", v)} />
               <BoolField label="Card shadow" checked={g.cardShadow} onChange={(v) => updateGlobal("cardShadow", v)} />
+              <BoolField
+                label="Card hover highlight"
+                checked={g.cardHoverHighlight}
+                onChange={(v) => updateGlobal("cardHoverHighlight", v)}
+                hint="Primary-tinted border on hover"
+              />
             </div>
           </TabsContent>
 
@@ -463,6 +625,120 @@ export default function AdminAppearance() {
               <ColorField label="Blockquote border" value={c.blockquoteBorder} onChange={(v) => updateCd("blockquoteBorder", v)} />
               <NumberField label="Table font size (px)" value={c.tableFontSizePx} min={10} max={16} onChange={(n) => updateCd("tableFontSizePx", n)} />
               <NumberField label="Table cell padding (px)" value={c.tableCellPaddingPx} min={4} max={16} onChange={(n) => updateCd("tableCellPaddingPx", n)} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="story" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                Story-based learning · {deviceMeta[editDevice].label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => applyStoryTo(["mobile"])}>
+                  Set to Phone
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => applyStoryTo(["tablet"])}>
+                  Set to Tablet
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => applyStoryTo(["desktop"])}>
+                  Set to Computer
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => applyStoryTo(["mobile", "tablet", "desktop"])}
+                >
+                  Set to all
+                </Button>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Apply this device&apos;s story design to others. Still needs <strong>Save to database</strong>.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <TextField label="Button label" value={s.buttonLabel} onChange={(v) => updateSbl("buttonLabel", v)} />
+              <TextField label="Empty message" value={s.emptyMessage} onChange={(v) => updateSbl("emptyMessage", v)} />
+              <Field label="Dialog max width">
+                <Select
+                  value={s.dialogMaxWidth}
+                  onValueChange={(v) => updateSbl("dialogMaxWidth", v as StoryDialogWidth)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="md">Medium</SelectItem>
+                    <SelectItem value="lg">Large</SelectItem>
+                    <SelectItem value="xl">XL</SelectItem>
+                    <SelectItem value="2xl">2XL</SelectItem>
+                    <SelectItem value="full">Full</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <BoolField
+                label="Show button icon"
+                checked={s.showButtonIcon}
+                onChange={(v) => updateSbl("showButtonIcon", v)}
+              />
+              <TextField label="Font family" value={s.fontFamily} onChange={(v) => updateSbl("fontFamily", v)} />
+              <NumberField
+                label="Body font size (px)"
+                value={s.fontSizePx}
+                min={12}
+                max={24}
+                onChange={(n) => updateSbl("fontSizePx", n)}
+              />
+              <NumberField
+                label="Line height"
+                value={s.lineHeight}
+                min={1.2}
+                max={2.4}
+                step={0.05}
+                onChange={(n) => updateSbl("lineHeight", n)}
+              />
+              <NumberField
+                label="Title size (px)"
+                value={s.titleSizePx}
+                min={14}
+                max={32}
+                onChange={(n) => updateSbl("titleSizePx", n)}
+              />
+              <NumberField
+                label="Border radius (px)"
+                value={s.borderRadiusPx}
+                min={0}
+                max={24}
+                onChange={(n) => updateSbl("borderRadiusPx", n)}
+              />
+              <NumberField
+                label="Content padding (px)"
+                value={s.contentPaddingPx}
+                min={8}
+                max={40}
+                onChange={(n) => updateSbl("contentPaddingPx", n)}
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ColorField label="Title color" value={s.titleColor} onChange={(v) => updateSbl("titleColor", v)} />
+              <ColorField label="Body color" value={s.bodyColor} onChange={(v) => updateSbl("bodyColor", v)} />
+              <ColorField label="Heading color" value={s.headingColor} onChange={(v) => updateSbl("headingColor", v)} />
+              <ColorField label="Link color" value={s.linkColor} onChange={(v) => updateSbl("linkColor", v)} />
+              <ColorField
+                label="Background"
+                value={s.backgroundColor}
+                onChange={(v) => updateSbl("backgroundColor", v)}
+              />
+              <ColorField label="Panel background" value={s.panelBg} onChange={(v) => updateSbl("panelBg", v)} />
+              <ColorField label="Accent" value={s.accentColor} onChange={(v) => updateSbl("accentColor", v)} />
+              <ColorField label="Border" value={s.borderColor} onChange={(v) => updateSbl("borderColor", v)} />
+            </div>
+            <div className="story-based-learning space-y-2">
+              <p className="text-xs font-semibold uppercase opacity-70">Live story preview</p>
+              <h2 style={{ color: "var(--sbl-heading-color)", fontSize: "1.15em" }}>Story heading sample</h2>
+              <p>
+                Body text with <strong>bold</strong> and a <a href="#sbl">link</a> — uses current device draft.
+              </p>
             </div>
           </TabsContent>
 

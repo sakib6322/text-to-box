@@ -8,8 +8,7 @@ import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
-import { StickyTopBar } from "@/components/StickyTopBar";
-import { userContentCard, userHeaderActionBtn, userPageShellTight, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
+import { userContentCard, userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
 
 export default function ConceptDetailPage() {
@@ -53,7 +52,7 @@ export default function ConceptDetailPage() {
 
   return (
     <div className={userPageShellTight}>
-      <StickyTopBar>
+      <div className={userPageTopBar}>
         <div className={userStickyHeader}>
           <Button asChild variant="ghost" size="icon" className="shrink-0">
             <Link to="/my-suggestions">
@@ -95,7 +94,7 @@ export default function ConceptDetailPage() {
             </Button>
           </div>
         </div>
-      </StickyTopBar>
+      </div>
 
       <Card className={userContentCard}>
         <div className="flex items-center justify-between gap-2">

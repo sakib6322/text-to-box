@@ -16,10 +16,10 @@ import {
   userHeaderActionBtn,
   userHeaderActionLabel,
   userPageShellTight,
+  userPageTopBar,
   userStickyHeader,
   userStickyHeaderActions,
 } from "@/lib/userShell";
-import { StickyTopBar } from "@/components/StickyTopBar";
 import { toast } from "sonner";
 
 type QRow = {
@@ -100,7 +100,7 @@ export default function PracticeSetup() {
 
   return (
     <div className={userPageShellTight}>
-      <StickyTopBar>
+      <div className={userPageTopBar}>
         <div className={userStickyHeader}>
           <Button asChild variant="ghost" size="icon" className="shrink-0">
             <Link to="/my-suggestions">
@@ -120,7 +120,7 @@ export default function PracticeSetup() {
             </Button>
           </div>
         </div>
-      </StickyTopBar>
+      </div>
 
       <Card className="mx-3 space-y-3 p-4 md:mx-0 md:p-6">
         <div className="space-y-2">

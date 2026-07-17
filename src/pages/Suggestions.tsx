@@ -990,17 +990,19 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
               <button
                 type="button"
-                className="font-medium text-primary hover:underline"
+                className="max-w-full break-words text-left font-medium text-primary hover:underline"
                 onClick={() => goBrowse("subjects")}
               >
                 Subjects
               </button>
               {subjectName ? (
                 <>
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-3 w-3 shrink-0" />
                   <button
                     type="button"
-                    className={browseStep === "systems" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    className={`max-w-full break-words text-left ${
+                      browseStep === "systems" ? "font-semibold text-foreground" : "text-primary hover:underline"
+                    }`}
                     onClick={() => goBrowse("systems")}
                   >
                     {subjectName}
@@ -1009,10 +1011,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               ) : null}
               {systemName ? (
                 <>
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-3 w-3 shrink-0" />
                   <button
                     type="button"
-                    className={browseStep === "chapters" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    className={`max-w-full break-words text-left ${
+                      browseStep === "chapters" ? "font-semibold text-foreground" : "text-primary hover:underline"
+                    }`}
                     onClick={() => goBrowse("chapters")}
                   >
                     {systemName}
@@ -1021,10 +1025,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               ) : null}
               {chapterName ? (
                 <>
-                  <ChevronRight className="h-3 w-3" />
+                  <ChevronRight className="h-3 w-3 shrink-0" />
                   <button
                     type="button"
-                    className={browseStep === "topics" ? "font-semibold text-foreground" : "text-primary hover:underline"}
+                    className={`max-w-full break-words text-left ${
+                      browseStep === "topics" ? "font-semibold text-foreground" : "text-primary hover:underline"
+                    }`}
                     onClick={() => goBrowse("topics")}
                   >
                     {chapterName}
@@ -1033,13 +1039,13 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               ) : null}
               {topicName ? (
                 <>
-                  <ChevronRight className="h-3 w-3" />
-                  <span className="font-semibold text-foreground">{topicName}</span>
+                  <ChevronRight className="h-3 w-3 shrink-0" />
+                  <span className="max-w-full break-words font-semibold text-foreground">{topicName}</span>
                 </>
               ) : null}
             </div>
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold">{browseTitle}</h2>
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="min-w-0 flex-1 break-words text-base font-semibold leading-snug">{browseTitle}</h2>
               {browseStep !== "subjects" ? (
                 <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={browseBack}>
                   <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back

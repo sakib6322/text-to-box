@@ -5,6 +5,8 @@
 
 export type DeviceKey = "mobile" | "tablet" | "desktop";
 
+export type StoryDialogWidth = "md" | "lg" | "xl" | "2xl" | "full";
+
 export type GlobalAppearance = {
   fontFamily: string;
   baseFontSizePx: number;
@@ -26,6 +28,14 @@ export type GlobalAppearance = {
   cardShadow: boolean;
   density: "comfortable" | "compact";
   contentMaxWidthPx: number;
+  /** Card chrome */
+  cardBorderWidthPx: number;
+  cardBorderOpacity: number;
+  cardPaddingPx: number;
+  cardHoverHighlight: boolean;
+  /** Page shell spacing */
+  pagePaddingPx: number;
+  sectionGapPx: number;
 };
 
 export type ConceptDetailsAppearance = {
@@ -56,9 +66,32 @@ export type ConceptDetailsAppearance = {
   blockquoteBorder: string;
 };
 
+/** Story-based learning modal + content styling (per device) */
+export type StoryBasedLearningAppearance = {
+  fontFamily: string;
+  fontSizePx: number;
+  lineHeight: number;
+  titleSizePx: number;
+  titleColor: string;
+  bodyColor: string;
+  headingColor: string;
+  linkColor: string;
+  backgroundColor: string;
+  panelBg: string;
+  accentColor: string;
+  borderColor: string;
+  borderRadiusPx: number;
+  contentPaddingPx: number;
+  dialogMaxWidth: StoryDialogWidth;
+  buttonLabel: string;
+  showButtonIcon: boolean;
+  emptyMessage: string;
+};
+
 export type DeviceAppearance = {
   global: GlobalAppearance;
   conceptDetails: ConceptDetailsAppearance;
+  storyBasedLearning: StoryBasedLearningAppearance;
 };
 
 export type UiAppearance = {
@@ -97,6 +130,12 @@ function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppeara
     cardShadow: true,
     density: "comfortable",
     contentMaxWidthPx: 1280,
+    cardBorderWidthPx: 1,
+    cardBorderOpacity: 0.9,
+    cardPaddingPx: 24,
+    cardHoverHighlight: true,
+    pagePaddingPx: 24,
+    sectionGapPx: 16,
     ...overrides,
   };
 }
@@ -132,22 +171,68 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
   };
 }
 
+function defaultStory(overrides: Partial<StoryBasedLearningAppearance> = {}): StoryBasedLearningAppearance {
+  return {
+    fontFamily: "Georgia, 'Times New Roman', serif",
+    fontSizePx: 16,
+    lineHeight: 1.75,
+    titleSizePx: 18,
+    titleColor: "#0f172a",
+    bodyColor: "#1e293b",
+    headingColor: "#0f766e",
+    linkColor: "#0d9488",
+    backgroundColor: "#fffbeb",
+    panelBg: "#ffffff",
+    accentColor: "#0d9488",
+    borderColor: "#fde68a",
+    borderRadiusPx: 12,
+    contentPaddingPx: 16,
+    dialogMaxWidth: "lg",
+    buttonLabel: "Story-based learning",
+    showButtonIcon: true,
+    emptyMessage: "এই concept-এ এখনো কোনো story নেই।",
+    ...overrides,
+  };
+}
+
 function defaultDevice(kind: DeviceKey): DeviceAppearance {
   if (kind === "mobile") {
     return {
-      global: defaultGlobal({ baseFontSizePx: 15, contentMaxWidthPx: 512, density: "compact" }),
+      global: defaultGlobal({
+        baseFontSizePx: 15,
+        contentMaxWidthPx: 512,
+        density: "compact",
+        cardPaddingPx: 12,
+        pagePaddingPx: 12,
+        sectionGapPx: 12,
+      }),
       conceptDetails: defaultConcept({ fontSizePx: 14, heading1SizePx: 20, heading2SizePx: 17, heading3SizePx: 15 }),
+      storyBasedLearning: defaultStory({
+        fontSizePx: 15,
+        titleSizePx: 16,
+        contentPaddingPx: 12,
+        dialogMaxWidth: "md",
+        borderRadiusPx: 10,
+      }),
     };
   }
   if (kind === "tablet") {
     return {
-      global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 840 }),
+      global: defaultGlobal({
+        baseFontSizePx: 16,
+        contentMaxWidthPx: 840,
+        cardPaddingPx: 16,
+        pagePaddingPx: 20,
+        sectionGapPx: 14,
+      }),
       conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 22, heading2SizePx: 18 }),
+      storyBasedLearning: defaultStory({ fontSizePx: 16, dialogMaxWidth: "xl" }),
     };
   }
   return {
     global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 1120, density: "comfortable" }),
     conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 24, heading2SizePx: 20, heading3SizePx: 17 }),
+    storyBasedLearning: defaultStory({ fontSizePx: 17, titleSizePx: 20, dialogMaxWidth: "2xl" }),
   };
 }
 
@@ -169,6 +254,7 @@ function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
   return {
     global: { ...base.global, ...(p.global ?? {}) },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
+    storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
   };
 }
 
@@ -179,22 +265,33 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
   const conceptDetails = (
     raw.conceptDetails && typeof raw.conceptDetails === "object" ? raw.conceptDetails : {}
   ) as Partial<ConceptDetailsAppearance>;
+  const storyBasedLearning = (
+    raw.storyBasedLearning && typeof raw.storyBasedLearning === "object" ? raw.storyBasedLearning : {}
+  ) as Partial<StoryBasedLearningAppearance>;
   const performance = (
     raw.performance && typeof raw.performance === "object" ? raw.performance : {}
   ) as Partial<UiAppearance["performance"]>;
   const sharedDevice: DeviceAppearance = {
     global: { ...base.desktop.global, ...global },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
+    storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
   };
   return {
     version: 2,
     mobile: {
       global: { ...sharedDevice.global, contentMaxWidthPx: 512, density: "compact" },
       conceptDetails: sharedDevice.conceptDetails,
+      storyBasedLearning: {
+        ...sharedDevice.storyBasedLearning,
+        fontSizePx: 15,
+        titleSizePx: 16,
+        dialogMaxWidth: "md",
+      },
     },
     tablet: {
       global: { ...sharedDevice.global, contentMaxWidthPx: 840 },
       conceptDetails: sharedDevice.conceptDetails,
+      storyBasedLearning: { ...sharedDevice.storyBasedLearning, dialogMaxWidth: "xl" },
     },
     desktop: sharedDevice,
     performance: { ...base.performance, ...performance },
@@ -235,6 +332,7 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   const resolved = resolveDeviceTheme(theme, device);
   const g = resolved.global;
   const c = resolved.conceptDetails;
+  const s = resolved.storyBasedLearning;
   const p = theme.performance;
 
   root.style.setProperty("--ui-font-family", g.fontFamily);
@@ -255,6 +353,11 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--glow-cyan", g.primaryHsl);
   root.style.setProperty("--glow-violet", g.accentHsl);
   root.style.setProperty("--ui-content-max", `${g.contentMaxWidthPx}px`);
+  root.style.setProperty("--ui-card-border-width", `${g.cardBorderWidthPx}px`);
+  root.style.setProperty("--ui-card-border-opacity", String(g.cardBorderOpacity));
+  root.style.setProperty("--ui-card-padding", `${g.cardPaddingPx}px`);
+  root.style.setProperty("--ui-page-padding", `${g.pagePaddingPx}px`);
+  root.style.setProperty("--ui-section-gap", `${g.sectionGapPx}px`);
 
   root.style.setProperty("--cd-font-family", c.fontFamily);
   root.style.setProperty("--cd-font-size", `${c.fontSizePx}px`);
@@ -282,11 +385,28 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-code-bg", c.codeBg);
   root.style.setProperty("--cd-quote-border", c.blockquoteBorder);
 
+  root.style.setProperty("--sbl-font-family", s.fontFamily);
+  root.style.setProperty("--sbl-font-size", `${s.fontSizePx}px`);
+  root.style.setProperty("--sbl-line-height", String(s.lineHeight));
+  root.style.setProperty("--sbl-title-size", `${s.titleSizePx}px`);
+  root.style.setProperty("--sbl-title-color", s.titleColor);
+  root.style.setProperty("--sbl-body-color", s.bodyColor);
+  root.style.setProperty("--sbl-heading-color", s.headingColor);
+  root.style.setProperty("--sbl-link-color", s.linkColor);
+  root.style.setProperty("--sbl-bg", s.backgroundColor);
+  root.style.setProperty("--sbl-panel-bg", s.panelBg);
+  root.style.setProperty("--sbl-accent", s.accentColor);
+  root.style.setProperty("--sbl-border", s.borderColor);
+  root.style.setProperty("--sbl-radius", `${s.borderRadiusPx}px`);
+  root.style.setProperty("--sbl-pad", `${s.contentPaddingPx}px`);
+  root.dataset.sblDialogWidth = s.dialogMaxWidth;
+
   root.dataset.pageTitleGradient = g.pageTitleGradient ? "1" : "0";
   root.dataset.meshBg = g.meshBackground ? "1" : "0";
   root.dataset.cardBlur = g.cardBackdropBlur ? "1" : "0";
   root.dataset.stickyBlur = g.stickyBackdropBlur ? "1" : "0";
   root.dataset.cardShadow = g.cardShadow ? "1" : "0";
+  root.dataset.cardHover = g.cardHoverHighlight ? "1" : "0";
   root.dataset.density = g.density;
   root.dataset.uiDevice = device;
   root.dataset.smoothScroll = p.smoothScroll ? "1" : "0";

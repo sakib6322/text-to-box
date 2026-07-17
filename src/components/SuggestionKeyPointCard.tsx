@@ -80,7 +80,7 @@ export function SuggestionKeyPointCard({
             })}
           </div>
         ) : null}
-        <p className={`leading-relaxed text-pretty ${compact ? "text-xs" : "text-sm"}`}>{content}</p>
+        <p className={`leading-relaxed text-pretty break-words ${compact ? "text-xs" : "text-sm"}`}>{content}</p>
         {conceptTitle && !compact ? (
           <div className="space-y-0.5">
             <p className="text-sm font-medium text-foreground">{conceptTitle}</p>

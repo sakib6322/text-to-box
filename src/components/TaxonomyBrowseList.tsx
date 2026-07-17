@@ -63,14 +63,14 @@ export function TaxonomyBrowseList({
           key={item.id}
           type="button"
           onClick={() => onSelect(item)}
-          className="flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99]"
+          className="flex w-full min-w-0 items-start gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99]"
           style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
         >
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
             {String(item.name).trim().charAt(0).toUpperCase() || "?"}
           </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
-          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 text-sm font-medium leading-snug break-words">{item.name}</span>
+          <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       ))}
       {visibleCount < items.length ? (
