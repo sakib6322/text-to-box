@@ -3,12 +3,14 @@ import {
   EXTRACT_CONCEPT_PROMPT_KEY,
   EXTRACT_KEY_POINTS_PROMPT_KEY,
   EXTRACT_QUESTIONS_PROMPT_KEY,
+  QUESTION_EXPLANATIONS_PROMPT_KEY,
   MATCHING_AI_ENABLED_KEY,
   MATCHING_PROMPT_KEY,
   MATCHING_VECTOR_ENABLED_KEY,
   getDefaultExtractConceptPrompt,
   getDefaultExtractKeyPointsPrompt,
   getDefaultExtractQuestionsPrompt,
+  getDefaultQuestionExplanationsPrompt,
   getDefaultMatchingPrompt,
 } from "./promptDefaults.mjs";
 
@@ -111,6 +113,18 @@ export async function saveExtractKeyPointsPrompt(db, prompt) {
 
 export async function resetExtractKeyPointsPrompt(db) {
   return resetPromptInDb(db, EXTRACT_KEY_POINTS_PROMPT_KEY, getDefaultExtractKeyPointsPrompt);
+}
+
+export async function getQuestionExplanationsPrompt(db) {
+  return getPromptFromDb(db, QUESTION_EXPLANATIONS_PROMPT_KEY, getDefaultQuestionExplanationsPrompt);
+}
+
+export async function saveQuestionExplanationsPrompt(db, prompt) {
+  return savePromptToDb(db, QUESTION_EXPLANATIONS_PROMPT_KEY, prompt);
+}
+
+export async function resetQuestionExplanationsPrompt(db) {
+  return resetPromptInDb(db, QUESTION_EXPLANATIONS_PROMPT_KEY, getDefaultQuestionExplanationsPrompt);
 }
 
 export async function getMatchingPrompt(db) {
@@ -326,11 +340,13 @@ export {
   EXTRACT_CONCEPT_PROMPT_KEY,
   EXTRACT_KEY_POINTS_PROMPT_KEY,
   EXTRACT_QUESTIONS_PROMPT_KEY,
+  QUESTION_EXPLANATIONS_PROMPT_KEY,
   MATCHING_PROMPT_KEY,
   MATCHING_VECTOR_ENABLED_KEY,
   MATCHING_AI_ENABLED_KEY,
   getDefaultExtractConceptPrompt,
   getDefaultExtractKeyPointsPrompt,
   getDefaultExtractQuestionsPrompt,
+  getDefaultQuestionExplanationsPrompt,
   getDefaultMatchingPrompt,
 };

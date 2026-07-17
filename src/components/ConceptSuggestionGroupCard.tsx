@@ -33,6 +33,7 @@ type Props = {
   onEdit?: (row: ConceptSuggestionRow) => void;
   onDelete?: (row: ConceptSuggestionRow) => void;
   onAdd?: () => void;
+  onBoardClick?: (board: { id: string; name: string }) => void;
 };
 
 export function ConceptSuggestionGroupCard({
@@ -48,6 +49,7 @@ export function ConceptSuggestionGroupCard({
   onEdit,
   onDelete,
   onAdd,
+  onBoardClick,
 }: Props) {
   const pct = studyPct ?? 0;
 
@@ -141,6 +143,7 @@ export function ConceptSuggestionGroupCard({
                 deleting={deleting === r.id}
                 onEdit={onEdit ? () => onEdit(r) : undefined}
                 onDelete={onDelete ? () => onDelete(r) : undefined}
+                onBoardClick={onBoardClick}
                 compact
               />
             ))}

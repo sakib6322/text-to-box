@@ -28,6 +28,9 @@ import {
   getExtractKeyPointsPrompt,
   resetExtractKeyPointsPrompt,
   saveExtractKeyPointsPrompt,
+  getQuestionExplanationsPrompt,
+  resetQuestionExplanationsPrompt,
+  saveQuestionExplanationsPrompt,
   getMatchingPromptConfig,
   saveMatchingPromptConfig,
   resetMatchingPromptConfig,
@@ -451,8 +454,22 @@ function preserveVerbatimText(value) {
 
 function normalizeQuestionType(value) {
   const s = String(value ?? "").toLowerCase().trim();
-  if (s === "mcq" || s === "multiple" || s.includes("true/false") || s.includes("t/f")) return "mcq";
-  if (s === "sba" || s === "single" || s.includes("best answer")) return "sba";
+  if (!s) return null;
+  if (
+    s === "mcq" ||
+    s === "multiple" ||
+    s.includes("mcq") ||
+    s.includes("true/false") ||
+    s.includes("true-false") ||
+    s.includes("t/f") ||
+    s.includes("tftf") ||
+    s === "tf"
+  ) {
+    return "mcq";
+  }
+  if (s === "sba" || s === "single" || s.includes("sba") || s.includes("best answer") || s.includes("single best")) {
+    return "sba";
+  }
   return null;
 }
 
@@ -869,11 +886,19 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
   }
 });
 
-app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
+app.post(
+  "/api/extract-questions",
+  (req, res, next) => {
+    const ct = String(req.headers["content-type"] ?? "");
+    if (ct.includes("multipart/form-data")) return upload.single("image")(req, res, next);
+    return next();
+  },
+  async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const inputText = String(req.body?.input_text ?? "").trim();
+    // Support multipart (image + text) and JSON body `{ input_text }` (text-only, more reliable).
+    const inputText = String(req.body?.input_text ?? req.body?.source_text ?? req.body?.text ?? "").trim();
     if (!req.file && !inputText) {
       return res.status(400).json({ error: "Image file or input text is required" });
     }
@@ -969,52 +994,98 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
 
       const text = result?.response?.text?.() ?? "";
       const parsed = parseGeminiJson(text);
-      const rawQuestions = Array.isArray(parsed?.questions) ? parsed.questions : [];
+      const rawQuestions = Array.isArray(parsed?.questions)
+        ? parsed.questions
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
 
       return rawQuestions
         .map((q) => {
-          const question_type = normalizeQuestionType(q?.question_type);
-          const stem = preserveVerbatimText(q?.stem);
-          if (!question_type || !stem) return null;
+          const question_type =
+            normalizeQuestionType(q?.question_type) ||
+            normalizeQuestionType(q?.questionType) ||
+            normalizeQuestionType(q?.type) ||
+            normalizeQuestionType(q?.mode);
+          const stem = preserveVerbatimText(q?.stem ?? q?.question ?? q?.text);
+          if (!stem) return null;
 
-          if (question_type === "mcq") {
-            const mcq_statements = Array.isArray(q?.mcq_statements)
-              ? q.mcq_statements
-                  .map((row) => {
-                    const line = preserveVerbatimText(row?.text);
-                    if (!line) return null;
-                    return { text: line, correct: normalizeTfAnswer(row?.correct) };
-                  })
-                  .filter(Boolean)
+          const rawMcq = Array.isArray(q?.mcq_statements)
+            ? q.mcq_statements
+            : Array.isArray(q?.trueFalse)
+              ? q.trueFalse
+              : Array.isArray(q?.statements)
+                ? q.statements
+                : Array.isArray(q?.options) && question_type === "mcq"
+                  ? q.options
+                  : [];
+          const mcq_statements = rawMcq
+            .map((row) => {
+              const line = preserveVerbatimText(
+                typeof row === "string" ? row : row?.text ?? row?.statement ?? row?.option,
+              );
+              if (!line) return null;
+              return {
+                text: line,
+                correct: normalizeTfAnswer(
+                  typeof row === "string" ? undefined : row?.correct ?? row?.answer ?? row?.is_correct,
+                ),
+              };
+            })
+            .filter(Boolean);
+
+          const rawSba = Array.isArray(q?.sba_options)
+            ? q.sba_options
+            : Array.isArray(q?.options) && question_type !== "mcq"
+              ? q.options
               : [];
-            if (mcq_statements.length === 0) return null;
+          const sba_options = rawSba
+            .map((row) => {
+              const line = preserveVerbatimText(typeof row === "string" ? row : row?.text ?? row?.option);
+              return line ? { text: line } : null;
+            })
+            .filter(Boolean);
+
+          // Infer type when model omitted/odd question_type but options are present.
+          let mode = question_type;
+          if (!mode) {
+            if (mcq_statements.length > 0) mode = "mcq";
+            else if (sba_options.length > 0) mode = "sba";
+            else mode = "sba";
+          }
+
+          if (mode === "mcq") {
+            // Keep stem even if options missing — user can fill manually.
+            const statements =
+              mcq_statements.length > 0
+                ? mcq_statements
+                : sba_options.map((o) => ({ text: o.text, correct: "false" }));
             return {
               question_type: "mcq",
-              question_number: preserveVerbatimText(q?.question_number) || null,
+              question_number: preserveVerbatimText(q?.question_number ?? q?.questionNumber) || null,
               stem,
-              mcq_statements,
+              mcq_statements:
+                statements.length > 0
+                  ? statements
+                  : [{ text: "", correct: "false" }],
             };
           }
 
-          const sba_options = Array.isArray(q?.sba_options)
-            ? q.sba_options
-                .map((row) => {
-                  const line = preserveVerbatimText(row?.text);
-                  return line ? { text: line } : null;
-                })
-                .filter(Boolean)
-            : [];
-          if (sba_options.length === 0) return null;
-          let sba_correct_index = Number(q?.sba_correct_index);
+          const opts =
+            sba_options.length > 0
+              ? sba_options
+              : mcq_statements.map((s) => ({ text: s.text }));
+          let sba_correct_index = Number(q?.sba_correct_index ?? q?.sbaCorrectIndex ?? q?.correct_index);
           if (!Number.isInteger(sba_correct_index) || sba_correct_index < 0 || sba_correct_index > 4) {
-            sba_correct_index = labelToOptionIndex(q?.sba_correct_label ?? q?.correct_option);
+            sba_correct_index = labelToOptionIndex(q?.sba_correct_label ?? q?.correct_option ?? q?.correct);
           }
+          const sliced = (opts.length > 0 ? opts : [{ text: "" }]).slice(0, 5);
           return {
             question_type: "sba",
-            question_number: preserveVerbatimText(q?.question_number) || null,
+            question_number: preserveVerbatimText(q?.question_number ?? q?.questionNumber) || null,
             stem,
-            sba_options: sba_options.slice(0, 5),
-            sba_correct_index: Math.min(sba_correct_index, sba_options.length - 1),
+            sba_options: sliced,
+            sba_correct_index: Math.min(Math.max(0, sba_correct_index), sliced.length - 1),
           };
         })
         .filter(Boolean);
@@ -1136,13 +1207,8 @@ app.post("/api/generate-question-explanations", async (req, res) => {
       })
       .join("\n\n");
 
-    const prompt = `You are a medical exam educator. For each question below, write concise explanations in the same language as the question (English or Bangla/Banglish as appropriate).
-
-MCQ (True/False statements): For EVERY statement, explain WHY it is TRUE or FALSE according to the marked answer. One explanation per statement_index.
-
-SBA: Provide exactly 5 option_explanations (index 0=a … 4=e). For the CORRECT option explain why it is the best answer. For each WRONG option explain why it is incorrect.
-
-Be medically accurate, exam-oriented, and specific. Do not repeat the option text verbatim without reasoning.${concept ? `\n\nConcept context: ${concept}` : ""}
+    const { prompt: explanationsPrompt } = await getQuestionExplanationsPrompt(db);
+    const prompt = `${explanationsPrompt.trim()}${concept ? `\n\nConcept context: ${concept}` : ""}
 
 QUESTIONS:
 ${questionsBlock}`;
@@ -1519,6 +1585,7 @@ app.post("/api/settings/prompts/extract-questions/reset", async (req, res) => {
 const promptHandlers = [
   ["extract-concept", getExtractConceptPrompt, saveExtractConceptPrompt, resetExtractConceptPrompt],
   ["extract-key-points", getExtractKeyPointsPrompt, saveExtractKeyPointsPrompt, resetExtractKeyPointsPrompt],
+  ["question-explanations", getQuestionExplanationsPrompt, saveQuestionExplanationsPrompt, resetQuestionExplanationsPrompt],
 ];
 
 for (const [slug, getFn, saveFn, resetFn] of promptHandlers) {

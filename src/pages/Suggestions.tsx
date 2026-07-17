@@ -24,6 +24,8 @@ import { mentionForBoard, type SuggestionBoardLink } from "@/components/Suggesti
 import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
 import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
 import type { KeyPointSavePayload } from "@/components/EditableKeyPointSection";
+import { KeyPointQuestionsEditor } from "@/components/KeyPointQuestionsEditor";
+import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import {
   Dialog,
   DialogContent,
@@ -128,6 +130,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [addTarget, setAddTarget] = useState<{ conceptId: string; title: string } | null>(null);
   const [addContent, setAddContent] = useState("");
   const [addBoardIds, setAddBoardIds] = useState<string[]>([]);
+  const [addCreatedKeyPointId, setAddCreatedKeyPointId] = useState<string | null>(null);
   const [savingAdd, setSavingAdd] = useState(false);
   const [savingKeyPoint, setSavingKeyPoint] = useState(false);
   const [search, setSearch] = useState("");
@@ -138,6 +141,9 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [detailsConceptDetail, setDetailsConceptDetail] = useState<ConceptDetail>(emptyConceptDetail());
   const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [savingConceptDetail, setSavingConceptDetail] = useState(false);
+  const [questionsPanelOpen, setQuestionsPanelOpen] = useState(false);
+  const [questionsBoardFilter, setQuestionsBoardFilter] = useState<{ id: string; name: string } | null>(null);
+  const [questionsConceptName, setQuestionsConceptName] = useState("");
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
   const [systems, setSystems] = useState<TaxonomyItem[]>([]);
@@ -368,6 +374,13 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setAddTarget({ conceptId, title });
     setAddContent("");
     setAddBoardIds([]);
+    setAddCreatedKeyPointId(null);
+  };
+
+  const openBoardQuestions = (board: { id: string; name: string }, conceptTitle?: string) => {
+    setQuestionsBoardFilter(board);
+    setQuestionsConceptName((conceptTitle ?? "").trim());
+    setQuestionsPanelOpen(true);
   };
 
   const openConceptDetails = async (conceptId: string, conceptTitle?: string) => {
@@ -482,34 +495,34 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     }
   };
 
-  const saveAdd = async () => {
+  const applyCreatedKeyPointToState = (
+    newId: string,
+    content: string,
+    boardIds: string[],
+    created?: {
+      id?: string;
+      content?: string;
+      increment_count?: number;
+      board_names?: string[];
+      board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+    },
+  ) => {
     if (!addTarget) return;
-    if (!guardPermission("suggestions.add")) return;
-    const content = addContent.trim();
-    if (!content) return toast.error("Content is required");
-    setSavingAdd(true);
-    try {
-      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ content, board_ids: addBoardIds }),
-      });
-      const j = (await r.json().catch(() => ({}))) as {
-        error?: string;
-        key_point?: {
-          id?: string;
-          content?: string;
-          increment_count?: number;
-          board_names?: string[];
-          board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
-        };
-      };
-      if (!r.ok) throw new Error(j.error ?? "Add failed");
-      const created = j.key_point;
-      const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
-      const nextBoards = boardLinksFromIds(addBoardIds, boardList);
-      const template = rows.find((r) => r.concept_id === addTarget.conceptId);
-      setRows((prev) => [
+    const nextBoards = boardLinksFromIds(boardIds, boardList);
+    const template = rows.find((r) => r.concept_id === addTarget.conceptId);
+    setRows((prev) => {
+      if (prev.some((r) => r.id === newId)) {
+        return prev.map((row) =>
+          row.id === newId
+            ? {
+                ...row,
+                content: created?.content ?? content,
+                key_point_boards: nextBoards,
+              }
+            : row,
+        );
+      }
+      return [
         {
           id: newId,
           content: created?.content ?? content,
@@ -526,9 +539,27 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
           key_point_boards: nextBoards,
         },
         ...prev,
-      ]);
-      if (detailsConceptId === addTarget.conceptId) {
-        setDetailsKeyPoints((prev) => [
+      ];
+    });
+    if (detailsConceptId === addTarget.conceptId) {
+      setDetailsKeyPoints((prev) => {
+        if (prev.some((kp) => kp.id === newId)) {
+          return prev.map((kp) =>
+            kp.id === newId
+              ? {
+                  ...kp,
+                  content: created?.content ?? content,
+                  boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
+                  boardLinks: nextBoards.map((b) => ({
+                    id: b.board_id,
+                    name: b.boards?.name ?? "",
+                    mention_count: Number(b.mention_count ?? 1) || 1,
+                  })),
+                }
+              : kp,
+          );
+        }
+        return [
           ...prev,
           {
             ...apiKpToWithBoards({ ...created, content, id: newId }),
@@ -539,11 +570,68 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               mention_count: Number(b.mention_count ?? 1) || 1,
             })),
           },
-        ]);
-      }
-      toast.success("Key point added");
+        ];
+      });
+    }
+    setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
+  };
+
+  /** Create key point if needed (for Add-box + optional questions), or update boards/content. */
+  const ensureAddKeyPointId = async (): Promise<string> => {
+    if (!addTarget) throw new Error("No concept selected");
+    if (!guardPermission("suggestions.add") && !guardPermission("suggestions.edit")) {
+      throw new Error("No permission");
+    }
+    const content = addContent.trim();
+    if (!content) throw new Error("Key point content is required before saving questions");
+
+    if (addCreatedKeyPointId) {
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(addCreatedKeyPointId)}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ content, board_ids: addBoardIds }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Failed to update key point");
+      applyCreatedKeyPointToState(addCreatedKeyPointId, content, addBoardIds);
+      return addCreatedKeyPointId;
+    }
+
+    const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      body: JSON.stringify({ content, board_ids: addBoardIds }),
+    });
+    const j = (await r.json().catch(() => ({}))) as {
+      error?: string;
+      key_point?: {
+        id?: string;
+        content?: string;
+        increment_count?: number;
+        board_names?: string[];
+        board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+      };
+    };
+    if (!r.ok) throw new Error(j.error ?? "Add failed");
+    const created = j.key_point;
+    const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
+    setAddCreatedKeyPointId(newId);
+    applyCreatedKeyPointToState(newId, content, addBoardIds, created);
+    return newId;
+  };
+
+  const saveAdd = async () => {
+    if (!addTarget) return;
+    if (!guardPermission("suggestions.add")) return;
+    const content = addContent.trim();
+    if (!content) return toast.error("Content is required");
+    setSavingAdd(true);
+    try {
+      const wasNew = !addCreatedKeyPointId;
+      await ensureAddKeyPointId();
+      toast.success(wasNew ? "Key point added" : "Key point updated");
       setAddTarget(null);
-      setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
+      setAddCreatedKeyPointId(null);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Add failed");
     } finally {
@@ -1166,6 +1254,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                       : undefined
                   }
                   onAdd={adminView && canAdd ? () => openAdd(g.conceptId, g.title) : undefined}
+                  onBoardClick={(board) => openBoardQuestions(board, g.title)}
                 />
               );
             })}
@@ -1192,11 +1281,11 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       />
 
       <Dialog open={Boolean(editTarget)} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent>
+        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-hidden sm:max-w-2xl lg:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Edit suggestion</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
             <div className="space-y-2">
               <Label>Concept</Label>
               <Input value={editConceptTitle} onChange={(e) => setEditConceptTitle(e.target.value)} placeholder="Concept title" />
@@ -1213,6 +1302,52 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                 onChange={setEditBoardIds}
               />
             </div>
+            {editTarget ? (
+              <KeyPointQuestionsEditor
+                keyPointId={editTarget.id}
+                defaultBoardIds={editBoardIds}
+                boardOptions={boardList}
+                concept={{
+                  subject: (editTarget.concepts?.subject ?? "").trim(),
+                  system: (editTarget.concepts?.system ?? "").trim(),
+                  chapter: (editTarget.concepts?.chapter ?? "").trim(),
+                  topic: (editTarget.concepts?.topic ?? "").trim(),
+                  concept: editConceptTitle.trim() || (editTarget.concepts?.title ?? "").trim(),
+                }}
+                resetKey={editTarget.id}
+                ensureKeyPointId={async () => {
+                  const content = editContent.trim();
+                  if (!content) throw new Error("Key point content is required before saving questions");
+                  const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(editTarget.id)}`), {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+                    body: JSON.stringify({
+                      content,
+                      concept_title: editConceptTitle.trim() || undefined,
+                      board_ids: editBoardIds,
+                    }),
+                  });
+                  const j = (await r.json().catch(() => ({}))) as { error?: string };
+                  if (!r.ok) throw new Error(j.error ?? "Failed to sync key point boards");
+                  const nextBoards = boardLinksFromIds(editBoardIds, boardList);
+                  setRows((prev) =>
+                    prev.map((row) =>
+                      row.id === editTarget.id
+                        ? {
+                            ...row,
+                            content,
+                            concepts: row.concepts
+                              ? { ...row.concepts, title: editConceptTitle.trim() || row.concepts.title }
+                              : row.concepts,
+                            key_point_boards: nextBoards,
+                          }
+                        : row,
+                    ),
+                  );
+                  return editTarget.id;
+                }}
+              />
+            ) : null}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
@@ -1226,12 +1361,40 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={Boolean(addTarget)} onOpenChange={(open) => !open && setAddTarget(null)}>
-        <DialogContent>
+      <ConceptQuestionsPanel
+        open={questionsPanelOpen}
+        onOpenChange={(open) => {
+          setQuestionsPanelOpen(open);
+          if (!open) setQuestionsBoardFilter(null);
+        }}
+        conceptName={questionsConceptName || undefined}
+        boardId={questionsBoardFilter?.id}
+        boardName={questionsBoardFilter?.name}
+        onClearBoardFilter={
+          questionsBoardFilter && questionsConceptName
+            ? () => setQuestionsBoardFilter(null)
+            : undefined
+        }
+        onBoardClick={(board) => {
+          setQuestionsBoardFilter(board);
+          setQuestionsPanelOpen(true);
+        }}
+      />
+
+      <Dialog
+        open={Boolean(addTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAddTarget(null);
+            setAddCreatedKeyPointId(null);
+          }
+        }}
+      >
+        <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-hidden sm:max-w-2xl lg:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Add key point{addTarget?.title ? `: ${addTarget.title}` : ""}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto py-2 pr-1">
             <div className="space-y-2">
               <Label>Key point content</Label>
               <Textarea
@@ -1250,14 +1413,46 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                 onChange={setAddBoardIds}
               />
             </div>
+            {addTarget ? (
+              <KeyPointQuestionsEditor
+                keyPointId={addCreatedKeyPointId}
+                defaultBoardIds={addBoardIds}
+                boardOptions={boardList}
+                concept={{
+                  subject: (
+                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.subject ?? ""
+                  ).trim(),
+                  system: (
+                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.system ?? ""
+                  ).trim(),
+                  chapter: (
+                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.chapter ?? ""
+                  ).trim(),
+                  topic: (
+                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.topic ?? ""
+                  ).trim(),
+                  concept: addTarget.title.trim(),
+                }}
+                resetKey={`add-${addTarget.conceptId}`}
+                ensureKeyPointId={ensureAddKeyPointId}
+              />
+            ) : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setAddTarget(null)} disabled={savingAdd}>
-              Cancel
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setAddTarget(null);
+                setAddCreatedKeyPointId(null);
+              }}
+              disabled={savingAdd}
+            >
+              {addCreatedKeyPointId ? "Close" : "Cancel"}
             </Button>
             <Button type="button" onClick={() => void saveAdd()} disabled={savingAdd || !addContent.trim()}>
               {savingAdd ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Add
+              {addCreatedKeyPointId ? "Save key point" : "Add"}
             </Button>
           </DialogFooter>
         </DialogContent>

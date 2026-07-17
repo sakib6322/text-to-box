@@ -1,6 +1,7 @@
 export const EXTRACT_QUESTIONS_PROMPT_KEY = "extract_questions_prompt";
 export const EXTRACT_CONCEPT_PROMPT_KEY = "extract_concept_prompt";
 export const EXTRACT_KEY_POINTS_PROMPT_KEY = "extract_key_points_prompt";
+export const QUESTION_EXPLANATIONS_PROMPT_KEY = "question_explanations_prompt";
 export const MATCHING_PROMPT_KEY = "matching_prompt";
 export const MATCHING_VECTOR_ENABLED_KEY = "matching_vector_enabled";
 export const MATCHING_AI_ENABLED_KEY = "matching_ai_enabled";
@@ -31,7 +32,9 @@ SBA fields:
 - sba_options: each option line copied exactly (up to 5)
 - sba_correct_index: 0 for a, 1 for b, … from the answer key
 
-MULTIPLE QUESTIONS: If the image has Q04, Q05, etc., return one object per question in reading order.
+MULTIPLE QUESTIONS: If the image/text has Q04, Q05, etc., return one object per question in reading order.
+
+TEXT SOURCES: When the source is pasted text (not an image), still extract every MCQ/SBA even if answer keys are incomplete; return options a–e when present. Prefer returning questions over an empty list.
 
 If there are no exam questions, return "questions": [].
 
@@ -51,6 +54,18 @@ export function getDefaultExtractKeyPointsPrompt() {
   return `For high_yield_points ONLY: convert essay-like teaching text into exam-friendly study points or stems.
 Do NOT put full MCQ/SBA exam questions (numbered stems with a–e options and an answer key) into high_yield_points.
 Each point should be a concise, high-yield fact suitable for matching against a medical question bank.`;
+}
+
+export function getDefaultQuestionExplanationsPrompt() {
+  return `You are a medical exam educator. For each question below, write concise explanations in the same language as the question (English or Bangla/Banglish as appropriate).
+
+MCQ (True/False statements): For EVERY statement, explain WHY it is TRUE or FALSE according to the marked answer. One explanation per statement_index.
+
+SBA: Provide exactly 5 option_explanations (index 0=a … 4=e). For the CORRECT option explain why it is the best answer. For each WRONG option explain why it is incorrect.
+
+Be medically accurate, exam-oriented, and specific. Do not repeat the option text verbatim without reasoning.
+
+Note: Concept context and the QUESTIONS block are appended automatically by the server.`;
 }
 
 export function getDefaultMatchingPrompt() {

@@ -21,6 +21,8 @@ type Props = {
   onDetails?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  /** Click a board badge to view that board's questions */
+  onBoardClick?: (board: { id: string; name: string }) => void;
   compact?: boolean;
 };
 
@@ -44,6 +46,7 @@ export function SuggestionKeyPointCard({
   onDetails,
   onEdit,
   onDelete,
+  onBoardClick,
   compact = false,
 }: Props) {
   const boardMention = boardFilterId && boardFilterId !== "all" ? mentionForBoard(boardLinks, boardFilterId) : null;
@@ -67,14 +70,31 @@ export function SuggestionKeyPointCard({
             {boardLinks.map((l) => {
               const name = l.boards?.name?.trim();
               if (!name) return null;
+              const id = l.boards?.id ?? l.board_id;
               const cnt = Number(l.mention_count ?? 1);
+              const label = `${name}${cnt > 1 ? ` ×${cnt}` : ""}`;
+              const className =
+                "text-[10px] font-normal tabular-nums text-red-600 border-red-300 bg-red-50";
+              if (onBoardClick && id) {
+                return (
+                  <button
+                    key={`${l.board_id}-${name}`}
+                    type="button"
+                    className="inline-flex"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onBoardClick({ id, name });
+                    }}
+                  >
+                    <Badge variant="outline" className={`${className} cursor-pointer hover:bg-red-100`}>
+                      {label}
+                    </Badge>
+                  </button>
+                );
+              }
               return (
-                <Badge
-                  key={`${l.board_id}-${name}`}
-                  variant="outline"
-                  className="text-[10px] font-normal tabular-nums"
-                >
-                  {name}{cnt > 1 ? ` ×${cnt}` : ""}
+                <Badge key={`${l.board_id}-${name}`} variant="outline" className={className}>
+                  {label}
                 </Badge>
               );
             })}

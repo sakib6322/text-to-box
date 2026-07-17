@@ -8,7 +8,12 @@ import { toast } from "sonner";
 import { Loader2, RotateCcw } from "lucide-react";
 import { apiFetch, apiUrl } from "@/lib/apiBase";
 
-type PromptSlug = "extract-questions" | "extract-concept" | "extract-key-points" | "matching";
+type PromptSlug =
+  | "extract-questions"
+  | "extract-concept"
+  | "extract-key-points"
+  | "question-explanations"
+  | "matching";
 
 type PromptResponse = {
   prompt?: string;
@@ -28,7 +33,7 @@ const PROMPT_NAV: { slug: PromptSlug; label: string; description: string }[] = [
   {
     slug: "extract-questions",
     label: "Questions",
-    description: "Gemini prompt for extracting MCQ/SBA exam questions (Create Question AI).",
+    description: "Gemini prompt for extracting MCQ/SBA exam questions (Create Question AI / Suggestions).",
   },
   {
     slug: "extract-concept",
@@ -39,6 +44,12 @@ const PROMPT_NAV: { slug: PromptSlug; label: string; description: string }[] = [
     slug: "extract-key-points",
     label: "Key points",
     description: "Prompt for high-yield key points / study stems used in suggestion matching.",
+  },
+  {
+    slug: "question-explanations",
+    label: "Explanations",
+    description:
+      "Generate explanations (AI) for MCQ T/F statements and SBA options. Concept context and question text are appended automatically.",
   },
   {
     slug: "matching",
