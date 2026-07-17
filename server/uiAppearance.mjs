@@ -116,6 +116,59 @@ function defaultStory(overrides = {}) {
   };
 }
 
+function defaultAllQuestions(overrides = {}) {
+  return {
+    useSidebarLabelAsTitle: true,
+    pageTitle: "All Questions",
+    showResultBadge: true,
+    filterSticky: true,
+    listMaxWidthPx: 768,
+    emptyMessage: "No questions found",
+    cardGapPx: 16,
+    paperBg: "#ffffff",
+    paperFg: "#171717",
+    paperMuted: "#737373",
+    paperBorder: "#d4d4d4",
+    paperRadiusPx: 2,
+    paperPaddingPx: 20,
+    paperShadow: true,
+    questionLabelSizePx: 10,
+    marksSizePx: 10,
+    modeBadgeSizePx: 9,
+    boardBadgeSizePx: 9,
+    taxonomySizePx: 10,
+    conceptSizePx: 11,
+    taxonomyColor: "#525252",
+    conceptColor: "#262626",
+    headerBorderColor: "#d4d4d4",
+    badgeBorderColor: "#d4d4d4",
+    stemFontFamily: "Georgia, 'Times New Roman', serif",
+    stemFontSizePx: 11,
+    stemLineHeight: 1.55,
+    stemColor: "#171717",
+    optionFontFamily: "Georgia, 'Times New Roman', serif",
+    optionFontSizePx: 10.5,
+    optionLineHeight: 1.5,
+    optionGapPx: 8,
+    optionNumberColor: "#737373",
+    optionTextColor: "#262626",
+    correctColor: "#047857",
+    wrongColor: "#dc2626",
+    showExplanations: true,
+    explanationTitle: "Explanations",
+    explanationTitleSizePx: 10,
+    explanationTitleColor: "#737373",
+    explanationFontSizePx: 10,
+    explanationLineHeight: 1.45,
+    explanationColor: "#404040",
+    explanationLabelColor: "#262626",
+    explanationGapPx: 8,
+    explanationBorderColor: "#e5e5e5",
+    explanationPaddingTopPx: 12,
+    ...overrides,
+  };
+}
+
 function defaultDevice(kind) {
   if (kind === "mobile") {
     return {
@@ -135,6 +188,13 @@ function defaultDevice(kind) {
         dialogMaxWidth: "md",
         borderRadiusPx: 10,
       }),
+      allQuestions: defaultAllQuestions({
+        listMaxWidthPx: 512,
+        paperPaddingPx: 14,
+        cardGapPx: 12,
+        stemFontSizePx: 12,
+        optionFontSizePx: 11,
+      }),
     };
   }
   if (kind === "tablet") {
@@ -148,12 +208,14 @@ function defaultDevice(kind) {
       }),
       conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 22, heading2SizePx: 18 }),
       storyBasedLearning: defaultStory({ fontSizePx: 16, dialogMaxWidth: "xl" }),
+      allQuestions: defaultAllQuestions({ listMaxWidthPx: 680, paperPaddingPx: 18 }),
     };
   }
   return {
     global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 1120, density: "comfortable" }),
     conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 24, heading2SizePx: 20, heading3SizePx: 17 }),
     storyBasedLearning: defaultStory({ fontSizePx: 17, titleSizePx: 20, dialogMaxWidth: "2xl" }),
+    allQuestions: defaultAllQuestions({ listMaxWidthPx: 768, paperPaddingPx: 24, stemFontSizePx: 12 }),
   };
 }
 
@@ -181,6 +243,7 @@ function mergeDevice(base, patch) {
     },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
+    allQuestions: { ...base.allQuestions, ...(p.allQuestions ?? {}) },
   };
 }
 
@@ -190,6 +253,7 @@ function fromV1(raw) {
   const conceptDetails = raw?.conceptDetails && typeof raw.conceptDetails === "object" ? raw.conceptDetails : {};
   const storyBasedLearning =
     raw?.storyBasedLearning && typeof raw.storyBasedLearning === "object" ? raw.storyBasedLearning : {};
+  const allQuestions = raw?.allQuestions && typeof raw.allQuestions === "object" ? raw.allQuestions : {};
   const performance = raw?.performance && typeof raw.performance === "object" ? raw.performance : {};
   const shared = {
     global: {
@@ -202,6 +266,7 @@ function fromV1(raw) {
     },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
+    allQuestions: { ...base.desktop.allQuestions, ...allQuestions },
   };
   return {
     version: 2,
@@ -209,11 +274,13 @@ function fromV1(raw) {
       global: { ...shared.global, contentMaxWidthPx: 512, density: "compact" },
       conceptDetails: shared.conceptDetails,
       storyBasedLearning: { ...shared.storyBasedLearning, fontSizePx: 15, titleSizePx: 16, dialogMaxWidth: "md" },
+      allQuestions: { ...shared.allQuestions, listMaxWidthPx: 512, paperPaddingPx: 14, cardGapPx: 12 },
     },
     tablet: {
       global: { ...shared.global, contentMaxWidthPx: 840 },
       conceptDetails: shared.conceptDetails,
       storyBasedLearning: { ...shared.storyBasedLearning, dialogMaxWidth: "xl" },
+      allQuestions: { ...shared.allQuestions, listMaxWidthPx: 680 },
     },
     desktop: shared,
     performance: { ...base.performance, ...performance },

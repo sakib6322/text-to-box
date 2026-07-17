@@ -40,6 +40,9 @@ import {
 } from "@/lib/conceptDetail";
 import { useHeaderSearch } from "@/components/AppShellContext";
 import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
+import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { resolveDeviceTheme } from "@/lib/uiAppearance";
+import { cn } from "@/lib/utils";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[]; boardIds?: string[] };
@@ -73,6 +76,13 @@ type QuestionRow = {
 };
 
 export default function AllQuestions() {
+  const { appearance, activeDevice } = useUiAppearance();
+  const deviceTheme = resolveDeviceTheme(appearance, activeDevice);
+  const aq = deviceTheme.allQuestions;
+  const pageTitle = aq.useSidebarLabelAsTitle
+    ? deviceTheme.global.sidebarLabels.allQuestions || aq.pageTitle
+    : aq.pageTitle || "All Questions";
+
   const [rows, setRows] = useState<QuestionRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -427,14 +437,16 @@ export default function AllQuestions() {
   return (
     <div className="space-y-4 print:bg-white">
       <div className="flex items-center justify-between gap-2 print:hidden">
-        <h1 className="page-title">All Questions</h1>
-        <Badge variant="secondary">{resultCount} items</Badge>
+        <h1 className="page-title">{pageTitle}</h1>
+        {aq.showResultBadge ? <Badge variant="secondary">{resultCount} items</Badge> : null}
       </div>
 
       <Card
-        className={`filter-card sticky-filter-card scroll-aware-panel print:hidden ${
-          filtersVisible ? "" : "hidden-on-scroll-down"
-        }`}
+        className={cn(
+          "filter-card print:hidden",
+          aq.filterSticky && "sticky-filter-card scroll-aware-panel",
+          aq.filterSticky && !filtersVisible && "hidden-on-scroll-down",
+        )}
       >
         <div className="filter-grid-mobile lg:grid-cols-4">
           <Select value={type} onValueChange={setType}>
@@ -580,9 +592,9 @@ export default function AllQuestions() {
           <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...
         </div>
       ) : rows.length === 0 ? (
-        <Card className="p-10 text-center text-muted-foreground print:hidden">No questions found</Card>
+        <Card className="p-10 text-center text-muted-foreground print:hidden">{aq.emptyMessage}</Card>
       ) : (
-        <div className="space-y-4 max-w-3xl mx-auto">
+        <div className="all-questions-list">
           {rows.map((r, i) => (
             <div key={r.id} className="relative group">
               <QuestionPaperCard

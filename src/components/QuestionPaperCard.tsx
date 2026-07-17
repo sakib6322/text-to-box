@@ -1,4 +1,6 @@
 import { Badge } from "@/components/ui/badge";
+import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { resolveDeviceTheme } from "@/lib/uiAppearance";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
@@ -8,9 +10,13 @@ type SbaDist = Record<string, { count: number }>;
 
 function MiniBar({ pct, variant }: { pct: number; variant: "correct" | "wrong" | "neutral" }) {
   const color =
-    variant === "correct" ? "bg-emerald-500" : variant === "wrong" ? "bg-red-500" : "bg-neutral-400";
+    variant === "correct"
+      ? "bg-[var(--aq-correct,#047857)]"
+      : variant === "wrong"
+        ? "bg-[var(--aq-wrong,#dc2626)]"
+        : "bg-[var(--aq-paper-muted,#a3a3a3)]";
   return (
-    <div className="w-8 h-1 bg-neutral-200 rounded-full overflow-hidden shrink-0">
+    <div className="w-8 h-1 rounded-full overflow-hidden shrink-0 bg-[color-mix(in_srgb,var(--aq-paper-muted,#a3a3a3)_25%,transparent)]">
       <div className={`h-full ${color}`} style={{ width: `${Math.min(100, pct)}%` }} />
     </div>
   );
@@ -55,6 +61,10 @@ export function QuestionPaperCard({
   distribution = null,
   showAnswerReview = false,
 }: Props) {
+  const { appearance, activeDevice } = useUiAppearance();
+  const aq = resolveDeviceTheme(appearance, activeDevice).allQuestions;
+  const showExplanations = aq.showExplanations !== false;
+
   const taxonomy = [subject, system, chapter, topic].filter(Boolean).join(" · ");
   const stem = questionMode === "mcq" ? mcq?.stem : sba?.stem;
   const reviewActive = showAnswerReview && !hideAnswers && distribution;
@@ -67,14 +77,14 @@ export function QuestionPaperCard({
   const sbaHasExplanations = (sba?.optionExplanations ?? []).some((e) => (e ?? "").trim());
 
   return (
-    <article className="question-paper bg-white text-neutral-900 border border-neutral-300 shadow-sm rounded-sm p-5 sm:p-6 print:shadow-none print:border-neutral-400">
-      <header className="border-b border-neutral-300 pb-2 mb-3 flex flex-wrap items-start justify-between gap-2">
+    <article className="question-paper print:shadow-none">
+      <header className="question-paper-header flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0 space-y-0.5">
           {index != null ? (
-            <p className="text-[10px] uppercase tracking-widest text-neutral-500 font-medium">Question {index + 1}</p>
+            <p className="question-paper-meta uppercase tracking-widest font-medium">Question {index + 1}</p>
           ) : null}
-          {taxonomy ? <p className="text-[10px] leading-snug text-neutral-600">{taxonomy}</p> : null}
-          {concept ? <p className="text-[11px] font-semibold text-neutral-800">{concept}</p> : null}
+          {taxonomy ? <p className="question-paper-taxonomy leading-snug">{taxonomy}</p> : null}
+          {concept ? <p className="question-paper-concept font-semibold">{concept}</p> : null}
           {boards?.length ? (
             <div className="flex flex-wrap gap-1 pt-0.5">
               {boards.map((b, idx) => {
@@ -85,7 +95,7 @@ export function QuestionPaperCard({
                   <Badge
                     key={b.id ?? `${name}-${idx}`}
                     variant="outline"
-                    className="text-[9px] font-normal tabular-nums border-neutral-300 px-1.5 py-0 text-neutral-600"
+                    className="question-paper-board-badge font-normal tabular-nums px-1.5 py-0"
                   >
                     {name}
                     {cnt > 1 ? ` ×${cnt}` : ""}
@@ -96,21 +106,21 @@ export function QuestionPaperCard({
           ) : null}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="outline" className="text-[9px] font-normal uppercase tracking-wide px-1.5 py-0">
+          <Badge variant="outline" className="question-paper-badge font-normal uppercase tracking-wide px-1.5 py-0">
             {questionMode}
           </Badge>
-          {marks != null ? <span className="text-[10px] text-neutral-500 tabular-nums">{marks} mark(s)</span> : null}
+          {marks != null ? <span className="question-paper-marks tabular-nums">{marks} mark(s)</span> : null}
         </div>
       </header>
 
       {stem ? (
-        <p className="text-[11px] leading-[1.55] text-neutral-900 font-serif whitespace-pre-wrap mb-3">{stem}</p>
+        <p className="question-paper-stem">{stem}</p>
       ) : (
-        <p className="text-[11px] text-neutral-400 italic mb-3">No stem</p>
+        <p className="question-paper-meta italic mb-3">No stem</p>
       )}
 
       {questionMode === "mcq" && mcq?.trueFalse?.length ? (
-        <ol className="space-y-2 pl-0 list-none">
+        <ol className="question-paper-options">
           {mcq.trueFalse.map((item, i) => {
             const sid = item.id ?? String(i);
             const student =
@@ -124,20 +134,21 @@ export function QuestionPaperCard({
             const falsePct = total ? Math.round((dist!.false / total) * 100) : 0;
 
             return (
-              <li key={sid} className="text-[10.5px] leading-[1.5] font-serif text-neutral-800 space-y-1">
+              <li key={sid} className="question-paper-option space-y-1">
                 <div className="flex gap-2">
-                  <span className="shrink-0 w-4 tabular-nums text-neutral-500">{i + 1}.</span>
+                  <span className="question-paper-option-num shrink-0 w-4 tabular-nums">{i + 1}.</span>
                   <span className="flex-1">{item.statement || "—"}</span>
                   {!hideAnswers ? (
-                    <span className="shrink-0 text-[9px] uppercase tracking-wide text-neutral-500 border border-neutral-300 px-1 rounded-sm">
+                    <span className="question-paper-badge shrink-0 uppercase tracking-wide border px-1 rounded-sm">
                       {correct}
                     </span>
                   ) : null}
                   {reviewActive && given ? (
                     <span
-                      className={`shrink-0 text-[9px] uppercase tracking-wide border px-1 rounded-sm ${
-                        given === correct ? "text-emerald-700 border-emerald-300" : "text-red-600 border-red-300"
+                      className={`shrink-0 uppercase tracking-wide border px-1 rounded-sm ${
+                        given === correct ? "question-paper-correct" : "question-paper-wrong"
                       }`}
+                      style={{ fontSize: "var(--aq-mode-badge-size, 9px)" }}
                     >
                       You: {given}
                     </span>
@@ -153,15 +164,16 @@ export function QuestionPaperCard({
                       return (
                         <span
                           key={val}
-                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] tabular-nums ${
+                          className={`inline-flex items-center gap-1 rounded border px-1.5 py-0.5 tabular-nums ${
                             picked && isCorrectOpt
-                              ? "border-emerald-400 bg-emerald-50 text-emerald-800"
+                              ? "question-paper-correct"
                               : picked
-                                ? "border-red-400 bg-red-50 text-red-800"
+                                ? "question-paper-wrong"
                                 : isCorrectOpt
-                                  ? "border-emerald-200 bg-emerald-50/50"
-                                  : "border-neutral-200"
+                                  ? "question-paper-correct opacity-70"
+                                  : "question-paper-badge"
                           }`}
+                          style={{ fontSize: "var(--aq-mode-badge-size, 9px)" }}
                         >
                           {label}
                           <MiniBar pct={pct} variant={isCorrectOpt ? "correct" : val === "false" ? "wrong" : "neutral"} />
@@ -178,7 +190,7 @@ export function QuestionPaperCard({
       ) : null}
 
       {questionMode === "sba" && sba?.options?.length ? (
-        <ol className="space-y-1 pl-0 list-none">
+        <ol className="question-paper-options">
           {sba.options.map((opt, i) => {
             const isCorrect = sba.correctIndex === i;
             const isSelected = sbaHasAnswer && Number(sbaSelected) === i;
@@ -194,26 +206,31 @@ export function QuestionPaperCard({
             return (
               <li
                 key={i}
-                className={`flex flex-wrap items-center gap-x-2 gap-y-1 text-[10.5px] leading-[1.5] font-serif ${
-                  isCorrect ? "text-neutral-900 font-medium" : "text-neutral-700"
-                } ${reviewActive && isSelected ? (isCorrect ? "text-emerald-800" : "text-red-700") : ""}`}
+                className={`question-paper-option flex flex-wrap items-center gap-x-2 gap-y-1 ${
+                  isCorrect ? "font-medium" : ""
+                } ${reviewActive && isSelected ? (isCorrect ? "question-paper-correct" : "question-paper-wrong") : ""}`}
               >
-                <span className="shrink-0 w-4">{optionLabel(i)}.</span>
+                <span className="question-paper-option-num shrink-0 w-4">{optionLabel(i)}.</span>
                 <span className="flex-1 min-w-[6rem]">{opt || "—"}</span>
                 {reviewActive && dist && totalResponses > 0 ? (
                   <>
                     <MiniBar pct={pct} variant={isCorrect ? "correct" : "neutral"} />
-                    <span className="text-[9px] tabular-nums text-neutral-500 shrink-0">{pct}%</span>
+                    <span className="question-paper-meta tabular-nums shrink-0" style={{ fontSize: "var(--aq-mode-badge-size, 9px)" }}>
+                      {pct}%
+                    </span>
                   </>
                 ) : null}
                 {!hideAnswers && isCorrect ? (
-                  <span className="shrink-0 text-[9px] text-emerald-700 border border-emerald-300 px-1 rounded-sm">✓</span>
+                  <span className="question-paper-correct shrink-0 border px-1 rounded-sm" style={{ fontSize: "var(--aq-mode-badge-size, 9px)" }}>
+                    ✓
+                  </span>
                 ) : null}
                 {reviewActive && isSelected ? (
                   <span
-                    className={`shrink-0 text-[9px] border px-1 rounded-sm ${
-                      isCorrect ? "text-emerald-700 border-emerald-300" : "text-red-600 border-red-300"
+                    className={`shrink-0 border px-1 rounded-sm ${
+                      isCorrect ? "question-paper-correct" : "question-paper-wrong"
                     }`}
+                    style={{ fontSize: "var(--aq-mode-badge-size, 9px)" }}
                   >
                     You
                   </span>
@@ -224,15 +241,15 @@ export function QuestionPaperCard({
         </ol>
       ) : null}
 
-      {questionMode === "mcq" && mcqHasExplanations && !hideAnswers ? (
-        <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
+      {showExplanations && questionMode === "mcq" && mcqHasExplanations && !hideAnswers ? (
+        <div className="question-paper-expl">
+          <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
           {(mcq?.trueFalse ?? []).map((item, i) => {
             const expl = (item.explanation ?? "").trim();
             if (!expl) return null;
             return (
-              <div key={item.id ?? i} className="text-[10px] leading-snug text-neutral-700">
-                <span className="font-medium text-neutral-800">
+              <div key={item.id ?? i} className="question-paper-expl-item">
+                <span className="question-paper-expl-label">
                   {i + 1}. ({item.correct === "true" ? "T" : "F"}):
                 </span>{" "}
                 {expl}
@@ -242,16 +259,16 @@ export function QuestionPaperCard({
         </div>
       ) : null}
 
-      {questionMode === "sba" && sbaHasExplanations && !hideAnswers ? (
-        <div className="mt-4 border-t border-neutral-200 pt-3 space-y-2">
-          <p className="text-[10px] uppercase tracking-wide text-neutral-500 font-medium">Explanations</p>
-          {(sba?.options ?? []).map((opt, i) => {
+      {showExplanations && questionMode === "sba" && sbaHasExplanations && !hideAnswers ? (
+        <div className="question-paper-expl">
+          <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
+          {(sba?.options ?? []).map((_opt, i) => {
             const expl = (sba?.optionExplanations?.[i] ?? "").trim();
             if (!expl) return null;
             const isCorrect = sba?.correctIndex === i;
             return (
-              <div key={i} className="text-[10px] leading-snug text-neutral-700">
-                <span className="font-medium text-neutral-800">
+              <div key={i} className="question-paper-expl-item">
+                <span className="question-paper-expl-label">
                   {optionLabel(i)} ({isCorrect ? "correct" : "wrong"}):
                 </span>{" "}
                 {expl}

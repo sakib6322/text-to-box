@@ -112,10 +112,66 @@ export type StoryBasedLearningAppearance = {
   emptyMessage: string;
 };
 
+/** All Questions page + question paper card styling (per device) */
+export type AllQuestionsAppearance = {
+  useSidebarLabelAsTitle: boolean;
+  pageTitle: string;
+  showResultBadge: boolean;
+  filterSticky: boolean;
+  listMaxWidthPx: number;
+  emptyMessage: string;
+  cardGapPx: number;
+  paperBg: string;
+  paperFg: string;
+  paperMuted: string;
+  paperBorder: string;
+  paperRadiusPx: number;
+  paperPaddingPx: number;
+  paperShadow: boolean;
+  /** Header meta: "Question N", marks, mode badge */
+  questionLabelSizePx: number;
+  marksSizePx: number;
+  modeBadgeSizePx: number;
+  boardBadgeSizePx: number;
+  taxonomySizePx: number;
+  conceptSizePx: number;
+  taxonomyColor: string;
+  conceptColor: string;
+  headerBorderColor: string;
+  badgeBorderColor: string;
+  /** Stem */
+  stemFontFamily: string;
+  stemFontSizePx: number;
+  stemLineHeight: number;
+  stemColor: string;
+  /** Options / statements */
+  optionFontFamily: string;
+  optionFontSizePx: number;
+  optionLineHeight: number;
+  optionGapPx: number;
+  optionNumberColor: string;
+  optionTextColor: string;
+  correctColor: string;
+  wrongColor: string;
+  /** Explanations block */
+  showExplanations: boolean;
+  explanationTitle: string;
+  explanationTitleSizePx: number;
+  explanationTitleColor: string;
+  explanationFontSizePx: number;
+  explanationLineHeight: number;
+  explanationColor: string;
+  explanationLabelColor: string;
+  explanationGapPx: number;
+  explanationBorderColor: string;
+  explanationPaddingTopPx: number;
+};
+
 export type DeviceAppearance = {
   global: GlobalAppearance;
   conceptDetails: ConceptDetailsAppearance;
   storyBasedLearning: StoryBasedLearningAppearance;
+  allQuestions: AllQuestionsAppearance;
 };
 
 export type UiAppearance = {
@@ -245,6 +301,59 @@ function defaultStory(overrides: Partial<StoryBasedLearningAppearance> = {}): St
   };
 }
 
+function defaultAllQuestions(overrides: Partial<AllQuestionsAppearance> = {}): AllQuestionsAppearance {
+  return {
+    useSidebarLabelAsTitle: true,
+    pageTitle: "All Questions",
+    showResultBadge: true,
+    filterSticky: true,
+    listMaxWidthPx: 768,
+    emptyMessage: "No questions found",
+    cardGapPx: 16,
+    paperBg: "#ffffff",
+    paperFg: "#171717",
+    paperMuted: "#737373",
+    paperBorder: "#d4d4d4",
+    paperRadiusPx: 2,
+    paperPaddingPx: 20,
+    paperShadow: true,
+    questionLabelSizePx: 10,
+    marksSizePx: 10,
+    modeBadgeSizePx: 9,
+    boardBadgeSizePx: 9,
+    taxonomySizePx: 10,
+    conceptSizePx: 11,
+    taxonomyColor: "#525252",
+    conceptColor: "#262626",
+    headerBorderColor: "#d4d4d4",
+    badgeBorderColor: "#d4d4d4",
+    stemFontFamily: "Georgia, 'Times New Roman', serif",
+    stemFontSizePx: 11,
+    stemLineHeight: 1.55,
+    stemColor: "#171717",
+    optionFontFamily: "Georgia, 'Times New Roman', serif",
+    optionFontSizePx: 10.5,
+    optionLineHeight: 1.5,
+    optionGapPx: 8,
+    optionNumberColor: "#737373",
+    optionTextColor: "#262626",
+    correctColor: "#047857",
+    wrongColor: "#dc2626",
+    showExplanations: true,
+    explanationTitle: "Explanations",
+    explanationTitleSizePx: 10,
+    explanationTitleColor: "#737373",
+    explanationFontSizePx: 10,
+    explanationLineHeight: 1.45,
+    explanationColor: "#404040",
+    explanationLabelColor: "#262626",
+    explanationGapPx: 8,
+    explanationBorderColor: "#e5e5e5",
+    explanationPaddingTopPx: 12,
+    ...overrides,
+  };
+}
+
 function defaultDevice(kind: DeviceKey): DeviceAppearance {
   if (kind === "mobile") {
     return {
@@ -264,6 +373,13 @@ function defaultDevice(kind: DeviceKey): DeviceAppearance {
         dialogMaxWidth: "md",
         borderRadiusPx: 10,
       }),
+      allQuestions: defaultAllQuestions({
+        listMaxWidthPx: 512,
+        paperPaddingPx: 14,
+        cardGapPx: 12,
+        stemFontSizePx: 12,
+        optionFontSizePx: 11,
+      }),
     };
   }
   if (kind === "tablet") {
@@ -277,12 +393,14 @@ function defaultDevice(kind: DeviceKey): DeviceAppearance {
       }),
       conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 22, heading2SizePx: 18 }),
       storyBasedLearning: defaultStory({ fontSizePx: 16, dialogMaxWidth: "xl" }),
+      allQuestions: defaultAllQuestions({ listMaxWidthPx: 680, paperPaddingPx: 18 }),
     };
   }
   return {
     global: defaultGlobal({ baseFontSizePx: 16, contentMaxWidthPx: 1120, density: "comfortable" }),
     conceptDetails: defaultConcept({ fontSizePx: 15, heading1SizePx: 24, heading2SizePx: 20, heading3SizePx: 17 }),
     storyBasedLearning: defaultStory({ fontSizePx: 17, titleSizePx: 20, dialogMaxWidth: "2xl" }),
+    allQuestions: defaultAllQuestions({ listMaxWidthPx: 768, paperPaddingPx: 24, stemFontSizePx: 12 }),
   };
 }
 
@@ -313,6 +431,7 @@ function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
     },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
+    allQuestions: { ...base.allQuestions, ...(p.allQuestions ?? {}) },
   };
 }
 
@@ -326,6 +445,9 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
   const storyBasedLearning = (
     raw.storyBasedLearning && typeof raw.storyBasedLearning === "object" ? raw.storyBasedLearning : {}
   ) as Partial<StoryBasedLearningAppearance>;
+  const allQuestions = (
+    raw.allQuestions && typeof raw.allQuestions === "object" ? raw.allQuestions : {}
+  ) as Partial<AllQuestionsAppearance>;
   const performance = (
     raw.performance && typeof raw.performance === "object" ? raw.performance : {}
   ) as Partial<UiAppearance["performance"]>;
@@ -342,6 +464,7 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
+    allQuestions: { ...base.desktop.allQuestions, ...allQuestions },
   };
   return {
     version: 2,
@@ -354,11 +477,18 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
         titleSizePx: 16,
         dialogMaxWidth: "md",
       },
+      allQuestions: {
+        ...sharedDevice.allQuestions,
+        listMaxWidthPx: 512,
+        paperPaddingPx: 14,
+        cardGapPx: 12,
+      },
     },
     tablet: {
       global: { ...sharedDevice.global, contentMaxWidthPx: 840 },
       conceptDetails: sharedDevice.conceptDetails,
       storyBasedLearning: { ...sharedDevice.storyBasedLearning, dialogMaxWidth: "xl" },
+      allQuestions: { ...sharedDevice.allQuestions, listMaxWidthPx: 680 },
     },
     desktop: sharedDevice,
     performance: { ...base.performance, ...performance },
@@ -400,6 +530,7 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   const g = resolved.global;
   const c = resolved.conceptDetails;
   const s = resolved.storyBasedLearning;
+  const aq = resolved.allQuestions;
   const p = theme.performance;
 
   root.style.setProperty("--ui-font-family", g.fontFamily);
@@ -467,6 +598,49 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--sbl-radius", `${s.borderRadiusPx}px`);
   root.style.setProperty("--sbl-pad", `${s.contentPaddingPx}px`);
   root.dataset.sblDialogWidth = s.dialogMaxWidth;
+
+  root.style.setProperty("--aq-list-max", `${aq.listMaxWidthPx}px`);
+  root.style.setProperty("--aq-card-gap", `${aq.cardGapPx}px`);
+  root.style.setProperty("--aq-paper-bg", aq.paperBg);
+  root.style.setProperty("--aq-paper-fg", aq.paperFg);
+  root.style.setProperty("--aq-paper-muted", aq.paperMuted);
+  root.style.setProperty("--aq-paper-border", aq.paperBorder);
+  root.style.setProperty("--aq-paper-radius", `${aq.paperRadiusPx}px`);
+  root.style.setProperty("--aq-paper-pad", `${aq.paperPaddingPx}px`);
+  root.style.setProperty("--aq-q-label-size", `${aq.questionLabelSizePx}px`);
+  root.style.setProperty("--aq-marks-size", `${aq.marksSizePx}px`);
+  root.style.setProperty("--aq-mode-badge-size", `${aq.modeBadgeSizePx}px`);
+  root.style.setProperty("--aq-board-badge-size", `${aq.boardBadgeSizePx}px`);
+  root.style.setProperty("--aq-taxonomy-size", `${aq.taxonomySizePx}px`);
+  root.style.setProperty("--aq-concept-size", `${aq.conceptSizePx}px`);
+  root.style.setProperty("--aq-taxonomy", aq.taxonomyColor);
+  root.style.setProperty("--aq-concept", aq.conceptColor);
+  root.style.setProperty("--aq-header-border", aq.headerBorderColor);
+  root.style.setProperty("--aq-badge-border", aq.badgeBorderColor);
+  root.style.setProperty("--aq-stem-font", aq.stemFontFamily);
+  root.style.setProperty("--aq-stem-size", `${aq.stemFontSizePx}px`);
+  root.style.setProperty("--aq-stem-lh", String(aq.stemLineHeight));
+  root.style.setProperty("--aq-stem-color", aq.stemColor);
+  root.style.setProperty("--aq-option-font", aq.optionFontFamily);
+  root.style.setProperty("--aq-option-size", `${aq.optionFontSizePx}px`);
+  root.style.setProperty("--aq-option-lh", String(aq.optionLineHeight));
+  root.style.setProperty("--aq-option-gap", `${aq.optionGapPx}px`);
+  root.style.setProperty("--aq-option-num", aq.optionNumberColor);
+  root.style.setProperty("--aq-option-text", aq.optionTextColor);
+  root.style.setProperty("--aq-correct", aq.correctColor);
+  root.style.setProperty("--aq-wrong", aq.wrongColor);
+  root.style.setProperty("--aq-expl-title-size", `${aq.explanationTitleSizePx}px`);
+  root.style.setProperty("--aq-expl-title-color", aq.explanationTitleColor);
+  root.style.setProperty("--aq-expl-size", `${aq.explanationFontSizePx}px`);
+  root.style.setProperty("--aq-expl-lh", String(aq.explanationLineHeight));
+  root.style.setProperty("--aq-expl-color", aq.explanationColor);
+  root.style.setProperty("--aq-expl-label", aq.explanationLabelColor);
+  root.style.setProperty("--aq-expl-gap", `${aq.explanationGapPx}px`);
+  root.style.setProperty("--aq-expl-border", aq.explanationBorderColor);
+  root.style.setProperty("--aq-expl-pad-top", `${aq.explanationPaddingTopPx}px`);
+  root.dataset.aqPaperShadow = aq.paperShadow ? "1" : "0";
+  root.dataset.aqFilterSticky = aq.filterSticky ? "1" : "0";
+  root.dataset.aqShowExplanations = aq.showExplanations ? "1" : "0";
 
   root.dataset.pageTitleGradient = g.pageTitleGradient ? "1" : "0";
   root.dataset.meshBg = g.meshBackground ? "1" : "0";

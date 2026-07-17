@@ -230,6 +230,19 @@ export default function AdminAppearance() {
     });
   };
 
+  const updateAq = <K extends keyof UiAppearance["desktop"]["allQuestions"]>(
+    key: K,
+    value: UiAppearance["desktop"]["allQuestions"][K],
+  ) => {
+    commit({
+      ...theme,
+      [editDevice]: {
+        ...deviceTheme,
+        allQuestions: { ...deviceTheme.allQuestions, [key]: value },
+      },
+    });
+  };
+
   const updatePerf = <K extends keyof UiAppearance["performance"]>(
     key: K,
     value: UiAppearance["performance"][K],
@@ -322,6 +335,24 @@ export default function AdminAppearance() {
     toast.message(`Story design applied to ${labels} (unsaved)`);
   };
 
+  /** Copy current device All Questions settings onto targets (preview until Save). */
+  const applyAllQuestionsTo = (targets: DeviceKey[]) => {
+    const aq = structuredClone(deviceTheme.allQuestions);
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          allQuestions: structuredClone(aq),
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`All Questions design applied to ${labels} (unsaved)`);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -391,6 +422,38 @@ export default function AdminAppearance() {
             <a href="#story-preview">story link</a>.
           </p>
         </div>
+        <div className="all-questions-list max-w-md">
+          <p className="text-xs font-semibold uppercase text-muted-foreground print:hidden">All questions paper</p>
+          <article className="question-paper">
+            <header className="question-paper-header flex justify-between gap-2">
+              <div className="space-y-0.5">
+                <p className="question-paper-meta uppercase tracking-widest font-medium">Question 1</p>
+                <p className="question-paper-taxonomy">Anatomy · CVS · Heart · Valves</p>
+                <p className="question-paper-concept font-semibold">Mitral valve</p>
+              </div>
+              <span className="question-paper-badge uppercase border px-1.5 rounded-sm">mcq</span>
+            </header>
+            <p className="question-paper-stem">Which statement about the mitral valve is correct?</p>
+            <ol className="question-paper-options">
+              <li className="question-paper-option flex gap-2">
+                <span className="question-paper-option-num w-4">1.</span>
+                <span className="flex-1">Has three cusps</span>
+                <span className="question-paper-badge border px-1 rounded-sm">F</span>
+              </li>
+              <li className="question-paper-option flex gap-2">
+                <span className="question-paper-option-num w-4">2.</span>
+                <span className="flex-1">Guards the left AV orifice</span>
+                <span className="question-paper-correct border px-1 rounded-sm">T</span>
+              </li>
+            </ol>
+            <div className="question-paper-expl">
+              <p className="question-paper-expl-title">Explanations</p>
+              <div className="question-paper-expl-item">
+                <span className="question-paper-expl-label">2. (T):</span> It guards the left atrioventricular orifice.
+              </div>
+            </div>
+          </article>
+        </div>
       </div>
     ),
     [],
@@ -407,6 +470,7 @@ export default function AdminAppearance() {
   const g = deviceTheme.global;
   const c = deviceTheme.conceptDetails;
   const s = deviceTheme.storyBasedLearning;
+  const aq = deviceTheme.allQuestions;
   const p = theme.performance;
 
   return (
@@ -497,6 +561,7 @@ export default function AdminAppearance() {
             <TabsTrigger value="global">{deviceMeta[editDevice].label} · Website UI</TabsTrigger>
             <TabsTrigger value="concept">{deviceMeta[editDevice].label} · Concept details</TabsTrigger>
             <TabsTrigger value="story">{deviceMeta[editDevice].label} · Story learning</TabsTrigger>
+            <TabsTrigger value="questions">{deviceMeta[editDevice].label} · All questions</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
@@ -830,6 +895,314 @@ export default function AdminAppearance() {
               <p>
                 Body text with <strong>bold</strong> and a <a href="#sbl">link</a> — uses current device draft.
               </p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="questions" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                All questions · {deviceMeta[editDevice].label}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => applyAllQuestionsTo(["mobile"])}>
+                  Set to Phone
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => applyAllQuestionsTo(["tablet"])}>
+                  Set to Tablet
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => applyAllQuestionsTo(["desktop"])}>
+                  Set to Computer
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => applyAllQuestionsTo(["mobile", "tablet", "desktop"])}
+                >
+                  Set to all
+                </Button>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Page chrome + question paper look. Still needs <strong>Save to database</strong>.
+            </p>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Page chrome</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <BoolField
+                label="Use sidebar label as title"
+                checked={aq.useSidebarLabelAsTitle}
+                onChange={(v) => updateAq("useSidebarLabelAsTitle", v)}
+                hint="Uses Website UI → Sidebar labels → All questions"
+              />
+              <TextField
+                label="Custom page title"
+                value={aq.pageTitle}
+                onChange={(v) => updateAq("pageTitle", v)}
+                hint="Used when sidebar label toggle is off"
+              />
+              <TextField label="Empty message" value={aq.emptyMessage} onChange={(v) => updateAq("emptyMessage", v)} />
+              <BoolField label="Show result count badge" checked={aq.showResultBadge} onChange={(v) => updateAq("showResultBadge", v)} />
+              <BoolField label="Sticky filters" checked={aq.filterSticky} onChange={(v) => updateAq("filterSticky", v)} />
+              <NumberField
+                label="List max width (px)"
+                value={aq.listMaxWidthPx}
+                min={320}
+                max={1200}
+                onChange={(n) => updateAq("listMaxWidthPx", n)}
+              />
+              <NumberField
+                label="Card gap (px)"
+                value={aq.cardGapPx}
+                min={4}
+                max={40}
+                onChange={(n) => updateAq("cardGapPx", n)}
+              />
+            </div>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Paper shell</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <NumberField
+                label="Paper padding (px)"
+                value={aq.paperPaddingPx}
+                min={8}
+                max={40}
+                onChange={(n) => updateAq("paperPaddingPx", n)}
+              />
+              <NumberField
+                label="Paper radius (px)"
+                value={aq.paperRadiusPx}
+                min={0}
+                max={24}
+                onChange={(n) => updateAq("paperRadiusPx", n)}
+              />
+              <BoolField label="Paper shadow" checked={aq.paperShadow} onChange={(v) => updateAq("paperShadow", v)} />
+              <ColorField label="Paper background" value={aq.paperBg} onChange={(v) => updateAq("paperBg", v)} />
+              <ColorField label="Paper text" value={aq.paperFg} onChange={(v) => updateAq("paperFg", v)} />
+              <ColorField label="Paper border" value={aq.paperBorder} onChange={(v) => updateAq("paperBorder", v)} />
+            </div>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Header · taxonomy · badges</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <NumberField
+                label="Question label size (px)"
+                value={aq.questionLabelSizePx}
+                min={8}
+                max={16}
+                step={0.5}
+                onChange={(n) => updateAq("questionLabelSizePx", n)}
+              />
+              <NumberField
+                label="Marks size (px)"
+                value={aq.marksSizePx}
+                min={8}
+                max={16}
+                step={0.5}
+                onChange={(n) => updateAq("marksSizePx", n)}
+              />
+              <NumberField
+                label="Mode badge size (px)"
+                value={aq.modeBadgeSizePx}
+                min={7}
+                max={14}
+                step={0.5}
+                onChange={(n) => updateAq("modeBadgeSizePx", n)}
+              />
+              <NumberField
+                label="Board badge size (px)"
+                value={aq.boardBadgeSizePx}
+                min={7}
+                max={14}
+                step={0.5}
+                onChange={(n) => updateAq("boardBadgeSizePx", n)}
+              />
+              <NumberField
+                label="Taxonomy size (px)"
+                value={aq.taxonomySizePx}
+                min={8}
+                max={16}
+                step={0.5}
+                onChange={(n) => updateAq("taxonomySizePx", n)}
+              />
+              <NumberField
+                label="Concept size (px)"
+                value={aq.conceptSizePx}
+                min={8}
+                max={18}
+                step={0.5}
+                onChange={(n) => updateAq("conceptSizePx", n)}
+              />
+              <ColorField label="Taxonomy color" value={aq.taxonomyColor} onChange={(v) => updateAq("taxonomyColor", v)} />
+              <ColorField label="Concept color" value={aq.conceptColor} onChange={(v) => updateAq("conceptColor", v)} />
+              <ColorField label="Header border" value={aq.headerBorderColor} onChange={(v) => updateAq("headerBorderColor", v)} />
+              <ColorField label="Badge border" value={aq.badgeBorderColor} onChange={(v) => updateAq("badgeBorderColor", v)} />
+              <ColorField label="Muted text" value={aq.paperMuted} onChange={(v) => updateAq("paperMuted", v)} />
+            </div>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Stem</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <TextField label="Stem font family" value={aq.stemFontFamily} onChange={(v) => updateAq("stemFontFamily", v)} />
+              <NumberField
+                label="Stem font size (px)"
+                value={aq.stemFontSizePx}
+                min={9}
+                max={20}
+                step={0.5}
+                onChange={(n) => updateAq("stemFontSizePx", n)}
+              />
+              <NumberField
+                label="Stem line height"
+                value={aq.stemLineHeight}
+                min={1.2}
+                max={2.2}
+                step={0.05}
+                onChange={(n) => updateAq("stemLineHeight", n)}
+              />
+              <ColorField label="Stem color" value={aq.stemColor} onChange={(v) => updateAq("stemColor", v)} />
+            </div>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Options / statements</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <TextField label="Option font family" value={aq.optionFontFamily} onChange={(v) => updateAq("optionFontFamily", v)} />
+              <NumberField
+                label="Option font size (px)"
+                value={aq.optionFontSizePx}
+                min={9}
+                max={18}
+                step={0.5}
+                onChange={(n) => updateAq("optionFontSizePx", n)}
+              />
+              <NumberField
+                label="Option line height"
+                value={aq.optionLineHeight}
+                min={1.2}
+                max={2.2}
+                step={0.05}
+                onChange={(n) => updateAq("optionLineHeight", n)}
+              />
+              <NumberField
+                label="Option gap (px)"
+                value={aq.optionGapPx}
+                min={2}
+                max={24}
+                onChange={(n) => updateAq("optionGapPx", n)}
+              />
+              <ColorField label="Option number color" value={aq.optionNumberColor} onChange={(v) => updateAq("optionNumberColor", v)} />
+              <ColorField label="Option text color" value={aq.optionTextColor} onChange={(v) => updateAq("optionTextColor", v)} />
+              <ColorField label="Correct highlight" value={aq.correctColor} onChange={(v) => updateAq("correctColor", v)} />
+              <ColorField label="Wrong highlight" value={aq.wrongColor} onChange={(v) => updateAq("wrongColor", v)} />
+            </div>
+
+            <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Explanations</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <BoolField
+                label="Show explanations"
+                checked={aq.showExplanations}
+                onChange={(v) => updateAq("showExplanations", v)}
+              />
+              <TextField
+                label="Explanations title"
+                value={aq.explanationTitle}
+                onChange={(v) => updateAq("explanationTitle", v)}
+              />
+              <NumberField
+                label="Title size (px)"
+                value={aq.explanationTitleSizePx}
+                min={8}
+                max={16}
+                step={0.5}
+                onChange={(n) => updateAq("explanationTitleSizePx", n)}
+              />
+              <NumberField
+                label="Body font size (px)"
+                value={aq.explanationFontSizePx}
+                min={8}
+                max={18}
+                step={0.5}
+                onChange={(n) => updateAq("explanationFontSizePx", n)}
+              />
+              <NumberField
+                label="Body line height"
+                value={aq.explanationLineHeight}
+                min={1.2}
+                max={2.2}
+                step={0.05}
+                onChange={(n) => updateAq("explanationLineHeight", n)}
+              />
+              <NumberField
+                label="Item gap (px)"
+                value={aq.explanationGapPx}
+                min={2}
+                max={24}
+                onChange={(n) => updateAq("explanationGapPx", n)}
+              />
+              <NumberField
+                label="Top padding (px)"
+                value={aq.explanationPaddingTopPx}
+                min={4}
+                max={32}
+                onChange={(n) => updateAq("explanationPaddingTopPx", n)}
+              />
+              <ColorField
+                label="Title color"
+                value={aq.explanationTitleColor}
+                onChange={(v) => updateAq("explanationTitleColor", v)}
+              />
+              <ColorField
+                label="Body color"
+                value={aq.explanationColor}
+                onChange={(v) => updateAq("explanationColor", v)}
+              />
+              <ColorField
+                label="Label color (1. T:)"
+                value={aq.explanationLabelColor}
+                onChange={(v) => updateAq("explanationLabelColor", v)}
+              />
+              <ColorField
+                label="Divider border"
+                value={aq.explanationBorderColor}
+                onChange={(v) => updateAq("explanationBorderColor", v)}
+              />
+            </div>
+
+            <div className="all-questions-list max-w-lg">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Live paper preview</p>
+              <article className="question-paper">
+                <header className="question-paper-header flex justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <p className="question-paper-meta uppercase tracking-widest font-medium">Question 1</p>
+                    <p className="question-paper-taxonomy">Anatomy · CVS · Heart · Valves</p>
+                    <p className="question-paper-concept font-semibold">Mitral valve</p>
+                    <span className="question-paper-board-badge inline-block border px-1.5 rounded-sm">BMDC</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="question-paper-badge uppercase border px-1.5 rounded-sm">mcq</span>
+                    <span className="question-paper-marks tabular-nums">1 mark(s)</span>
+                  </div>
+                </header>
+                <p className="question-paper-stem">Which statement about the mitral valve is correct?</p>
+                <ol className="question-paper-options">
+                  <li className="question-paper-option flex gap-2">
+                    <span className="question-paper-option-num w-4">1.</span>
+                    <span className="flex-1">Has three cusps</span>
+                    <span className="question-paper-badge border px-1 rounded-sm">F</span>
+                  </li>
+                  <li className="question-paper-option flex gap-2">
+                    <span className="question-paper-option-num w-4">2.</span>
+                    <span className="flex-1">Guards the left AV orifice</span>
+                    <span className="question-paper-correct border px-1 rounded-sm">T</span>
+                  </li>
+                </ol>
+                <div className="question-paper-expl">
+                  <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
+                  <div className="question-paper-expl-item">
+                    <span className="question-paper-expl-label">1. (F):</span> Mitral valve has two cusps, not three.
+                  </div>
+                  <div className="question-paper-expl-item">
+                    <span className="question-paper-expl-label">2. (T):</span> It guards the left atrioventricular orifice.
+                  </div>
+                </div>
+              </article>
             </div>
           </TabsContent>
 
