@@ -17,6 +17,9 @@ import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { apiUrl } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
+import { Can, useCan } from "@/components/Can";
+import { guardPermission } from "@/lib/permissionGuard";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   Dialog,
   DialogContent,
@@ -89,6 +92,9 @@ export default function AllQuestions() {
   const [type, setType] = useState("all");
   const [status, setStatus] = useState("all");
   const [difficulty, setDifficulty] = useState("all");
+
+  const canEdit = useCan("question_bank.questions.edit");
+  const canDelete = useCan("question_bank.questions.delete");
 
   const [subjects, setSubjects] = useState<TaxonomyItem[]>([]);
   const [systems, setSystems] = useState<TaxonomyItem[]>([]);
@@ -254,9 +260,13 @@ export default function AllQuestions() {
   }, [load]);
 
   const remove = async (id: string) => {
+    if (!guardPermission("question_bank.questions.delete")) return;
     setDeletingId(id);
     try {
-      const resp = await fetch(apiUrl(`/api/questions/${id}`), { method: "DELETE" });
+      const resp = await fetch(apiUrl(`/api/questions/${id}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data?.error ?? "Delete failed");
       setRows((prev) => prev.filter((r) => r.id !== id));
@@ -270,6 +280,7 @@ export default function AllQuestions() {
   };
 
   const openEdit = (row: QuestionRow) => {
+    if (!canEdit) return;
     setEditTarget(row);
     setEditConcept(row.concept);
     setEditStem(row.mcq?.stem ?? row.sba?.stem ?? "");
@@ -337,6 +348,7 @@ export default function AllQuestions() {
 
   const saveEdit = async () => {
     if (!editTarget) return;
+    if (!guardPermission("question_bank.questions.edit")) return;
     setSavingEdit(true);
     try {
       const payload =
@@ -345,7 +357,7 @@ export default function AllQuestions() {
           : { ...editTarget.sba, stem: editStem, optionExplanations: editSbaExplanations };
       const resp = await fetch(apiUrl(`/api/questions/${editTarget.id}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           concept: editConcept,
           stem: editStem,
@@ -598,6 +610,7 @@ export default function AllQuestions() {
                     <BookOpen className="h-4 w-4" />
                   </Button>
                 ) : null}
+                <Can permission="question_bank.questions.edit">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -606,6 +619,8 @@ export default function AllQuestions() {
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
+                </Can>
+                <Can permission="question_bank.questions.delete">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -620,6 +635,7 @@ export default function AllQuestions() {
                 >
                   {deletingId === r.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 </Button>
+                </Can>
               </div>
             </div>
           ))}

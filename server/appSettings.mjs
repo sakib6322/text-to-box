@@ -193,16 +193,29 @@ export async function loginUser(db, email, password, { adminOnly = false, userOn
 
   const { data: user, error } = await db
     .from("app_users")
-    .select("id, email, password_hash, role, created_at")
+    .select("id, email, password_hash, role, permissions, created_at")
     .eq("email", e)
     .maybeSingle();
-  if (error) throw error;
+  if (error) {
+    const msg = String(error.message ?? "");
+    if (msg.includes("permissions")) {
+      throw new Error("Database migration required for staff login. Run 20260717160000_user_permissions.sql on Supabase.");
+    }
+    throw error;
+  }
   if (!user) throw new Error("Invalid email or password");
 
   const ok = await bcrypt.compare(p, user.password_hash);
   if (!ok) throw new Error("Invalid email or password");
 
-  if (adminOnly && user.role !== "admin") throw new Error("Admin access only — use user login to register");
+  if (adminOnly && user.role !== "admin" && user.role !== "staff") {
+    throw new Error("Admin access only — use user login to register");
+  }
+  if (adminOnly && user.role === "staff") {
+    const perms = Array.isArray(user.permissions) ? user.permissions : [];
+    if (perms.length === 0) throw new Error("No permissions assigned — contact administrator");
+  }
+  if (userOnly && user.role === "admin") throw new Error("Use Admin tab for administrator login");
 
   const expires_at = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const { data: session, error: sessErr } = await db
@@ -212,10 +225,23 @@ export async function loginUser(db, email, password, { adminOnly = false, userOn
     .single();
   if (sessErr) throw sessErr;
 
+  const permissions =
+    user.role === "admin"
+      ? null
+      : Array.isArray(user.permissions)
+        ? user.permissions.filter((k) => typeof k === "string")
+        : [];
+
   return {
     token: session.id,
     expiresAt: session.expires_at,
-    user: { id: user.id, email: user.email, role: user.role, createdAt: user.created_at },
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      permissions,
+      createdAt: user.created_at,
+    },
   };
 }
 
@@ -225,7 +251,7 @@ export async function validateSession(db, token) {
 
   const { data: session, error } = await db
     .from("app_sessions")
-    .select("id, user_id, expires_at, app_users(id, email, role)")
+    .select("id, user_id, expires_at, app_users(id, email, role, permissions)")
     .eq("id", id)
     .maybeSingle();
   if (error || !session) return null;
@@ -235,7 +261,19 @@ export async function validateSession(db, token) {
   }
   const u = session.app_users;
   if (!u) return null;
-  return { id: u.id, email: u.email, role: u.role, sessionId: session.id };
+  const permissions =
+    u.role === "admin"
+      ? null
+      : Array.isArray(u.permissions)
+        ? u.permissions.filter((k) => typeof k === "string")
+        : [];
+  return {
+    id: u.id,
+    email: u.email,
+    role: u.role,
+    permissions,
+    sessionId: session.id,
+  };
 }
 
 export async function logoutSession(db, token) {

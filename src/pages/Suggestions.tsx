@@ -15,7 +15,10 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, conceptDetailToSavePayload, clearConceptCaches, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
-import { isAdmin } from "@/lib/auth";
+import { hasPermission } from "@/lib/auth";
+import { guardPermission, guardAnyPermission } from "@/lib/permissionGuard";
+import { useCan } from "@/components/Can";
+import { getAuthHeaders } from "@/lib/auth";
 import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } from "@/lib/userProgress";
 import { mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
@@ -108,6 +111,9 @@ function apiKpToWithBoards(kp: {
 
 const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const adminView = mode === "admin";
+  const canAdd = useCan("suggestions.add");
+  const canEdit = useCan("suggestions.edit");
+  const canDelete = useCan("suggestions.delete");
   type BrowseStep = "subjects" | "systems" | "chapters" | "topics" | "concepts";
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -330,18 +336,27 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   }, [subjectName, systemName, chapterName, topicName, topicId]);
 
   const remove = async (row: Row) => {
+    if (!guardPermission("suggestions.delete")) return;
     setDeleting(row.id);
-    const { error } = await supabase.from("key_points").delete().eq("id", row.id);
-    if (error) toast.error(error.message);
-    else {
+    try {
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(row.id)}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Delete failed");
       setRows((prev) => prev.filter((r) => r.id !== row.id));
       toast.success("Deleted");
       setDeleteTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(null);
     }
-    setDeleting(null);
   };
 
   const openEdit = (row: Row) => {
+    if (!guardPermission("suggestions.edit")) return;
     setEditTarget(row);
     setEditContent(row.content);
     setEditConceptTitle((row.concepts?.title ?? "").trim());
@@ -349,6 +364,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   };
 
   const openAdd = (conceptId: string, title: string) => {
+    if (!guardPermission("suggestions.add")) return;
     setAddTarget({ conceptId, title });
     setAddContent("");
     setAddBoardIds([]);
@@ -385,11 +401,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
 
   const saveConceptDetail = async (detail: ConceptDetail) => {
     if (!detailsConceptId) return;
+    if (!guardAnyPermission(["settings.concepts.edit", "home.edit"])) return;
     setSavingConceptDetail(true);
     try {
       const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(detailsConceptId)}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(conceptDetailToSavePayload(detail)),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -406,6 +423,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
 
   const saveEdit = async () => {
     if (!editTarget) return;
+    if (!guardPermission("suggestions.edit")) return;
     const content = editContent.trim();
     const conceptTitle = editConceptTitle.trim();
     if (!content) return toast.error("Content is required");
@@ -413,7 +431,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     try {
       const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(editTarget.id)}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           content,
           concept_title: conceptTitle || undefined,
@@ -466,13 +484,14 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
 
   const saveAdd = async () => {
     if (!addTarget) return;
+    if (!guardPermission("suggestions.add")) return;
     const content = addContent.trim();
     if (!content) return toast.error("Content is required");
     setSavingAdd(true);
     try {
       const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ content, board_ids: addBoardIds }),
       });
       const j = (await r.json().catch(() => ({}))) as {
@@ -537,11 +556,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       toast.error("Key point id missing");
       return;
     }
+    if (!guardPermission("suggestions.edit")) return;
     setSavingKeyPoint(true);
     try {
       const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(payload.id)}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ content: payload.content, board_ids: payload.boardIds }),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
@@ -582,11 +602,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
 
   const addDetailsKeyPoint = async (payload: { content: string; boardIds: string[] }) => {
     if (!detailsConceptId) return;
+    if (!guardPermission("suggestions.add")) return;
     setSavingKeyPoint(true);
     try {
       const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(detailsConceptId)}/key-points`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ content: payload.content, board_ids: payload.boardIds }),
       });
       const j = (await r.json().catch(() => ({}))) as {
@@ -645,10 +666,15 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   };
 
   const deleteDetailsKeyPoint = async (id: string) => {
+    if (!guardPermission("suggestions.delete")) return;
     setSavingKeyPoint(true);
     try {
-      const { error } = await supabase.from("key_points").delete().eq("id", id);
-      if (error) throw new Error(error.message);
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Delete failed");
       setRows((prev) => prev.filter((r) => r.id !== id));
       setDetailsKeyPoints((prev) => prev.filter((kp) => kp.id !== id));
       if (detailsConceptId) clearConceptCaches(detailsConceptId);
@@ -743,7 +769,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     boardFilter !== "all" ||
     conceptFilter !== "all";
 
-  const homeLink = isAdmin() ? "/" : "/study/progress";
+  const homeLink = hasPermission("home.view") ? "/" : "/study/progress";
 
   const goBrowse = (step: BrowseStep) => {
     setSearch("");
@@ -814,7 +840,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             ? "Topics"
             : "Concepts";
 
-  if (adminView && !isAdmin()) {
+  if (adminView && !hasPermission("suggestions.view")) {
     return <Navigate to="/my-suggestions" replace />;
   }
 
@@ -1124,7 +1150,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   deleting={deleting}
                   onDetails={adminView ? () => void openConceptDetails(g.conceptId, g.title) : undefined}
                   onEdit={
-                    adminView
+                    adminView && canEdit
                       ? (row) => {
                           const full = g.rows.find((r) => r.id === row.id);
                           if (full) openEdit(full);
@@ -1132,14 +1158,14 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                       : undefined
                   }
                   onDelete={
-                    adminView
+                    adminView && canDelete
                       ? (row) => {
                           const full = g.rows.find((r) => r.id === row.id);
                           if (full) setDeleteTarget(full);
                         }
                       : undefined
                   }
-                  onAdd={adminView ? () => openAdd(g.conceptId, g.title) : undefined}
+                  onAdd={adminView && canAdd ? () => openAdd(g.conceptId, g.title) : undefined}
                 />
               );
             })}
@@ -1244,11 +1270,11 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         detail={detailsConceptDetail}
         keyPoints={detailsKeyPoints}
         loading={detailsLoading}
-        editable
+        editable={canEdit}
         onDetailChange={setDetailsConceptDetail}
         onSave={saveConceptDetail}
         saving={savingConceptDetail}
-        keyPointsEditable
+        keyPointsEditable={canEdit || canAdd || canDelete}
         boardOptions={boardList}
         onSaveKeyPoint={saveDetailsKeyPoint}
         onAddKeyPoint={addDetailsKeyPoint}

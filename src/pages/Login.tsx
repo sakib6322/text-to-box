@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, LogIn, UserPlus } from "lucide-react";
-import { isAuthenticated, isAdmin, login, register } from "@/lib/auth";
+import { isAuthenticated, getDefaultLandingPath, login, register } from "@/lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ export default function Login() {
 
   if (isAuthenticated()) {
     if (from && from !== "/login") return <Navigate to={from} replace />;
-    return <Navigate to={isAdmin() ? "/admin" : "/study/progress"} replace />;
+    return <Navigate to={getDefaultLandingPath()} replace />;
   }
 
   const handleLogin = async (mode: "admin" | "user") => {
@@ -34,8 +34,8 @@ export default function Login() {
       const dest =
         from && from !== "/login"
           ? from
-          : mode === "admin" || session.role === "admin"
-            ? "/admin"
+          : mode === "admin" || session.role === "admin" || session.role === "staff"
+            ? getDefaultLandingPath()
             : "/study/progress";
       navigate(dest, { replace: true });
     } catch (e) {

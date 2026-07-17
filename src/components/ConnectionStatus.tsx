@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, RefreshCw, Wifi, WifiOff } from "lucide-react";
@@ -12,18 +12,30 @@ type Props = {
 export function ConnectionStatus({ compact, onStatusChange }: Props) {
   const [status, setStatus] = useState<Status | null>(null);
   const [loading, setLoading] = useState(true);
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const s = await fetchConnectionStatus();
     setStatus(s);
-    onStatusChange?.(s);
+    onStatusChangeRef.current?.(s);
     setLoading(false);
-  }, [onStatusChange]);
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const s = await fetchConnectionStatus();
+      if (cancelled) return;
+      setStatus(s);
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (loading && !status) {
     return (

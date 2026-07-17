@@ -15,7 +15,8 @@ import {
   FileCheck,
   BarChart3,
 } from "lucide-react";
-import { logout, isAdmin } from "@/lib/auth";
+import { logout, canAccessAdmin, hasPermission, isAdmin } from "@/lib/auth";
+import { SETTINGS_TAB_ANY_VIEW } from "@/lib/permissions";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -40,32 +41,43 @@ type NavItem = {
   labelKey?: keyof SidebarLabels;
   to?: string;
   icon?: ComponentType<{ className?: string }>;
-  children?: { label: string; labelKey?: keyof SidebarLabels; to: string }[];
+  permission?: string;
+  children?: { label: string; labelKey?: keyof SidebarLabels; to: string; permission?: string }[];
 };
 
 const userItems: NavItem[] = [
-  { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3 },
-  { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target },
-  { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck },
+  { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
+  { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
+  { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
 ];
 
 const adminUserItems: NavItem[] = [
-  { label: "Home", labelKey: "home", to: "/", icon: School },
-  { label: "Suggestions", labelKey: "suggestions", to: "/suggestions", icon: Target },
-  { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target },
-  { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3 },
-  { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck },
+  { label: "Home", labelKey: "home", to: "/", icon: School, permission: "home.view" },
+  { label: "Suggestions", labelKey: "suggestions", to: "/suggestions", icon: Target, permission: "suggestions.view" },
+  { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
+  { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
+  { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
 ];
 
 const adminItems: NavItem[] = [
-  { label: "Dashboard", labelKey: "dashboard", to: "/admin", icon: LayoutDashboard },
+  { label: "Dashboard", labelKey: "dashboard", to: "/admin", icon: LayoutDashboard, permission: "dashboard.view" },
   {
     label: "Question bank",
     labelKey: "questionBank",
     icon: BookOpen,
     children: [
-      { label: "Create question (AI)", labelKey: "createQuestionAi", to: "/admin/question-bank/create-ai" },
-      { label: "All questions", labelKey: "allQuestions", to: "/admin/question-bank/questions" },
+      {
+        label: "Create question (AI)",
+        labelKey: "createQuestionAi",
+        to: "/admin/question-bank/create-ai",
+        permission: "question_bank.create_ai.view",
+      },
+      {
+        label: "All questions",
+        labelKey: "allQuestions",
+        to: "/admin/question-bank/questions",
+        permission: "question_bank.questions.view",
+      },
     ],
   },
   {
@@ -73,25 +85,53 @@ const adminItems: NavItem[] = [
     labelKey: "exam",
     icon: ClipboardList,
     children: [
-      { label: "Create exam", labelKey: "createExam", to: "/admin/exam/create" },
-      { label: "Schedules", labelKey: "schedules", to: "/admin/exam/schedules" },
+      { label: "Create exam", labelKey: "createExam", to: "/admin/exam/create", permission: "exam.create.view" },
+      { label: "Schedules", labelKey: "schedules", to: "/admin/exam/schedules", permission: "exam.schedules.view" },
     ],
   },
-  { label: "Student", labelKey: "student", to: "/admin/students", icon: GraduationCap },
-  { label: "Teacher", labelKey: "teacher", to: "/admin/teachers", icon: Users },
-  { label: "Organization", labelKey: "organization", to: "/admin/organization", icon: Bell },
+  { label: "Student", labelKey: "student", to: "/admin/students", icon: GraduationCap, permission: "students.view" },
+  { label: "Teacher", labelKey: "teacher", to: "/admin/teachers", icon: Users, permission: "teachers.view" },
+  { label: "Organization", labelKey: "organization", to: "/admin/organization", icon: Bell, permission: "organization.view" },
   {
     label: "Settings",
     labelKey: "settings",
     icon: Settings,
     children: [
       { label: "General", labelKey: "general", to: "/admin/settings" },
-      { label: "Appearance", labelKey: "appearance", to: "/admin/settings/appearance" },
+      { label: "Appearance", labelKey: "appearance", to: "/admin/settings/appearance", permission: "settings.appearance.view" },
     ],
   },
 ];
 
-const items: NavItem[] = [...adminUserItems, ...adminItems];
+function navItemVisible(item: NavItem): boolean {
+  if (isAdmin()) return true;
+  if (item.children?.length) {
+    return item.children.some((c) => !c.permission || hasPermission(c.permission));
+  }
+  if (item.to === "/admin/settings") {
+    return hasPermission("settings.connection.view") || hasPermission("settings.appearance.view");
+  }
+  return !item.permission || hasPermission(item.permission);
+}
+
+function filterNavItems(items: NavItem[]): NavItem[] {
+  return items
+    .map((item) => {
+      if (item.children?.length) {
+        const children = item.children.filter((c) => {
+          if (isAdmin()) return true;
+          if (c.to === "/admin/settings") {
+            return SETTINGS_TAB_ANY_VIEW.some((k) => hasPermission(k));
+          }
+          return !c.permission || hasPermission(c.permission);
+        });
+        if (children.length === 0) return null;
+        return { ...item, children };
+      }
+      return navItemVisible(item) ? item : null;
+    })
+    .filter(Boolean) as NavItem[];
+}
 
 function NavDropdown({
   item,
@@ -148,8 +188,10 @@ export function AdminSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { appearance, activeDevice } = useUiAppearance();
-  const admin = isAdmin();
-  const navItems = admin ? items : userItems;
+  const admin = canAccessAdmin();
+  const navItems = admin
+    ? filterNavItems([...adminUserItems, ...adminItems])
+    : filterNavItems(userItems);
   const sidebarLabels = resolveDeviceTheme(appearance, activeDevice).global.sidebarLabels;
   const isActive = (to?: string) =>
     to ? location.pathname === to || location.pathname.startsWith(`${to}/`) : false;

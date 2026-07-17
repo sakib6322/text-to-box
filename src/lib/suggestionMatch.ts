@@ -1,4 +1,5 @@
 import { apiUrl } from "@/lib/apiBase";
+import { getAuthHeaders } from "@/lib/auth";
 
 export type SuggestionMatch = {
   keyPointId: string;
@@ -71,7 +72,7 @@ export async function fetchSuggestionMatches(texts: string[]): Promise<Map<strin
 
   const resp = await fetch(apiUrl("/api/match-key-points"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ texts: list.slice(0, 40), threshold: 0.55, count: 1 }),
   });
 

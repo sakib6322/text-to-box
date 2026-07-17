@@ -1,9 +1,9 @@
 import "dotenv/config";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import multer from "multer";
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
-import { createClient } from "@supabase/supabase-js";
 import {
   addGeminiKeys,
   deleteGeminiKey,
@@ -45,7 +45,48 @@ import {
   saveGeminiModelSettings,
   resolveAiModels,
 } from "./geminiModels.mjs";
-import { getDefaultMatchingPrompt } from "./promptDefaults.mjs";
+import {
+  createStaffUser,
+  deleteStaffUser,
+  listAccessUsers,
+  updateStaffUser,
+} from "./accessUsers.mjs";
+import {
+  ALL_PERMISSION_KEYS,
+  PERMISSION_GROUPS,
+  permissionsForResponse,
+} from "./permissions.mjs";
+import {
+  denyPermission,
+  requireAnyPermission,
+  requireExtractAccess,
+  requireCreateAiExtractAccess,
+  requirePermission,
+  requireStaffArea,
+  taxonomyActionPermission,
+} from "./routeAuth.mjs";
+import {
+  initDbConnection,
+  requireSupabase,
+  getSupabaseUrl,
+  getConnectionMeta,
+  loadFullConnectionConfig,
+  saveConnectionConfig,
+  maskConnectionConfig,
+  testSupabaseConnection,
+  buildEnvSnippet,
+} from "./dbConnection.mjs";
+import {
+  BACKUP_TABLES,
+  getDatabaseStats,
+  createBackup,
+  listBackups,
+  getBackupFilePath,
+  testPostgresConnection,
+  startMigrationJob,
+  getMigrationJob,
+  runSchemaCheck,
+} from "./databaseOps.mjs";
 
 const app = express();
 app.use(cors());
@@ -67,25 +108,8 @@ const MCQ_STATEMENT_MARK = 0.2;
 const MCQ_WRONG_PENALTY = 0.05;
 const SBA_CORRECT_MARK = 1;
 
-const SUPABASE_URL = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-const SUPABASE_SERVICE_ROLE_KEY =
-  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "";
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "models/gemini-embedding-001";
 const EMBEDDING_DIM = Number(process.env.EMBEDDING_DIM || 768);
-const supabaseAdmin =
-  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
-    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
-    : null;
-
-function requireSupabase(res) {
-  if (!supabaseAdmin) {
-    res.status(500).json({
-      error: "Supabase config missing. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or VITE_SUPABASE_PUBLISHABLE_KEY) in server env",
-    });
-    return null;
-  }
-  return supabaseAdmin;
-}
 
 function formatSupabaseError(error) {
   if (error == null) return "Unknown error";
@@ -95,11 +119,11 @@ function formatSupabaseError(error) {
   const details = error.details != null ? String(error.details) : "";
   const hint = error.hint != null ? String(error.hint) : "";
   if (msg.includes("fetch failed") || msg.includes("ENOTFOUND")) {
-    return `Cannot reach Supabase (${SUPABASE_URL}). Check SUPABASE_URL in .env matches your active Supabase project.`;
+    return `Cannot reach Supabase (${getSupabaseUrl()}). Check Supabase URL in Settings → Connection or .env.`;
   }
   if (code === "PGRST205" || msg.includes("Could not find the table")) {
     const table = msg.match(/table '([^']+)'/i)?.[1] ?? "unknown table";
-    return `Missing table ${table} on ${SUPABASE_URL}. Run taxonomy migration on THIS project in Supabase SQL Editor, then retry.`;
+    return `Missing table ${table} on ${getSupabaseUrl()}. Run migrations on this project, then retry.`;
   }
   if (code === "PGRST116" || msg.toLowerCase().includes("contains 0 rows")) {
     return "Save returned no row (often RLS blocking RETURNING, or wrong table). In Supabase SQL Editor run the taxonomy migration and confirm policies on subjects/systems/chapters/topics.";
@@ -115,18 +139,8 @@ app.get("/api/debug/schema-check", async (_req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const tables = ["subjects", "systems", "chapters", "topics", "boards", "concepts", "gemini_api_keys", "app_settings"];
-    const checks = {};
-    for (const table of tables) {
-      const selectCol = table === "app_settings" ? "key" : "id";
-      const { error } = await db.from(table).select(selectCol).limit(1);
-      checks[table] = {
-        ok: !error,
-        code: error?.code ?? null,
-        message: error?.message ?? null,
-      };
-    }
-    return res.json({ supabase_url: SUPABASE_URL, checks });
+    const checks = await runSchemaCheck(db);
+    return res.json({ supabase_url: getSupabaseUrl(), checks, tables: BACKUP_TABLES });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -711,6 +725,11 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    const inputText = String(req.body?.input_text ?? "").trim();
+    if (!req.file && !inputText) {
+      return res.status(400).json({ error: "Image file or input text is required" });
+    }
+    if (!(await requireExtract(req, res, db, { hasFile: Boolean(req.file), hasText: Boolean(inputText) }))) return;
     if (!(await hasGeminiKeys(db))) {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
@@ -718,10 +737,6 @@ app.post("/api/extract-concept", upload.single("image"), async (req, res) => {
     const models = await resolveAiModels(db);
     const modelName = models.primary;
     const fallbackModelName = models.fallback;
-    const inputText = String(req.body?.input_text ?? "").trim();
-    if (!req.file && !inputText) {
-      return res.status(400).json({ error: "Image file or input text is required" });
-    }
 
     const responseSchema = {
       type: SchemaType.OBJECT,
@@ -857,6 +872,11 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    const inputText = String(req.body?.input_text ?? "").trim();
+    if (!req.file && !inputText) {
+      return res.status(400).json({ error: "Image file or input text is required" });
+    }
+    if (!(await requireCreateAiExtract(req, res, db, { hasFile: Boolean(req.file), hasText: Boolean(inputText) }))) return;
     if (!(await hasGeminiKeys(db))) {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
@@ -864,10 +884,6 @@ app.post("/api/extract-questions", upload.single("image"), async (req, res) => {
     const models = await resolveAiModels(db);
     const modelName = models.primary;
     const fallbackModelName = models.fallback;
-    const inputText = String(req.body?.input_text ?? "").trim();
-    if (!req.file && !inputText) {
-      return res.status(400).json({ error: "Image file or input text is required" });
-    }
 
     const responseSchema = {
       type: SchemaType.OBJECT,
@@ -1024,6 +1040,7 @@ app.post("/api/generate-question-explanations", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.create_ai.edit"))) return;
     if (!(await hasGeminiKeys(db))) {
       return res.status(500).json({ error: "No Gemini API keys configured. Add keys in Settings → Gemini API." });
     }
@@ -1271,6 +1288,156 @@ app.get("/api/debug/test-gemini", async (_req, res) => {
   }
 });
 
+app.get("/api/settings/database", async (_req, res) => {
+  try {
+    const { config, meta } = await loadFullConnectionConfig();
+    return res.json({ config: maskConnectionConfig(config), meta, tables: BACKUP_TABLES });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Load failed" });
+  }
+});
+
+app.put("/api/settings/database", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.connection.edit"))) return;
+    const { supabase, postgres, writeEnv, syncAppSettings } = req.body ?? {};
+    const result = await saveConnectionConfig(
+      { supabase, postgres },
+      { writeEnv: Boolean(writeEnv), syncAppSettings: syncAppSettings !== false },
+    );
+    return res.json({
+      ok: true,
+      config: maskConnectionConfig(result.config),
+      meta: result.meta,
+      envSnippet: buildEnvSnippet(result.config),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Save failed" });
+  }
+});
+
+app.post("/api/settings/database/test-supabase", async (req, res) => {
+  try {
+    const { config } = req.body ?? {};
+    const { config: current } = await loadFullConnectionConfig();
+    const merged = {
+      supabase: { ...current.supabase, ...(config?.supabase ?? {}) },
+      postgres: current.postgres,
+    };
+    return res.json(await testSupabaseConnection(merged));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Test failed" });
+  }
+});
+
+app.post("/api/settings/database/test-postgres", async (req, res) => {
+  try {
+    const { config } = req.body ?? {};
+    const { config: current } = await loadFullConnectionConfig();
+    const merged = {
+      supabase: current.supabase,
+      postgres: { ...current.postgres, ...(config?.postgres ?? {}) },
+    };
+    return res.json(await testPostgresConnection(merged));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Test failed" });
+  }
+});
+
+app.get("/api/settings/database/stats", async (_req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const stats = await getDatabaseStats(db);
+    return res.json({ stats, meta: getConnectionMeta() });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Stats failed" });
+  }
+});
+
+app.post("/api/settings/database/backup", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.connection.backup"))) return;
+    const { includeSql, includeEmbeddings, tables } = req.body ?? {};
+    const backup = await createBackup(db, {
+      includeSql: Boolean(includeSql),
+      includeEmbeddings: includeEmbeddings !== false,
+      tables: Array.isArray(tables) && tables.length ? tables : undefined,
+    });
+    return res.json({ ok: true, backup });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Backup failed" });
+  }
+});
+
+app.get("/api/settings/database/backups", async (_req, res) => {
+  try {
+    return res.json({ backups: listBackups() });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "List failed" });
+  }
+});
+
+app.get("/api/settings/database/backups/:id/download", async (req, res) => {
+  try {
+    const format = String(req.query.format ?? "json").toLowerCase() === "sql" ? "sql" : "json";
+    const filePath = getBackupFilePath(req.params.id, format);
+    if (!filePath) return res.status(404).json({ error: "Backup not found" });
+    const filename = path.basename(filePath);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Type", format === "sql" ? "application/sql" : "application/json");
+    return res.sendFile(filePath);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Download failed" });
+  }
+});
+
+app.post("/api/settings/database/migrate", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.connection.migrate"))) return;
+    const jobId = startMigrationJob(db, req.body ?? {});
+    return res.json({ ok: true, jobId });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Migration start failed" });
+  }
+});
+
+app.get("/api/settings/database/migrate/:jobId", async (req, res) => {
+  try {
+    const job = getMigrationJob(req.params.jobId);
+    if (!job) return res.status(404).json({ error: "Migration job not found" });
+    return res.json(job);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Status failed" });
+  }
+});
+
+app.get("/api/settings/database/env-snippet", async (_req, res) => {
+  try {
+    const { config } = await loadFullConnectionConfig();
+    return res.json({ snippet: buildEnvSnippet(config) });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
 app.get("/api/settings/prompts/extract-questions", async (_req, res) => {
   try {
     const db = requireSupabase(res);
@@ -1297,6 +1464,7 @@ app.put("/api/settings/appearance", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.appearance.edit"))) return;
     const result = await saveUiAppearance(db, req.body);
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1305,10 +1473,11 @@ app.put("/api/settings/appearance", async (req, res) => {
   }
 });
 
-app.post("/api/settings/appearance/reset", async (_req, res) => {
+app.post("/api/settings/appearance/reset", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.appearance.reset"))) return;
     const result = await resetUiAppearance(db);
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1321,6 +1490,7 @@ app.put("/api/settings/prompts/extract-questions", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.prompts.edit"))) return;
     const result = await saveExtractQuestionsPrompt(db, req.body?.prompt);
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1329,10 +1499,11 @@ app.put("/api/settings/prompts/extract-questions", async (req, res) => {
   }
 });
 
-app.post("/api/settings/prompts/extract-questions/reset", async (_req, res) => {
+app.post("/api/settings/prompts/extract-questions/reset", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.prompts.reset"))) return;
     const result = await resetExtractQuestionsPrompt(db);
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1362,6 +1533,7 @@ for (const [slug, getFn, saveFn, resetFn] of promptHandlers) {
     try {
       const db = requireSupabase(res);
       if (!db) return;
+      if (!(await requirePerm(req, res, db, "settings.prompts.edit"))) return;
       const result = await saveFn(db, req.body?.prompt);
       return res.json({ ok: true, ...result });
     } catch (e) {
@@ -1370,10 +1542,11 @@ for (const [slug, getFn, saveFn, resetFn] of promptHandlers) {
     }
   });
 
-  app.post(`/api/settings/prompts/${slug}/reset`, async (_req, res) => {
+  app.post(`/api/settings/prompts/${slug}/reset`, async (req, res) => {
     try {
       const db = requireSupabase(res);
       if (!db) return;
+      if (!(await requirePerm(req, res, db, "settings.prompts.reset"))) return;
       const result = await resetFn(db);
       return res.json({ ok: true, ...result });
     } catch (e) {
@@ -1398,6 +1571,7 @@ app.put("/api/settings/prompts/matching", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.prompts.edit"))) return;
     const { prompt, vector_enabled, ai_enabled } = req.body ?? {};
     if (typeof prompt !== "string" || !prompt.trim()) {
       return res.status(400).json({ error: "Matching prompt is required" });
@@ -1414,10 +1588,11 @@ app.put("/api/settings/prompts/matching", async (req, res) => {
   }
 });
 
-app.post("/api/settings/prompts/matching/reset", async (_req, res) => {
+app.post("/api/settings/prompts/matching/reset", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.prompts.reset"))) return;
     const result = await resetMatchingPromptConfig(db);
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1475,7 +1650,7 @@ app.get("/api/auth/me", async (req, res) => {
     const token = getBearerToken(req);
     const user = token ? await validateSession(db, token) : null;
     if (!user) return res.status(401).json({ error: "Not authenticated" });
-    return res.json({ user: { id: user.id, email: user.email, role: user.role } });
+    return res.json({ user: formatAuthUser(user) });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -1491,6 +1666,117 @@ async function requireAuthUser(req, res, db) {
   }
   return user;
 }
+
+async function requireAdminUser(req, res, db) {
+  const user = await requireAuthUser(req, res, db);
+  if (!user) return null;
+  if (user.role !== "admin") {
+    res.status(403).json({ error: "Full administrator access required" });
+    return null;
+  }
+  return user;
+}
+
+async function requireStaff(req, res, db) {
+  return requireStaffArea(req, res, db, validateSession, getBearerToken);
+}
+
+async function requirePerm(req, res, db, permission) {
+  return requirePermission(req, res, db, permission, validateSession, getBearerToken);
+}
+
+async function requireAnyPerm(req, res, db, permissions) {
+  return requireAnyPermission(req, res, db, permissions, validateSession, getBearerToken);
+}
+
+async function requireExtract(req, res, db, { hasFile, hasText }) {
+  return requireExtractAccess(req, res, db, validateSession, getBearerToken, { hasFile, hasText });
+}
+
+async function requireCreateAiExtract(req, res, db, { hasFile, hasText }) {
+  return requireCreateAiExtractAccess(req, res, db, validateSession, getBearerToken, { hasFile, hasText });
+}
+
+function formatAuthUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    permissions: permissionsForResponse(user),
+  };
+}
+
+app.get("/api/settings/access/permissions", async (_req, res) => {
+  try {
+    return res.json({ groups: PERMISSION_GROUPS, all_keys: ALL_PERMISSION_KEYS });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+app.get("/api/settings/access/users", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const actor = await requireAdminUser(req, res, db);
+    if (!actor) return;
+    const users = await listAccessUsers(db);
+    return res.json({ users });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Failed" });
+  }
+});
+
+app.post("/api/settings/access/users", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const actor = await requireAdminUser(req, res, db);
+    if (!actor) return;
+    const { email, password, permissions, displayName } = req.body ?? {};
+    const user = await createStaffUser(db, { email, password, permissions, displayName });
+    return res.json({ ok: true, user });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Create failed" });
+  }
+});
+
+app.patch("/api/settings/access/users/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const actor = await requireAdminUser(req, res, db);
+    if (!actor) return;
+    const { email, password, permissions, displayName } = req.body ?? {};
+    const user = await updateStaffUser(
+      db,
+      req.params.id,
+      { email, password, permissions, displayName },
+      { actorId: actor.id },
+    );
+    return res.json({ ok: true, user });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
+  }
+});
+
+app.delete("/api/settings/access/users/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const actor = await requireAdminUser(req, res, db);
+    if (!actor) return;
+    await deleteStaffUser(db, req.params.id, { actorId: actor.id });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Delete failed" });
+  }
+});
 
 app.get("/api/user/progress/study", async (req, res) => {
   try {
@@ -1613,6 +1899,7 @@ app.put("/api/settings/gemini-models", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.gemini.edit"))) return;
     const result = await saveGeminiModelSettings(db, req.body ?? {});
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1625,6 +1912,7 @@ app.put("/api/settings/gemini-keys", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.gemini.edit"))) return;
     const keys = req.body?.keys;
     const result = await saveGeminiKeys(db, keys);
     invalidateKeyCache();
@@ -1639,6 +1927,7 @@ app.post("/api/settings/gemini-keys", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.gemini.add"))) return;
     const keys = req.body?.keys ?? (req.body?.api_key ? [req.body.api_key] : []);
     const result = await addGeminiKeys(db, keys);
     return res.json({ ok: true, ...result });
@@ -1652,6 +1941,7 @@ app.patch("/api/settings/gemini-keys/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.gemini.edit"))) return;
     const result = await updateGeminiKey(db, req.params.id, req.body ?? {});
     return res.json({ ok: true, ...result });
   } catch (e) {
@@ -1665,6 +1955,7 @@ app.delete("/api/settings/gemini-keys/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.gemini.delete"))) return;
     await deleteGeminiKey(db, req.params.id);
     return res.json({ ok: true });
   } catch (e) {
@@ -1870,6 +2161,7 @@ app.patch("/api/concepts/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requireAnyPerm(req, res, db, ["settings.concepts.edit", "home.edit"]))) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
 
@@ -1970,6 +2262,7 @@ app.delete("/api/concepts/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.concepts.delete"))) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
     const { error } = await db.from("concepts").delete().eq("id", id);
@@ -2000,6 +2293,7 @@ app.post("/api/boards", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.boards.add"))) return;
     const name = String(req.body?.name ?? "").trim();
     if (!name) return res.status(400).json({ error: "name required" });
     const { data, error } = await db.from("boards").insert({ name }).select("id, name, created_at");
@@ -2017,6 +2311,7 @@ app.delete("/api/boards/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.boards.delete"))) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
     const { error } = await db.from("boards").delete().eq("id", id);
@@ -2032,6 +2327,7 @@ app.patch("/api/boards/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.boards.edit"))) return;
     const id = String(req.params.id ?? "").trim();
     const name = String(req.body?.name ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
@@ -2097,6 +2393,8 @@ app.post("/api/taxonomy/:level", async (req, res) => {
     const db = requireSupabase(res);
     if (!db) return;
     const level = String(req.params.level ?? "");
+    const perm = taxonomyActionPermission(level, "add");
+    if (!perm || !(await requirePerm(req, res, db, perm))) return;
     const table = taxonomyTable(level);
     if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
     const name = String(req.body?.name ?? "").trim();
@@ -2129,7 +2427,10 @@ app.delete("/api/taxonomy/:level/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
-    const table = taxonomyTable(String(req.params.level ?? ""));
+    const level = String(req.params.level ?? "");
+    const perm = taxonomyActionPermission(level, "delete");
+    if (!perm || !(await requirePerm(req, res, db, perm))) return;
+    const table = taxonomyTable(level);
     if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
@@ -2147,6 +2448,8 @@ app.patch("/api/taxonomy/:level/:id", async (req, res) => {
     const db = requireSupabase(res);
     if (!db) return;
     const level = String(req.params.level ?? "");
+    const perm = taxonomyActionPermission(level, "edit");
+    if (!perm || !(await requirePerm(req, res, db, perm))) return;
     const table = taxonomyTable(level);
     if (!table) return res.status(400).json({ error: "Invalid taxonomy level" });
     const id = String(req.params.id ?? "").trim();
@@ -2170,6 +2473,7 @@ app.patch("/api/key-points/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "suggestions.edit"))) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
 
@@ -2220,10 +2524,27 @@ app.patch("/api/key-points/:id", async (req, res) => {
   }
 });
 
+app.delete("/api/key-points/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "suggestions.delete"))) return;
+    const id = String(req.params.id ?? "").trim();
+    if (!id) return res.status(400).json({ error: "id required" });
+    const { error } = await db.from("key_points").delete().eq("id", id);
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.post("/api/concepts/:id/key-points", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "suggestions.add"))) return;
     const conceptId = String(req.params.id ?? "").trim();
     if (!conceptId) return res.status(400).json({ error: "id required" });
 
@@ -2281,6 +2602,7 @@ app.post("/api/approve-point", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.create_ai.add"))) return;
     const {
       matched_key_point_id,
       point_id,
@@ -2424,6 +2746,7 @@ app.post("/api/match-key-points", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requireAnyPerm(req, res, db, ["home.match", "question_bank.create_ai.extract"]))) return;
 
     const matchingConfig = await getMatchingPromptConfig(db);
     const useVector = matchingConfig.vector_enabled;
@@ -2544,6 +2867,7 @@ app.post("/api/save-concept", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "home.add"))) return;
     const body = req.body ?? {};
 
     const conceptName = String(body?.concept_name ?? "").trim();
@@ -2650,6 +2974,7 @@ app.post("/api/save-question", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.create_ai.add"))) return;
     const body = req.body ?? {};
     const list = Array.isArray(body?.questions) ? body.questions : [body];
 
@@ -2820,6 +3145,7 @@ app.delete("/api/questions/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.questions.delete"))) return;
     const { error } = await db.from("questions").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
@@ -2833,6 +3159,7 @@ app.patch("/api/questions/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.questions.edit"))) return;
     const id = String(req.params.id ?? "").trim();
     if (!id) return res.status(400).json({ error: "id required" });
 
@@ -3222,6 +3549,7 @@ app.post("/api/exams", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "exam.create.add"))) return;
     const body = req.body ?? {};
     const title = String(body.title ?? "").trim();
     if (!title) return res.status(400).json({ error: "title required" });
@@ -3284,6 +3612,7 @@ app.patch("/api/exams/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requireAnyPerm(req, res, db, ["exam.create.edit", "exam.schedules.edit"]))) return;
     const id = String(req.params.id ?? "").trim();
     const body = req.body ?? {};
     const patch = { updated_at: new Date().toISOString() };
@@ -3355,6 +3684,7 @@ app.delete("/api/exams/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
     if (!db) return;
+    if (!(await requirePerm(req, res, db, "exam.schedules.delete"))) return;
     const { error } = await db.from("exams").delete().eq("id", req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ ok: true });
@@ -3685,7 +4015,10 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
 });
 
 const port = Number(process.env.PORT || 8787);
+await initDbConnection();
 app.listen(port, () => {
+  const meta = getConnectionMeta();
   console.log(`API server listening on http://localhost:${port}`);
+  console.log(`Database: ${meta.connected ? meta.supabase_url : "not configured"} (source: ${meta.source})`);
 });
 

@@ -21,6 +21,9 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { cn } from "@/lib/utils";
 import { apiUrl } from "@/lib/apiBase";
+import { getAuthHeaders } from "@/lib/auth";
+import { Can, useCan } from "@/components/Can";
+import { guardPermission } from "@/lib/permissionGuard";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import { ConceptPickerDialog, ConceptSelectButton } from "@/components/ConceptPickerDialog";
@@ -209,7 +212,7 @@ function mergeExplanationResults(drafts: DraftQuestion[], results: GeneratedExpl
 async function fetchGeneratedExplanations(drafts: DraftQuestion[], concept?: string): Promise<DraftQuestion[]> {
   const resp = await fetch(apiUrl("/api/generate-question-explanations"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...getAuthHeaders() },
     body: JSON.stringify({ questions: drafts, concept: concept?.trim() || undefined }),
   });
   const j = (await resp.json().catch(() => ({}))) as {
@@ -230,6 +233,13 @@ async function fetchLegacySuggestionMatches(texts: string[]): Promise<Map<string
 }
 
 export default function CreateQuestionAI() {
+  const canUpload = useCan("question_bank.create_ai.upload");
+  const canSourceText = useCan("question_bank.create_ai.source_text");
+  const canExtract = useCan("question_bank.create_ai.extract");
+  const canAdd = useCan("question_bank.create_ai.add");
+  const canEdit = useCan("question_bank.create_ai.edit");
+  const canDelete = useCan("question_bank.create_ai.delete");
+
   const [conceptTitle, setConceptTitle] = useState("");
   const [selectedConceptId, setSelectedConceptId] = useState<string | null>(null);
   const [conceptPickerOpen, setConceptPickerOpen] = useState(false);
@@ -570,6 +580,7 @@ export default function CreateQuestionAI() {
   };
 
   const onPickImage = async (f: File) => {
+    if (!guardPermission("question_bank.create_ai.upload")) return;
     if (!isAcceptedSourceFile(f)) {
       toast.error("Please choose an image or PDF file");
       return;
@@ -647,7 +658,12 @@ export default function CreateQuestionAI() {
 
   const handleExtract = async (options?: { skipMatching?: boolean }) => {
     const skipMatching = options?.skipMatching === true;
+    if (!guardPermission("question_bank.create_ai.extract")) return;
     if (!imageFile && !sourceText.trim()) return toast.error("Please upload image or paste text");
+    if (imageFile && !guardPermission("question_bank.create_ai.upload")) return;
+    if (!imageFile && sourceText.trim() && !canSourceText) {
+      return toast.error("No permission to use source text for extract");
+    }
     setExtracting(true);
     setExtractedQuestionSummary(null);
     try {
@@ -658,9 +674,10 @@ export default function CreateQuestionAI() {
       }
       if (sourceText.trim()) formData.append("input_text", sourceText.trim());
 
+      const authHeaders = getAuthHeaders();
       const [conceptResp, questionsResp] = await Promise.all([
-        fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData }),
-        fetch(apiUrl("/api/extract-questions"), { method: "POST", body: formData }),
+        fetch(apiUrl("/api/extract-concept"), { method: "POST", headers: authHeaders, body: formData }),
+        fetch(apiUrl("/api/extract-questions"), { method: "POST", headers: authHeaders, body: formData }),
       ]);
 
       const data = (await conceptResp.json().catch(() => ({}))) as {
@@ -727,6 +744,7 @@ export default function CreateQuestionAI() {
   };
 
   const approvePoint = async (idx: number) => {
+    if (!guardPermission("question_bank.create_ai.add")) return;
     const p = points[idx];
     if (!p) return;
     if (!p.match?.key_point_id) {
@@ -741,7 +759,7 @@ export default function CreateQuestionAI() {
     try {
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           mode: "approve",
           matched_key_point_id: p.match.key_point_id,
@@ -785,6 +803,7 @@ export default function CreateQuestionAI() {
   };
 
   const savePoint = async (idx: number) => {
+    if (!guardPermission("question_bank.create_ai.add")) return;
     const p = points[idx];
     if (!p) return;
     if (!requireTaxonomy()) return;
@@ -797,7 +816,7 @@ export default function CreateQuestionAI() {
     try {
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           mode: "save",
           matched_key_point_id: null,
@@ -880,6 +899,7 @@ export default function CreateQuestionAI() {
   };
 
   const approveQuestionMatch = async (index: number, options?: { quiet?: boolean }) => {
+    if (!guardPermission("question_bank.create_ai.add")) return false;
     const q = index === activeQuestionIndex ? buildCurrentDraftFromForm() : queuedQuestions[index];
     if (!q?.match?.key_point_id) return false;
     if (!requireTaxonomy()) return false;
@@ -898,7 +918,7 @@ export default function CreateQuestionAI() {
       const boardIds = q.boardIds ?? [];
       const resp = await fetch(apiUrl("/api/approve-point"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           mode: "approve",
           matched_key_point_id: q.match!.key_point_id,
@@ -1014,6 +1034,7 @@ export default function CreateQuestionAI() {
   };
 
   const generateExplanationsAi = async () => {
+    if (!guardPermission("question_bank.create_ai.edit")) return;
     if (!questionMode) return toast.error("Select MCQ or SBA first");
     const stem = questionMode === "mcq" ? mcqStem.trim() : sbaStem.trim();
     if (!stem) return toast.error("Enter question stem first");
@@ -1034,6 +1055,7 @@ export default function CreateQuestionAI() {
   };
 
   const saveQuestion = async () => {
+    if (!guardPermission("question_bank.create_ai.add")) return;
     if (!questionMode) return toast.error("Select a question type");
     if (!requireTaxonomy()) return;
     if (!requireSelectedConcept()) return;
@@ -1049,7 +1071,7 @@ export default function CreateQuestionAI() {
       };
       const resp = await fetch(apiUrl("/api/save-question"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(payload),
       });
       const data = (await resp.json().catch(() => ({}))) as { error?: string };
@@ -1065,6 +1087,7 @@ export default function CreateQuestionAI() {
   };
 
   const addQuestionToPaper = (mode: "mcq" | "sba" = questionMode as "mcq" | "sba") => {
+    if (!guardPermission("question_bank.create_ai.add")) return;
     if (!mode) return toast.error("Select question type first");
     if (!requireTaxonomy()) return;
     const t = taxonomyNames();
@@ -1201,30 +1224,33 @@ export default function CreateQuestionAI() {
         </div>
 
         <div className="mt-4 space-y-4">
+          <Can permission="question_bank.create_ai.upload">
           <div className="space-y-2">
-            <Label>Book page image</Label>
+            <Label>Upload image / PDF for extract</Label>
             <div
               role="button"
               tabIndex={0}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onPaste={onPaste}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
+              onDragOver={canUpload ? onDragOver : undefined}
+              onDragLeave={canUpload ? onDragLeave : undefined}
+              onDrop={canUpload ? onDrop : undefined}
+              onPaste={canUpload ? onPaste : undefined}
+              onClick={() => canUpload && fileRef.current?.click()}
+              onKeyDown={(e) => e.key === "Enter" && canUpload && fileRef.current?.click()}
               className={[
-                "rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors max-w-md",
-                dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
+                "rounded-lg border-2 border-dashed p-4 text-center transition-colors max-w-md",
+                canUpload ? "cursor-pointer" : "cursor-not-allowed opacity-50",
+                dragOver && canUpload ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
               <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ, ক্লিক করুন</p>
-              <p className="text-xs text-muted-foreground mt-1">Image অথবা PDF</p>
+              <p className="text-xs text-muted-foreground mt-1">Image অথবা PDF — extract এর জন্য</p>
               <Input
                 ref={fileRef}
                 type="file"
                 accept={ACCEPTED_SOURCE_TYPES}
                 className="sr-only"
+                disabled={!canUpload}
                 onChange={(e) => e.target.files?.[0] && void onPickImage(e.target.files[0])}
               />
             </div>
@@ -1240,7 +1266,9 @@ export default function CreateQuestionAI() {
               </div>
             ) : null}
           </div>
+          </Can>
 
+          <Can permission="question_bank.create_ai.extract">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button onClick={() => void handleExtract()} disabled={(!imageFile && !sourceText.trim()) || extracting} type="button">
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
@@ -1256,18 +1284,22 @@ export default function CreateQuestionAI() {
               {extracting ? "Extracting…" : "Extract concept without matching"}
             </Button>
           </div>
+          </Can>
         </div>
+        <Can permission="question_bank.create_ai.source_text">
         <div className="mt-4 space-y-2">
           <Label>Source text (Text to concept generator)</Label>
           <Textarea
             ref={sourceTextRef}
             value={sourceText}
-            onChange={(e) => setSourceText(e.target.value)}
+            onChange={(e) => canSourceText && setSourceText(e.target.value)}
+            readOnly={!canSourceText}
             rows={1}
             className="min-h-10 resize-none overflow-hidden"
             placeholder="Paste or type source text…"
           />
         </div>
+        </Can>
       </Card>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
@@ -1610,6 +1642,7 @@ export default function CreateQuestionAI() {
       </Card>
 
       <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-2">
+        <Can permission="question_bank.create_ai.add">
         <Button type="button" variant="secondary" onClick={() => addQuestionToPaper("mcq")}>
           <Plus className="mr-2 h-4 w-4" />
           Add new question: MCQ
@@ -1618,13 +1651,16 @@ export default function CreateQuestionAI() {
           <Plus className="mr-2 h-4 w-4" />
           Add new question: SBA
         </Button>
+        </Can>
         <Button type="button" variant="outline" onClick={resetForm}>
           Reset
         </Button>
+        <Can permission="question_bank.create_ai.add">
         <Button type="button" onClick={saveQuestion} disabled={saving || !questionMode}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {queuedQuestions.length > 1 ? `Save all ${queuedQuestions.length} questions` : "Save question"}
         </Button>
+        </Can>
       </div>
       {queuedQuestions.length > 0 && (
         <Card className="p-4">
@@ -1719,18 +1755,21 @@ export default function CreateQuestionAI() {
                     ) : null}
                   </div>
                 </div>
+                {canDelete ? (
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!guardPermission("question_bank.create_ai.delete")) return;
                     setDeleteQuestionTarget(q);
                   }}
                   aria-label="Delete question"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
+                ) : null}
               </div>
             ))}
           </div>

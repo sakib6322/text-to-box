@@ -76,7 +76,7 @@ const App = () => (
                 <Route
                   path="/admin"
                   element={
-                    <ProtectedRoute role="admin">
+                    <ProtectedRoute adminArea>
                       <AdminLayout />
                     </ProtectedRoute>
                   }
@@ -84,16 +84,51 @@ const App = () => (
                   <Route index element={<AdminPlaceholder />} />
                   <Route path="academic/classes" element={<AdminPlaceholder />} />
                   <Route path="academic/subjects" element={<AdminPlaceholder />} />
-                  <Route path="question-bank/create-ai" element={<CreateQuestionAI />} />
-                  <Route path="question-bank/questions" element={<AllQuestions />} />
-                  <Route path="exam/create" element={<CreateExam />} />
-                  <Route path="exam/schedules" element={<ExamSchedules />} />
+                  <Route
+                    path="question-bank/create-ai"
+                    element={
+                      <ProtectedRoute permission="question_bank.create_ai.view">
+                        <CreateQuestionAI />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="question-bank/questions"
+                    element={
+                      <ProtectedRoute permission="question_bank.questions.view">
+                        <AllQuestions />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="exam/create"
+                    element={
+                      <ProtectedRoute permission="exam.create.view">
+                        <CreateExam />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="exam/schedules"
+                    element={
+                      <ProtectedRoute permission="exam.schedules.view">
+                        <ExamSchedules />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="practice-sheets" element={<AdminPlaceholder />} />
                   <Route path="students" element={<AdminPlaceholder />} />
                   <Route path="teachers" element={<AdminPlaceholder />} />
                   <Route path="organization" element={<AdminPlaceholder />} />
                   <Route path="settings" element={<AdminSettings />} />
-                  <Route path="settings/appearance" element={<AdminAppearance />} />
+                  <Route
+                    path="settings/appearance"
+                    element={
+                      <ProtectedRoute permission="settings.appearance.view">
+                        <AdminAppearance />
+                      </ProtectedRoute>
+                    }
+                  />
                 </Route>
                 <Route path="*" element={<NotFound />} />
               </Routes>

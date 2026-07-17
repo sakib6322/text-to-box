@@ -16,6 +16,12 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { EditItemDialog } from "@/components/EditItemDialog";
 import { AIPromptsPanel } from "@/components/AIPromptsPanel";
 import { ConceptsPanel } from "@/components/ConceptsPanel";
+import { AccessManagementPanel } from "@/components/AccessManagementPanel";
+import { hasPermission, isAdmin, getAuthHeaders } from "@/lib/auth";
+import { SETTINGS_TAB_PERMISSION } from "@/lib/permissions";
+import { guardPermission } from "@/lib/permissionGuard";
+import { settingsLevelPerm } from "@/lib/permissionGuard";
+import { Can, useCan } from "@/components/Can";
 
 type BoardRow = { id: string; name: string; created_at?: string };
 
@@ -30,6 +36,13 @@ function TaxonomySection({
   parentLevel?: "subjects" | "systems" | "chapters";
   parentLabel?: string;
 }) {
+  const permAdd = settingsLevelPerm(level, "add");
+  const permEdit = settingsLevelPerm(level, "edit");
+  const permDelete = settingsLevelPerm(level, "delete");
+  const canAdd = useCan(permAdd);
+  const canEdit = useCan(permEdit);
+  const canDelete = useCan(permDelete);
+
   const [items, setItems] = useState<TaxonomyItem[]>([]);
   const [parents, setParents] = useState<TaxonomyItem[]>([]);
   const [parentId, setParentId] = useState("");
@@ -67,6 +80,7 @@ function TaxonomySection({
   }, [loadItems]);
 
   const add = async () => {
+    if (!guardPermission(permAdd)) return;
     const n = name.trim();
     if (!n) return toast.error("Enter a name");
     if (parentLevel && !parentId) return toast.error(`Select ${parentLabel}`);
@@ -74,7 +88,7 @@ function TaxonomySection({
     try {
       const r = await fetch(apiUrl(`/api/taxonomy/${level}`), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ name: n, parent_id: parentId || undefined }),
       });
       const j = (await r.json().catch(() => ({}))) as { item?: TaxonomyItem; error?: unknown };
@@ -99,9 +113,13 @@ function TaxonomySection({
   };
 
   const remove = async (id: string) => {
+    if (!guardPermission(permDelete)) return;
     setDeleting(id);
     try {
-      const r = await fetch(apiUrl(`/api/taxonomy/${level}/${encodeURIComponent(id)}`), { method: "DELETE" });
+      const r = await fetch(apiUrl(`/api/taxonomy/${level}/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setItems((prev) => prev.filter((x) => x.id !== id));
@@ -116,19 +134,21 @@ function TaxonomySection({
 
   
   const openEdit = (item: TaxonomyItem) => {
+    if (!guardPermission(permEdit)) return;
     setEditTarget({ id: item.id, name: item.name });
     setEditName(item.name);
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
+    if (!guardPermission(permEdit)) return;
     const n = editName.trim();
     if (!n) return toast.error("Enter a name");
     setSavingEdit(true);
     try {
       const r = await fetch(apiUrl(`/api/taxonomy/${level}/${encodeURIComponent(editTarget.id)}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ name: n }),
       });
       const j = (await r.json().catch(() => ({}))) as { item?: TaxonomyItem; error?: string };
@@ -170,12 +190,15 @@ function TaxonomySection({
             onChange={(e) => setName(e.target.value)}
             placeholder={`e.g. ${label} name`}
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), add())}
+            disabled={!canAdd}
           />
         </div>
-        <Button type="button" onClick={add} disabled={saving}>
+        <Can permission={permAdd}>
+        <Button type="button" onClick={add} disabled={saving || !canAdd}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Add {label.toLowerCase()}
         </Button>
+        </Can>
       </div>
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground py-6">
@@ -189,9 +212,12 @@ function TaxonomySection({
             <li key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="font-medium">{item.name}</span>
               <div className="flex gap-1">
+                {canEdit ? (
                 <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(item)} aria-label="Edit">
                   <Pencil className="h-4 w-4" />
                 </Button>
+                ) : null}
+                {canDelete ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -202,6 +228,7 @@ function TaxonomySection({
                 >
                   {deleting === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 </Button>
+                ) : null}
               </div>
             </li>
           ))}
@@ -236,6 +263,13 @@ function TaxonomySection({
 }
 
 function BoardsSection() {
+  const permAdd = settingsLevelPerm("boards", "add");
+  const permEdit = settingsLevelPerm("boards", "edit");
+  const permDelete = settingsLevelPerm("boards", "delete");
+  const canAdd = useCan(permAdd);
+  const canEdit = useCan(permEdit);
+  const canDelete = useCan(permDelete);
+
   const [boards, setBoards] = useState<BoardRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -265,13 +299,14 @@ function BoardsSection() {
   }, [load]);
 
   const addBoard = async () => {
+    if (!guardPermission(permAdd)) return;
     const n = name.trim();
     if (!n) return toast.error("Enter a board name");
     setSaving(true);
     try {
       const r = await fetch(apiUrl("/api/boards"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ name: n }),
       });
       const j = (await r.json().catch(() => ({}))) as { board?: BoardRow; error?: string };
@@ -287,9 +322,13 @@ function BoardsSection() {
   };
 
   const remove = async (id: string) => {
+    if (!guardPermission(permDelete)) return;
     setDeleting(id);
     try {
-      const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(id)}`), { method: "DELETE" });
+      const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(id)}`), {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(typeof j?.error === "string" ? j.error : "Failed to delete");
       setBoards((prev) => prev.filter((b) => b.id !== id));
@@ -303,19 +342,21 @@ function BoardsSection() {
   };
 
   const openEdit = (board: BoardRow) => {
+    if (!guardPermission(permEdit)) return;
     setEditTarget({ id: board.id, name: board.name });
     setEditName(board.name);
   };
 
   const saveEdit = async () => {
     if (!editTarget) return;
+    if (!guardPermission(permEdit)) return;
     const n = editName.trim();
     if (!n) return toast.error("Enter a board name");
     setSavingEdit(true);
     try {
       const r = await fetch(apiUrl(`/api/boards/${encodeURIComponent(editTarget.id)}`), {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ name: n }),
       });
       const j = (await r.json().catch(() => ({}))) as { board?: BoardRow; error?: string };
@@ -346,12 +387,15 @@ function BoardsSection() {
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. BMDC, FCPS Part-1"
             onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addBoard())}
+            disabled={!canAdd}
           />
         </div>
-        <Button type="button" onClick={addBoard} disabled={saving}>
+        <Can permission={permAdd}>
+        <Button type="button" onClick={addBoard} disabled={saving || !canAdd}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Add board
         </Button>
+        </Can>
       </div>
       {loading ? (
         <div className="flex items-center gap-2 text-muted-foreground py-6">
@@ -365,9 +409,12 @@ function BoardsSection() {
             <li key={b.id} className="flex items-center justify-between gap-3 px-4 py-3">
               <span className="font-medium">{b.name}</span>
               <div className="flex gap-1">
+                {canEdit ? (
                 <Button type="button" variant="ghost" size="icon" onClick={() => openEdit(b)} aria-label={`Edit ${b.name}`}>
                   <Pencil className="h-4 w-4" />
                 </Button>
+                ) : null}
+                {canDelete ? (
                 <Button
                   type="button"
                   variant="ghost"
@@ -378,6 +425,7 @@ function BoardsSection() {
                 >
                   {deleting === b.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 </Button>
+                ) : null}
               </div>
             </li>
           ))}
@@ -411,7 +459,34 @@ function BoardsSection() {
   );
 }
 
+const SETTINGS_TABS = [
+  { value: "connection", label: "Connection", permission: SETTINGS_TAB_PERMISSION.connection },
+  { value: "gemini", label: "Gemini API", permission: SETTINGS_TAB_PERMISSION.gemini },
+  { value: "prompts", label: "AI Prompts", permission: SETTINGS_TAB_PERMISSION.prompts },
+  { value: "subjects", label: "Subjects", permission: SETTINGS_TAB_PERMISSION.subjects },
+  { value: "systems", label: "Systems", permission: SETTINGS_TAB_PERMISSION.systems },
+  { value: "chapters", label: "Chapters", permission: SETTINGS_TAB_PERMISSION.chapters },
+  { value: "topics", label: "Topics", permission: SETTINGS_TAB_PERMISSION.topics },
+  { value: "concepts", label: "Concepts", permission: SETTINGS_TAB_PERMISSION.concepts },
+  { value: "boards", label: "Boards", permission: SETTINGS_TAB_PERMISSION.boards },
+  { value: "access", label: "Access", permission: SETTINGS_TAB_PERMISSION.access, adminOnly: true },
+] as const;
+
 export default function AdminSettings() {
+  const visibleTabs = SETTINGS_TABS.filter((t) => {
+    if (t.adminOnly) return isAdmin();
+    return hasPermission(t.permission);
+  });
+  const defaultTab = visibleTabs[0]?.value ?? "connection";
+
+  if (visibleTabs.length === 0) {
+    return (
+      <Card className="p-6">
+        <p className="text-sm text-muted-foreground">You do not have permission to view any settings sections.</p>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2 text-sm text-muted-foreground">
@@ -440,45 +515,64 @@ export default function AdminSettings() {
           </p>
         </div>
 
-        <Tabs defaultValue="subjects">
+        <Tabs defaultValue={defaultTab} key={defaultTab}>
           <TabsList className="flex flex-wrap h-auto gap-1">
-            <TabsTrigger value="connection">Connection</TabsTrigger>
-            <TabsTrigger value="gemini">Gemini API</TabsTrigger>
-            <TabsTrigger value="prompts">AI Prompts</TabsTrigger>
-            <TabsTrigger value="subjects">Subjects</TabsTrigger>
-            <TabsTrigger value="systems">Systems</TabsTrigger>
-            <TabsTrigger value="chapters">Chapters</TabsTrigger>
-            <TabsTrigger value="topics">Topics</TabsTrigger>
-            <TabsTrigger value="concepts">Concepts</TabsTrigger>
-            <TabsTrigger value="boards">Boards</TabsTrigger>
+            {visibleTabs.map((t) => (
+              <TabsTrigger key={t.value} value={t.value}>
+                {t.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
-          <TabsContent value="connection" className="mt-4">
-            <DatabaseConnectionPanel />
-          </TabsContent>
-          <TabsContent value="gemini" className="mt-4">
-            <GeminiKeysPanel />
-          </TabsContent>
-          <TabsContent value="prompts" className="mt-4">
-            <AIPromptsPanel />
-          </TabsContent>
-          <TabsContent value="subjects" className="mt-4">
-            <TaxonomySection level="subjects" label="Subject" />
-          </TabsContent>
-          <TabsContent value="systems" className="mt-4">
-            <TaxonomySection level="systems" label="System" parentLevel="subjects" parentLabel="Parent subject" />
-          </TabsContent>
-          <TabsContent value="chapters" className="mt-4">
-            <TaxonomySection level="chapters" label="Chapter" parentLevel="systems" parentLabel="Parent system" />
-          </TabsContent>
-          <TabsContent value="topics" className="mt-4">
-            <TaxonomySection level="topics" label="Topic" parentLevel="chapters" parentLabel="Parent chapter" />
-          </TabsContent>
-          <TabsContent value="concepts" className="mt-4">
-            <ConceptsPanel />
-          </TabsContent>
-          <TabsContent value="boards" className="mt-4">
-            <BoardsSection />
-          </TabsContent>
+          {hasPermission(SETTINGS_TAB_PERMISSION.connection) ? (
+            <TabsContent value="connection" className="mt-4">
+              <DatabaseConnectionPanel />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.gemini) ? (
+            <TabsContent value="gemini" className="mt-4">
+              <GeminiKeysPanel />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.prompts) ? (
+            <TabsContent value="prompts" className="mt-4">
+              <AIPromptsPanel />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.subjects) ? (
+            <TabsContent value="subjects" className="mt-4">
+              <TaxonomySection level="subjects" label="Subject" />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.systems) ? (
+            <TabsContent value="systems" className="mt-4">
+              <TaxonomySection level="systems" label="System" parentLevel="subjects" parentLabel="Parent subject" />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.chapters) ? (
+            <TabsContent value="chapters" className="mt-4">
+              <TaxonomySection level="chapters" label="Chapter" parentLevel="systems" parentLabel="Parent system" />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.topics) ? (
+            <TabsContent value="topics" className="mt-4">
+              <TaxonomySection level="topics" label="Topic" parentLevel="chapters" parentLabel="Parent chapter" />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.concepts) ? (
+            <TabsContent value="concepts" className="mt-4">
+              <ConceptsPanel />
+            </TabsContent>
+          ) : null}
+          {hasPermission(SETTINGS_TAB_PERMISSION.boards) ? (
+            <TabsContent value="boards" className="mt-4">
+              <BoardsSection />
+            </TabsContent>
+          ) : null}
+          {isAdmin() ? (
+            <TabsContent value="access" className="mt-4">
+              <AccessManagementPanel />
+            </TabsContent>
+          ) : null}
         </Tabs>
       </Card>
     </div>

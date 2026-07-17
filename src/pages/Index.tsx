@@ -27,6 +27,9 @@ import {
   readFilePreview,
 } from "@/lib/sourceInput";
 import { fetchSuggestionMatches, type SuggestionMatch } from "@/lib/suggestionMatch";
+import { Can, useCan } from "@/components/Can";
+import { guardPermission } from "@/lib/permissionGuard";
+import { getAuthHeaders } from "@/lib/auth";
 import {
   buildSuggestionLines,
   conceptDetailFromSourceHtml,
@@ -63,7 +66,16 @@ const Index = () => {
   const [deletePointIndex, setDeletePointIndex] = useState<number | null>(null);
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
 
+  const canUpload = useCan("home.upload");
+  const canSourceText = useCan("home.source_text");
+  const canExtract = useCan("home.extract");
+  const canEdit = useCan("home.edit");
+  const canAdd = useCan("home.add");
+  const canDelete = useCan("home.delete");
+  const canMatch = useCan("home.match");
+
   const applySourceText = (html: string) => {
+    if (!canSourceText) return;
     setSourceText(html);
     setConceptDetail((prev) =>
       conceptDetailFromSourceHtml(html, {
@@ -90,6 +102,7 @@ const Index = () => {
   };
 
   const onPick = async (f: File) => {
+    if (!guardPermission("home.upload")) return;
     if (!isAcceptedSourceFile(f)) {
       toast.error("Please choose an image or PDF file");
       return;
@@ -134,6 +147,11 @@ const Index = () => {
   };
 
   const runSuggestionMatch = async (lines: string[]) => {
+    if (!canMatch) {
+      setSuggestionLines(lines);
+      setSuggestionMatches(new Map());
+      return;
+    }
     if (!lines.length) {
       setSuggestionLines([]);
       setSuggestionMatches(new Map());
@@ -154,9 +172,14 @@ const Index = () => {
   };
 
   const handleExtract = async (options?: { skipMatching?: boolean }) => {
+    if (!guardPermission("home.extract")) return;
     const skipMatching = options?.skipMatching === true;
     if (!imageFile && isHtmlEmpty(sourceText)) {
       return toast.error("Upload an image or paste source text");
+    }
+    if (imageFile && !guardPermission("home.upload")) return;
+    if (!imageFile && !isHtmlEmpty(sourceText) && !canSourceText) {
+      return toast.error("No permission to use source text for extract");
     }
     setExtracting(true);
     try {
@@ -167,7 +190,11 @@ const Index = () => {
       }
       if (htmlToPlainText(sourceText)) formData.append("input_text", htmlToPlainText(sourceText));
 
-      const resp = await fetch(apiUrl("/api/extract-concept"), { method: "POST", body: formData });
+      const resp = await fetch(apiUrl("/api/extract-concept"), {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: formData,
+      });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Extraction failed");
 
@@ -208,14 +235,21 @@ const Index = () => {
     }
   };
 
-  const updatePoint = (i: number, content: string) =>
+  const updatePoint = (i: number, content: string) => {
+    if (!canEdit) return;
     setPoints((p) => p.map((x, idx) => (idx === i ? { ...x, content } : x)));
-  const removePoint = (i: number) =>
+  };
+  const removePoint = (i: number) => {
+    if (!guardPermission("home.delete")) return;
     setPoints((p) => {
       const next = p.filter((_, idx) => idx !== i);
       return next.length ? next : [emptyKeyPoint()];
     });
-  const addPoint = () => setPoints((p) => [...p, emptyKeyPoint()]);
+  };
+  const addPoint = () => {
+    if (!guardPermission("home.add")) return;
+    setPoints((p) => [...p, emptyKeyPoint()]);
+  };
 
   const resetForm = () => {
     setImageFile(null);
@@ -234,6 +268,7 @@ const Index = () => {
   };
 
   const handleSave = async () => {
+    if (!guardPermission("home.add")) return;
     if (!requireTaxonomy()) return;
     if (!points.length) return toast.error("No key points to save");
     if (points.some((p) => !p.content.trim())) return toast.error("Empty boxes — fill or remove");
@@ -242,7 +277,7 @@ const Index = () => {
     try {
       const resp = await fetch(apiUrl("/api/save-concept"), {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({
           concept_name: conceptName.trim(),
           subject: taxonomy.subjectName,
@@ -313,7 +348,7 @@ const Index = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8">
-        {sourceEditorOpen ? (
+        {sourceEditorOpen && canSourceText ? (
           <Card className="p-4 space-y-3 w-full animate-in fade-in slide-in-from-top-2 duration-300">
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -347,31 +382,35 @@ const Index = () => {
               </p>
             </div>
 
+            <Can permission="home.upload">
             <div
               role="button"
               tabIndex={0}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-              onPaste={onPaste}
-              onClick={() => fileRef.current?.click()}
-              onKeyDown={(e) => e.key === "Enter" && fileRef.current?.click()}
+              onDragOver={canUpload ? onDragOver : undefined}
+              onDragLeave={canUpload ? onDragLeave : undefined}
+              onDrop={canUpload ? onDrop : undefined}
+              onPaste={canUpload ? onPaste : undefined}
+              onClick={() => canUpload && fileRef.current?.click()}
+              onKeyDown={(e) => e.key === "Enter" && canUpload && fileRef.current?.click()}
               className={[
-                "rounded-lg border-2 border-dashed p-4 text-center cursor-pointer transition-colors",
-                dragOver ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
+                "rounded-lg border-2 border-dashed p-4 text-center transition-colors",
+                canUpload ? "cursor-pointer" : "cursor-not-allowed opacity-50",
+                dragOver && canUpload ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
               ].join(" ")}
             >
               <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
               <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ করুন, ক্লিক করুন।</p>
-              <p className="text-xs text-muted-foreground mt-1">Image (JPG, PNG…) অথবা PDF</p>
+              <p className="text-xs text-muted-foreground mt-1">Image (JPG, PNG…) অথবা PDF — extract এর জন্য</p>
               <Input
                 ref={fileRef}
                 type="file"
                 accept={ACCEPTED_SOURCE_TYPES}
                 className="sr-only"
+                disabled={!canUpload}
                 onChange={(e) => e.target.files?.[0] && void onPick(e.target.files[0])}
               />
             </div>
+            </Can>
 
             {isPdf && imageFile ? (
               <div className="rounded-md border p-3 flex items-center gap-2 text-sm text-muted-foreground">
@@ -386,6 +425,7 @@ const Index = () => {
               </div>
             )}
 
+            <Can permission="home.source_text">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label>Source text</Label>
@@ -417,7 +457,9 @@ const Index = () => {
                 </p>
               )}
             </div>
+            </Can>
 
+            <Can permission="home.extract">
             <Button
               onClick={() => void handleExtract()}
               disabled={(!imageFile && isHtmlEmpty(sourceText)) || extracting}
@@ -427,14 +469,15 @@ const Index = () => {
               {extracting ? "Extracting…" : "Extract Concept"}
             </Button>
             <Button
+              type="button"
               variant="outline"
               onClick={() => void handleExtract({ skipMatching: true })}
               disabled={(!imageFile && isHtmlEmpty(sourceText)) || extracting}
               className="w-full"
             >
-              {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {extracting ? "Extracting…" : "Extract Concept Without Matching"}
+              Extract Concept Without Matching
             </Button>
+            </Can>
           </Card>
         </section>
 
@@ -471,11 +514,13 @@ const Index = () => {
             conceptName={conceptName}
             detail={conceptDetail}
             onOpenDetails={() => setDetailsOpen(true)}
-            editable
-            onDetailChange={applyConceptDetail}
+            editable={canEdit}
+            onDetailChange={canEdit ? applyConceptDetail : undefined}
           />
 
-          <ConceptSuggestionsPanel lines={suggestionLines} matches={suggestionMatches} loading={matching} />
+          {canMatch ? (
+            <ConceptSuggestionsPanel lines={suggestionLines} matches={suggestionMatches} loading={matching} />
+          ) : null}
 
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-sm font-semibold">Key points</h2>
@@ -490,6 +535,7 @@ const Index = () => {
                   <Badge variant="outline" className="tabular-nums">
                     #{i + 1}
                   </Badge>
+                  <Can permission="home.delete">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -498,6 +544,7 @@ const Index = () => {
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
+                  </Can>
                 </div>
                 <Textarea
                   value={p.content}
@@ -505,19 +552,24 @@ const Index = () => {
                   rows={3}
                   className="resize-none"
                   placeholder={`Key point ${i + 1}…`}
+                  readOnly={!canEdit}
                 />
               </Card>
             ))}
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={addPoint}>
-              <Plus className="mr-2 h-4 w-4" /> Add box
-            </Button>
+            <Can permission="home.add">
+              <Button variant="outline" onClick={addPoint}>
+                <Plus className="mr-2 h-4 w-4" /> Add box
+              </Button>
+            </Can>
+            <Can permission="home.add">
             <Button onClick={handleSave} disabled={saving} className="ml-auto">
               {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {saving ? "Saving…" : "Save Concept to Database"}
             </Button>
+            </Can>
           </div>
         </section>
         </div>
@@ -530,8 +582,8 @@ const Index = () => {
         detail={conceptDetail}
         keyPoints={[]}
         showKeyPoints={false}
-        editable
-        onDetailChange={applyConceptDetail}
+        editable={canEdit}
+        onDetailChange={canEdit ? applyConceptDetail : undefined}
       />
 
       <ConfirmDeleteDialog

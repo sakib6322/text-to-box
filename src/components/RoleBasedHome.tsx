@@ -1,13 +1,13 @@
 import { Suspense, lazy } from "react";
 import { Navigate } from "react-router-dom";
-import { isAdmin } from "@/lib/auth";
+import { hasPermission } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
 const Index = lazy(() => import("@/pages/Index"));
 
-/** Home (Concept Builder) is admin-only; users land on My progress. */
+/** Home (Concept Builder) requires home.view permission. */
 export default function RoleBasedHome() {
-  if (!isAdmin()) return <Navigate to="/study/progress" replace />;
+  if (!hasPermission("home.view")) return <Navigate to="/study/progress" replace />;
   return (
     <Suspense
       fallback={
