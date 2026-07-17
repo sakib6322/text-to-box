@@ -49,8 +49,17 @@ type Props = {
   concept: ConceptCtx;
   /** Reset drafts when the edited key point / dialog target changes */
   resetKey?: string;
-  /** Create or sync key point; returns id used as source_point_id */
+  /** Create or sync key point content; returns id used as source_point_id */
   ensureKeyPointId: () => Promise<string>;
+  /** Keep key-point board checkboxes in sync with the union of per-question boards */
+  onKeyPointBoardsChange?: (boardIds: string[]) => void;
+  /** After save — apply bumped board links + increment_count onto the key point row */
+  onKeyPointLinked?: (update: {
+    keyPointId: string;
+    incrementCount: number;
+    boardCountAdded: number;
+    boardLinks: { board_id: string | null; name: string; mention_count: number }[];
+  }) => void;
 };
 
 export function KeyPointQuestionsEditor({
@@ -60,6 +69,8 @@ export function KeyPointQuestionsEditor({
   concept,
   resetKey,
   ensureKeyPointId,
+  onKeyPointBoardsChange,
+  onKeyPointLinked,
 }: Props) {
   const canSourceText = useCan("question_bank.create_ai.source_text");
   const canExtract = useCan("question_bank.create_ai.extract");
@@ -118,6 +129,25 @@ export function KeyPointQuestionsEditor({
     el.style.height = `${Math.max(el.scrollHeight, 40)}px`;
   }, [sourceText, open]);
 
+  /** Union of boards across the queue (including the active form selection). */
+  const syncKeyPointBoardsFromQuestions = (
+    drafts: DraftQuestion[],
+    activeIdx: number,
+    activeBoardIds: string[],
+  ) => {
+    if (!onKeyPointBoardsChange) return;
+    const union = new Set<string>();
+    drafts.forEach((q, i) => {
+      const ids = i === activeIdx ? activeBoardIds : q.boardIds ?? [];
+      for (const id of ids) if (id) union.add(id);
+    });
+    // If nothing in queue yet but form has boards, still sync.
+    if (drafts.length === 0) {
+      for (const id of activeBoardIds) if (id) union.add(id);
+    }
+    onKeyPointBoardsChange([...union]);
+  };
+
   const loadQuestionIntoForm = (q: DraftQuestion) => {
     setQuestionMode(q.questionMode);
     setDifficulty(q.metadata.difficulty || "medium");
@@ -141,6 +171,23 @@ export function KeyPointQuestionsEditor({
       setSbaOptionExplanations(expls);
       setSbaCorrect(q.sba.correctIndex as 0 | 1 | 2 | 3 | 4);
     }
+  };
+
+  const setActiveBoardIds = (ids: string[]) => {
+    setSelectedBoardIds(ids);
+    setQueuedQuestions((prev) => {
+      if (prev.length === 0) {
+        syncKeyPointBoardsFromQuestions([], 0, ids);
+        return prev;
+      }
+      const next = prev.map((q, i) =>
+        i === activeQuestionIndex
+          ? { ...q, boardIds: ids, metadata: { ...q.metadata, boards: boardNamesFor(ids) } }
+          : q,
+      );
+      syncKeyPointBoardsFromQuestions(next, activeQuestionIndex, ids);
+      return next;
+    });
   };
 
   const buildCurrentDraftFromForm = (resolvedKeyPointId: string | null): DraftQuestion => {
@@ -235,6 +282,7 @@ export function KeyPointQuestionsEditor({
     setQueuedQuestions(drafts);
     setActiveQuestionIndex(0);
     loadQuestionIntoForm(drafts[0]);
+    syncKeyPointBoardsFromQuestions(drafts, 0, drafts[0]?.boardIds ?? []);
     const mcqCount = questions.filter((q) => q.question_type === "mcq").length;
     const sbaCount = questions.filter((q) => q.question_type === "sba").length;
     const parts = [];
@@ -343,6 +391,7 @@ export function KeyPointQuestionsEditor({
     setQueuedQuestions((prev) => {
       const merged = [...prev, next];
       setActiveQuestionIndex(merged.length - 1);
+      syncKeyPointBoardsFromQuestions(merged, merged.length - 1, next.boardIds);
       return merged;
     });
     loadQuestionIntoForm(next);
@@ -370,11 +419,15 @@ export function KeyPointQuestionsEditor({
         setSbaOptionExplanations(emptySbaExplanations());
         setSelectedBoardIds([...defaultBoardIds]);
         setActiveQuestionIndex(0);
+        syncKeyPointBoardsFromQuestions([], 0, defaultBoardIds);
         return next;
       }
       const newIdx = Math.min(index, next.length - 1);
       setActiveQuestionIndex(newIdx);
-      queueMicrotask(() => loadQuestionIntoForm(next[newIdx]!));
+      queueMicrotask(() => {
+        loadQuestionIntoForm(next[newIdx]!);
+        syncKeyPointBoardsFromQuestions(next, newIdx, next[newIdx]?.boardIds ?? []);
+      });
       return next;
     });
   };
@@ -405,10 +458,32 @@ export function KeyPointQuestionsEditor({
           questions: toSave,
         }),
       });
-      const data = (await resp.json().catch(() => ({}))) as { error?: string; count?: number };
+      const data = (await resp.json().catch(() => ({}))) as {
+        error?: string;
+        count?: number;
+        key_point_updates?: {
+          id: string;
+          increment_count: number;
+          board_count_added: number;
+          board_links: { board_id: string | null; name: string; mention_count: number }[];
+        }[];
+      };
       if (!resp.ok) throw new Error(data.error ?? "Save failed");
+      const kpUpdate = data.key_point_updates?.find((u) => u.id === resolvedId) ?? data.key_point_updates?.[0];
+      if (kpUpdate && onKeyPointLinked) {
+        onKeyPointLinked({
+          keyPointId: kpUpdate.id,
+          incrementCount: kpUpdate.increment_count,
+          boardCountAdded: kpUpdate.board_count_added,
+          boardLinks: kpUpdate.board_links ?? [],
+        });
+      }
+      const bumpMsg =
+        kpUpdate && kpUpdate.board_count_added > 0
+          ? ` · key point boards +${kpUpdate.board_count_added}`
+          : "";
       toast.success(
-        `${data.count ?? toSave.length} question(s) saved · linked to this key point · visible in All Questions`,
+        `${data.count ?? toSave.length} question(s) saved · linked to this key point${bumpMsg} · visible in All Questions`,
       );
       setQueuedQuestions([]);
       setActiveQuestionIndex(0);
@@ -451,8 +526,8 @@ export function KeyPointQuestionsEditor({
         <CollapsibleContent>
           <div className="space-y-4 border-t px-3 py-3">
             <p className="text-xs text-muted-foreground">
-              Extract from source text or add MCQ/SBA manually. Each question has its own board selection. Saved
-              questions link to this key point and appear in All Questions.
+              Extract from source text or add MCQ/SBA manually. Each question has its own board selection — those boards
+              auto-select on this key point and increase board counts when you save questions.
             </p>
 
             {canSourceText ? (
@@ -558,7 +633,7 @@ export function KeyPointQuestionsEditor({
                   <BoardCheckboxGroup
                     boardOptions={boardOptions}
                     selectedIds={selectedBoardIds}
-                    onChange={setSelectedBoardIds}
+                    onChange={setActiveBoardIds}
                     compact
                   />
                 </div>

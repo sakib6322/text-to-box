@@ -576,31 +576,37 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
   };
 
-  /** Create key point if needed (for Add-box + optional questions), or update boards/content. */
-  const ensureAddKeyPointId = async (): Promise<string> => {
+  /** Create key point if needed (for Add-box + optional questions), or update content/boards. */
+  const ensureAddKeyPointId = async (opts?: { syncBoards?: boolean }): Promise<string> => {
     if (!addTarget) throw new Error("No concept selected");
     if (!guardPermission("suggestions.add") && !guardPermission("suggestions.edit")) {
       throw new Error("No permission");
     }
     const content = addContent.trim();
     if (!content) throw new Error("Key point content is required before saving questions");
+    const syncBoards = opts?.syncBoards !== false;
 
     if (addCreatedKeyPointId) {
+      const body: Record<string, unknown> = { content };
+      if (syncBoards) body.board_ids = addBoardIds;
       const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(addCreatedKeyPointId)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ content, board_ids: addBoardIds }),
+        body: JSON.stringify(body),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Failed to update key point");
-      applyCreatedKeyPointToState(addCreatedKeyPointId, content, addBoardIds);
+      applyCreatedKeyPointToState(addCreatedKeyPointId, content, syncBoards ? addBoardIds : boardIdsFromLinks(
+        rows.find((r) => r.id === addCreatedKeyPointId)?.key_point_boards,
+      ));
       return addCreatedKeyPointId;
     }
 
     const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-      body: JSON.stringify({ content, board_ids: addBoardIds }),
+      // Question save bumps boards via linkKeyPointBoards — avoid seeding counts here.
+      body: JSON.stringify({ content, board_ids: syncBoards ? addBoardIds : [] }),
     });
     const j = (await r.json().catch(() => ({}))) as {
       error?: string;
@@ -616,8 +622,61 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     const created = j.key_point;
     const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
     setAddCreatedKeyPointId(newId);
-    applyCreatedKeyPointToState(newId, content, addBoardIds, created);
+    applyCreatedKeyPointToState(newId, content, syncBoards ? addBoardIds : [], created);
     return newId;
+  };
+
+  const mergeKeyPointBoardSelection = (setter: (fn: (prev: string[]) => string[]) => void, nextIds: string[]) => {
+    setter((prev) => {
+      const merged = new Set(prev);
+      for (const id of nextIds) if (id) merged.add(id);
+      const arr = [...merged];
+      if (arr.length === prev.length && arr.every((id) => prev.includes(id))) return prev;
+      return arr;
+    });
+  };
+
+  const applyKeyPointLinkedUpdate = (update: {
+    keyPointId: string;
+    incrementCount: number;
+    boardCountAdded: number;
+    boardLinks: { board_id: string | null; name: string; mention_count: number }[];
+  }) => {
+    const nextBoards: BoardLink[] = (update.boardLinks ?? [])
+      .filter((l) => l.name?.trim())
+      .map((l) => ({
+        board_id: l.board_id ?? "",
+        mention_count: Number(l.mention_count ?? 1) || 1,
+        boards: {
+          id: l.board_id ?? "",
+          name: l.name.trim(),
+        },
+      }));
+    const selectedIds = nextBoards.map((b) => b.boards?.id ?? b.board_id).filter(Boolean);
+
+    setRows((prev) =>
+      prev.map((row) =>
+        row.id === update.keyPointId
+          ? {
+              ...row,
+              increment_count: update.incrementCount,
+              key_point_boards: nextBoards,
+            }
+          : row,
+      ),
+    );
+
+    if (editTarget?.id === update.keyPointId) {
+      setEditBoardIds(selectedIds);
+      setEditTarget((prev) =>
+        prev && prev.id === update.keyPointId
+          ? { ...prev, increment_count: update.incrementCount, key_point_boards: nextBoards }
+          : prev,
+      );
+    }
+    if (addCreatedKeyPointId === update.keyPointId) {
+      setAddBoardIds(selectedIds);
+    }
   };
 
   const saveAdd = async () => {
@@ -628,7 +687,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setSavingAdd(true);
     try {
       const wasNew = !addCreatedKeyPointId;
-      await ensureAddKeyPointId();
+      await ensureAddKeyPointId({ syncBoards: true });
       toast.success(wasNew ? "Key point added" : "Key point updated");
       setAddTarget(null);
       setAddCreatedKeyPointId(null);
@@ -1315,21 +1374,22 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   concept: editConceptTitle.trim() || (editTarget.concepts?.title ?? "").trim(),
                 }}
                 resetKey={editTarget.id}
+                onKeyPointBoardsChange={(ids) => mergeKeyPointBoardSelection(setEditBoardIds, ids)}
+                onKeyPointLinked={applyKeyPointLinkedUpdate}
                 ensureKeyPointId={async () => {
                   const content = editContent.trim();
                   if (!content) throw new Error("Key point content is required before saving questions");
+                  // Content only — board counts are bumped by save-question via linkKeyPointBoards.
                   const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(editTarget.id)}`), {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json", ...getAuthHeaders() },
                     body: JSON.stringify({
                       content,
                       concept_title: editConceptTitle.trim() || undefined,
-                      board_ids: editBoardIds,
                     }),
                   });
                   const j = (await r.json().catch(() => ({}))) as { error?: string };
-                  if (!r.ok) throw new Error(j.error ?? "Failed to sync key point boards");
-                  const nextBoards = boardLinksFromIds(editBoardIds, boardList);
+                  if (!r.ok) throw new Error(j.error ?? "Failed to sync key point");
                   setRows((prev) =>
                     prev.map((row) =>
                       row.id === editTarget.id
@@ -1339,7 +1399,6 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                             concepts: row.concepts
                               ? { ...row.concepts, title: editConceptTitle.trim() || row.concepts.title }
                               : row.concepts,
-                            key_point_boards: nextBoards,
                           }
                         : row,
                     ),
@@ -1434,7 +1493,9 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   concept: addTarget.title.trim(),
                 }}
                 resetKey={`add-${addTarget.conceptId}`}
-                ensureKeyPointId={ensureAddKeyPointId}
+                onKeyPointBoardsChange={(ids) => mergeKeyPointBoardSelection(setAddBoardIds, ids)}
+                onKeyPointLinked={applyKeyPointLinkedUpdate}
+                ensureKeyPointId={() => ensureAddKeyPointId({ syncBoards: false })}
               />
             ) : null}
           </div>

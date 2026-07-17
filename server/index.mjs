@@ -212,19 +212,41 @@ async function linkKeyPointBoards(db, keyPointId, boardIds) {
   }
 }
 
-/** Replace board links for a key point (edit UI). Empty array clears all boards. */
+/** Replace board links for a key point (edit UI). Keeps existing mention_count when a board stays selected. */
 async function replaceKeyPointBoards(db, keyPointId, boardIds) {
   if (!keyPointId) return;
   const ids = Array.isArray(boardIds)
     ? [...new Set(boardIds.filter((id) => typeof id === "string" && id.trim()).map((id) => id.trim()))]
     : [];
-  const { error: delErr } = await db.from("key_point_boards").delete().eq("key_point_id", keyPointId);
-  if (delErr) throw new Error(delErr.message);
-  if (!ids.length) return;
-  const { error: insErr } = await db.from("key_point_boards").insert(
-    ids.map((board_id) => ({ key_point_id: keyPointId, board_id, mention_count: 1 })),
+
+  const { data: existingRows, error: loadErr } = await db
+    .from("key_point_boards")
+    .select("board_id, mention_count")
+    .eq("key_point_id", keyPointId);
+  if (loadErr) throw new Error(loadErr.message);
+
+  const existingById = new Map(
+    (existingRows ?? [])
+      .filter((r) => typeof r.board_id === "string" && r.board_id.trim())
+      .map((r) => [r.board_id.trim(), Math.max(1, Number(r.mention_count ?? 1) || 1)]),
   );
-  if (insErr) throw new Error(insErr.message);
+  const nextSet = new Set(ids);
+  const toDelete = [...existingById.keys()].filter((id) => !nextSet.has(id));
+  if (toDelete.length) {
+    const { error: delErr } = await db
+      .from("key_point_boards")
+      .delete()
+      .eq("key_point_id", keyPointId)
+      .in("board_id", toDelete);
+    if (delErr) throw new Error(delErr.message);
+  }
+  for (const board_id of ids) {
+    if (existingById.has(board_id)) continue;
+    const { error: insErr } = await db
+      .from("key_point_boards")
+      .insert({ key_point_id: keyPointId, board_id, mention_count: 1 });
+    if (insErr) throw new Error(insErr.message);
+  }
 }
 
 function taxonomyTable(level) {
@@ -3150,7 +3172,42 @@ app.post("/api/save-question", async (req, res) => {
     const { data: inserted, error: qErr } = await db.from("questions").insert(questionsToInsert).select("id");
     if (qErr) return res.status(500).json({ error: qErr.message });
 
-    // Boards are linked only via approve/save key-point flows — do not bump again here.
+    // When questions are linked to a key point, bump that KP's boards + increment_count
+    // the same way approve-point does (per board on each question).
+    const bumpByKeyPoint = new Map();
+    for (const q of normalized) {
+      const kpId = typeof q.sourcePointId === "string" ? q.sourcePointId.trim() : "";
+      if (!kpId || !Array.isArray(q.boardIds) || q.boardIds.length === 0) continue;
+      const ids = q.boardIds.map((id) => String(id).trim()).filter(Boolean);
+      if (!ids.length) continue;
+      await linkKeyPointBoards(db, kpId, ids);
+      bumpByKeyPoint.set(kpId, (bumpByKeyPoint.get(kpId) ?? 0) + ids.length);
+    }
+
+    const keyPointUpdates = [];
+    for (const [kpId, bump] of bumpByKeyPoint.entries()) {
+      const { data: point } = await db
+        .from("key_points")
+        .select("increment_count")
+        .eq("id", kpId)
+        .maybeSingle();
+      let nextIncrement = Number(point?.increment_count ?? 0);
+      if (bump > 0) {
+        nextIncrement = nextIncrement + bump;
+        const { error: incErr } = await db
+          .from("key_points")
+          .update({ increment_count: nextIncrement })
+          .eq("id", kpId);
+        if (incErr) console.error("save-question increment:", incErr.message);
+      }
+      const boardsMap = await fetchBoardsByKeyPointIds(db, [kpId]);
+      keyPointUpdates.push({
+        id: kpId,
+        increment_count: nextIncrement,
+        board_count_added: bump,
+        board_links: boardsMap.get(kpId) ?? [],
+      });
+    }
 
     const explanationEmbeddingsSaved = normalized.filter((q) => q.explanationEmbedding != null).length;
     return res.json({
@@ -3159,6 +3216,7 @@ app.post("/api/save-question", async (req, res) => {
       count: inserted?.length ?? 0,
       ids: (inserted ?? []).map((q) => q.id),
       explanation_embeddings_saved: explanationEmbeddingsSaved,
+      key_point_updates: keyPointUpdates,
     });
   } catch (e) {
     console.error(e);
