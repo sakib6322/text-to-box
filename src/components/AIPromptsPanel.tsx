@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { Loader2, RotateCcw } from "lucide-react";
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 
 type PromptSlug = "extract-questions" | "extract-concept" | "extract-key-points" | "matching";
 
@@ -80,7 +80,7 @@ function PromptEditor({ slug, description }: { slug: Exclude<PromptSlug, "matchi
     if (!value) return toast.error("Prompt cannot be empty");
     setSaving(true);
     try {
-      const r = await fetch(apiUrl(`/api/settings/prompts/${slug}`), {
+      const r = await apiFetch(`/api/settings/prompts/${slug}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: value }),
@@ -100,7 +100,7 @@ function PromptEditor({ slug, description }: { slug: Exclude<PromptSlug, "matchi
   const resetToDefault = async () => {
     setResetting(true);
     try {
-      const r = await fetch(apiUrl(`/api/settings/prompts/${slug}/reset`), { method: "POST" });
+      const r = await apiFetch(`/api/settings/prompts/${slug}/reset`, { method: "POST" });
       const j = (await r.json().catch(() => ({}))) as PromptResponse;
       if (!r.ok) throw new Error(j.error ?? "Reset failed");
       setPrompt(typeof j.prompt === "string" ? j.prompt : "");
@@ -200,7 +200,7 @@ function MatchingPromptEditor({ description }: { description: string }) {
     }
     setSaving(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/prompts/matching"), {
+      const r = await apiFetch("/api/settings/prompts/matching", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -226,7 +226,7 @@ function MatchingPromptEditor({ description }: { description: string }) {
   const resetToDefault = async () => {
     setResetting(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/prompts/matching/reset"), { method: "POST" });
+      const r = await apiFetch("/api/settings/prompts/matching/reset", { method: "POST" });
       const j = (await r.json().catch(() => ({}))) as MatchingResponse;
       if (!r.ok) throw new Error(j.error ?? "Reset failed");
       setPrompt(typeof j.prompt === "string" ? j.prompt : "");

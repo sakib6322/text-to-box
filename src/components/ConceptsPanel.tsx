@@ -20,7 +20,7 @@ import {
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 import { toast } from "sonner";
 import { Loader2, Pencil, RefreshCw, Trash2 } from "lucide-react";
 
@@ -127,7 +127,7 @@ export function ConceptsPanel() {
     if (!title) return toast.error("Concept title is required");
     setSavingEdit(true);
     try {
-      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(editTarget.id)}`), {
+      const r = await apiFetch(`/api/concepts/${encodeURIComponent(editTarget.id)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -170,7 +170,7 @@ export function ConceptsPanel() {
   const remove = async (row: ConceptRow) => {
     setDeletingId(row.id);
     try {
-      const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(row.id)}`), { method: "DELETE" });
+      const r = await apiFetch(`/api/concepts/${encodeURIComponent(row.id)}`, { method: "DELETE" });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Delete failed");
       setConcepts((prev) => prev.filter((c) => c.id !== row.id));

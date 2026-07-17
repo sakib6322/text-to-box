@@ -30,7 +30,7 @@ import {
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { toast } from "sonner";
 import { Loader2, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 import {
   DEFAULT_FALLBACK_AI_MODEL,
   DEFAULT_MATCH_AI_MODEL,
@@ -152,8 +152,8 @@ export function GeminiKeysPanel() {
     setLoading(true);
     try {
       const [keysRes, modelsRes] = await Promise.all([
-        fetch(apiUrl("/api/settings/gemini-keys")),
-        fetch(apiUrl("/api/settings/gemini-models")),
+        apiFetch("/api/settings/gemini-keys"),
+        apiFetch("/api/settings/gemini-models"),
       ]);
       const keysJson = (await keysRes.json().catch(() => ({}))) as KeysResponse;
       const modelsJson = (await modelsRes.json().catch(() => ({}))) as ModelsResponse;
@@ -191,7 +191,7 @@ export function GeminiKeysPanel() {
   const saveModels = async () => {
     setSavingModels(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/gemini-models"), {
+      const r = await apiFetch("/api/settings/gemini-models", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -239,7 +239,7 @@ export function GeminiKeysPanel() {
     if (keys.length === 0) return toast.error("কমপক্ষে একটি API key দিন");
     setAdding(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/gemini-keys"), {
+      const r = await apiFetch("/api/settings/gemini-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys }),
@@ -275,7 +275,7 @@ export function GeminiKeysPanel() {
       };
       if (editApiKey.trim()) body.api_key = editApiKey.trim();
 
-      const r = await fetch(apiUrl(`/api/settings/gemini-keys/${editKey.id}`), {
+      const r = await apiFetch(`/api/settings/gemini-keys/${editKey.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -296,7 +296,7 @@ export function GeminiKeysPanel() {
     if (!deleteTarget) return;
     setDeletingId(deleteTarget.id);
     try {
-      const r = await fetch(apiUrl(`/api/settings/gemini-keys/${deleteTarget.id}`), { method: "DELETE" });
+      const r = await apiFetch(`/api/settings/gemini-keys/${deleteTarget.id}`, { method: "DELETE" });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Delete failed");
       toast.success("API key মুছে ফেলা হয়েছে");
@@ -312,7 +312,7 @@ export function GeminiKeysPanel() {
   const testOne = async (k: SavedKey) => {
     setTestingId(k.id);
     try {
-      const r = await fetch(apiUrl(`/api/settings/gemini-keys/${k.id}/test`), { method: "POST" });
+      const r = await apiFetch(`/api/settings/gemini-keys/${k.id}/test`, { method: "POST" });
       const j = (await r.json().catch(() => ({}))) as {
         ok?: boolean;
         status?: KeyStatus;
@@ -341,7 +341,7 @@ export function GeminiKeysPanel() {
   const testAll = async () => {
     setTestingAll(true);
     try {
-      const r = await fetch(apiUrl("/api/settings/gemini-keys/test-all"), { method: "POST" });
+      const r = await apiFetch("/api/settings/gemini-keys/test-all", { method: "POST" });
       const j = (await r.json().catch(() => ({}))) as {
         results?: { id: string; label?: string; ok: boolean; status: KeyStatus }[];
         error?: string;

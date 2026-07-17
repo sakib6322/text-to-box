@@ -193,7 +193,7 @@ export async function loginUser(db, email, password, { adminOnly = false, userOn
 
   const { data: user, error } = await db
     .from("app_users")
-    .select("id, email, password_hash, role, permissions, created_at")
+    .select("id, email, password_hash, role, permissions, display_name, created_at")
     .eq("email", e)
     .maybeSingle();
   if (error) {
@@ -240,6 +240,7 @@ export async function loginUser(db, email, password, { adminOnly = false, userOn
       email: user.email,
       role: user.role,
       permissions,
+      displayName: user.display_name ?? null,
       createdAt: user.created_at,
     },
   };
@@ -251,7 +252,7 @@ export async function validateSession(db, token) {
 
   const { data: session, error } = await db
     .from("app_sessions")
-    .select("id, user_id, expires_at, app_users(id, email, role, permissions)")
+    .select("id, user_id, expires_at, app_users(id, email, role, permissions, display_name, created_at)")
     .eq("id", id)
     .maybeSingle();
   if (error || !session) return null;
@@ -272,8 +273,47 @@ export async function validateSession(db, token) {
     email: u.email,
     role: u.role,
     permissions,
+    displayName: u.display_name ?? null,
+    createdAt: u.created_at ?? null,
     sessionId: session.id,
   };
+}
+
+export async function updateUserProfile(db, userId, { displayName, currentPassword, newPassword } = {}) {
+  const uid = String(userId ?? "").trim();
+  if (!uid) throw new Error("User id required");
+
+  const { data: user, error } = await db
+    .from("app_users")
+    .select("id, password_hash")
+    .eq("id", uid)
+    .maybeSingle();
+  if (error) throw error;
+  if (!user) throw new Error("User not found");
+
+  const patch = { updated_at: new Date().toISOString() };
+  if (typeof displayName === "string") patch.display_name = displayName.trim() || null;
+
+  const nextPassword = typeof newPassword === "string" ? newPassword.trim() : "";
+  if (nextPassword) {
+    const current = String(currentPassword ?? "");
+    if (!current) throw new Error("Current password is required");
+    const ok = await bcrypt.compare(current, user.password_hash);
+    if (!ok) throw new Error("Current password is incorrect");
+    if (nextPassword.length < 3) throw new Error("New password must be at least 3 characters");
+    patch.password_hash = await bcrypt.hash(nextPassword, 10);
+  }
+
+  if (Object.keys(patch).length <= 1) throw new Error("Nothing to update");
+
+  const { data: updated, error: upErr } = await db
+    .from("app_users")
+    .update(patch)
+    .eq("id", uid)
+    .select("id, email, role, permissions, display_name, created_at")
+    .single();
+  if (upErr) throw upErr;
+  return updated;
 }
 
 export async function logoutSession(db, token) {

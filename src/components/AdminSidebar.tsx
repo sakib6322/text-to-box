@@ -11,6 +11,7 @@ import {
   School,
   Settings,
   Target,
+  User,
   Users,
   FileCheck,
   BarChart3,
@@ -237,6 +238,14 @@ export function AdminSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="My profile" isActive={isActive("/profile")}>
+                  <Link to="/profile">
+                    <User />
+                    <span>My profile</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton onClick={handleLogout} tooltip={sidebarLabels.signOut}>
                   <LogOut />

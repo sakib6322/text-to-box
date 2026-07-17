@@ -30,6 +30,7 @@ const ConceptLearn = lazy(() => import("./pages/ConceptLearn.tsx"));
 const ConceptDetailPage = lazy(() => import("./pages/ConceptDetailPage.tsx"));
 const PracticeTake = lazy(() => import("./pages/PracticeTake.tsx"));
 const StudyProgressPage = lazy(() => import("./pages/StudyProgressPage.tsx"));
+const MyProfile = lazy(() => import("./pages/MyProfile.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -72,6 +73,7 @@ const App = () => (
                   <Route path="practice/:conceptId/setup" element={<ConceptLearn />} />
                   <Route path="practice/session/:sessionId" element={<PracticeTake />} />
                   <Route path="study/progress" element={<StudyProgressPage />} />
+                  <Route path="profile" element={<MyProfile />} />
                 </Route>
                 <Route
                   path="/admin"

@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 import { supabase } from "@/integrations/supabase/client";
 
 export type DetailTable = {
@@ -433,7 +433,7 @@ export async function fetchConceptByTitle(
   };
 
   const fallbackViaSemanticMatch = async () => {
-    const r = await fetch(apiUrl("/api/match-key-points"), {
+    const r = await apiFetch("/api/match-key-points", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

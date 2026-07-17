@@ -38,6 +38,7 @@ import {
   loginUser,
   validateSession,
   logoutSession,
+  updateUserProfile,
 } from "./appSettings.mjs";
 import { getUiAppearance, saveUiAppearance, resetUiAppearance } from "./uiAppearance.mjs";
 import {
@@ -1391,6 +1392,9 @@ app.get("/api/settings/database/backups", async (_req, res) => {
 
 app.get("/api/settings/database/backups/:id/download", async (req, res) => {
   try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.connection.backup"))) return;
     const format = String(req.query.format ?? "json").toLowerCase() === "sql" ? "sql" : "json";
     const filePath = getBackupFilePath(req.params.id, format);
     if (!filePath) return res.status(404).json({ error: "Backup not found" });
@@ -1657,6 +1661,31 @@ app.get("/api/auth/me", async (req, res) => {
   }
 });
 
+app.patch("/api/auth/profile", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    const user = await requireAuthUser(req, res, db);
+    if (!user) return;
+    const { displayName, currentPassword, newPassword } = req.body ?? {};
+    const updated = await updateUserProfile(db, user.id, { displayName, currentPassword, newPassword });
+    return res.json({
+      ok: true,
+      user: formatAuthUser({
+        id: updated.id,
+        email: updated.email,
+        role: updated.role,
+        permissions: updated.permissions,
+        displayName: updated.display_name ?? null,
+        createdAt: updated.created_at ?? null,
+      }),
+    });
+  } catch (e) {
+    console.error(e);
+    return res.status(400).json({ error: e instanceof Error ? e.message : "Update failed" });
+  }
+});
+
 async function requireAuthUser(req, res, db) {
   const token = getBearerToken(req);
   const user = token ? await validateSession(db, token) : null;
@@ -1702,7 +1731,9 @@ function formatAuthUser(user) {
     id: user.id,
     email: user.email,
     role: user.role,
+    displayName: user.displayName ?? null,
     permissions: permissionsForResponse(user),
+    createdAt: user.createdAt ?? null,
   };
 }
 

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 import {
   applyUiAppearance,
   defaultUiAppearance,
@@ -84,7 +84,7 @@ export function UiAppearanceProvider({ children }: { children: ReactNode }) {
   );
 
   const save = useCallback(async (next: UiAppearance) => {
-    const res = await fetch(apiUrl("/api/settings/appearance"), {
+    const res = await apiFetch("/api/settings/appearance", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(next),
@@ -106,7 +106,7 @@ export function UiAppearanceProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const reset = useCallback(async () => {
-    const res = await fetch(apiUrl("/api/settings/appearance/reset"), { method: "POST" });
+    const res = await apiFetch("/api/settings/appearance/reset", { method: "POST" });
     const data = (await res.json().catch(() => ({}))) as { appearance?: unknown; error?: string };
     if (!res.ok) throw new Error(data.error ?? "Reset failed");
     const merged = mergeUiAppearance(data.appearance ?? defaultUiAppearance());

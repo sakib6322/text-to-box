@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 import {
   canAccessAdminArea,
   firstAllowedAdminPath,
@@ -16,6 +16,7 @@ export type AuthSession = {
   email: string;
   role: UserRole;
   userId: string;
+  displayName?: string | null;
   permissions: string[];
   loggedInAt: string;
   expiresAt?: string;
@@ -96,7 +97,13 @@ function saveSession(session: AuthSession) {
 
 function sessionFromLogin(data: {
   token: string;
-  user: { id: string; email: string; role: UserRole; permissions?: string[] | null };
+  user: {
+    id: string;
+    email: string;
+    role: UserRole;
+    permissions?: string[] | null;
+    displayName?: string | null;
+  };
   expiresAt?: string;
 }): AuthSession {
   const role = data.user.role;
@@ -106,6 +113,7 @@ function sessionFromLogin(data: {
     email: data.user.email,
     role,
     userId: data.user.id,
+    displayName: data.user.displayName ?? null,
     permissions,
     loggedInAt: new Date().toISOString(),
     expiresAt: data.expiresAt,
@@ -120,7 +128,7 @@ export async function login(email: string, password: string, mode: "admin" | "us
   });
   const data = (await resp.json().catch(() => ({}))) as {
     token?: string;
-    user?: { id: string; email: string; role: UserRole; permissions?: string[] | null };
+    user?: { id: string; email: string; role: UserRole; permissions?: string[] | null; displayName?: string | null };
     expiresAt?: string;
     error?: string;
   };
@@ -144,7 +152,7 @@ export async function register(email: string, password: string): Promise<AuthSes
   });
   const data = (await resp.json().catch(() => ({}))) as {
     token?: string;
-    user?: { id: string; email: string; role: UserRole; permissions?: string[] | null };
+    user?: { id: string; email: string; role: UserRole; permissions?: string[] | null; displayName?: string | null };
     expiresAt?: string;
     error?: string;
   };
@@ -179,15 +187,19 @@ export async function fetchCurrentUser(): Promise<AuthSession | null> {
   const session = getSession();
   if (!session?.token) return null;
   try {
-    const resp = await fetch(apiUrl("/api/auth/me"), {
-      headers: { Authorization: `Bearer ${session.token}` },
-    });
+    const resp = await apiFetch("/api/auth/me");
     if (!resp.ok) {
       localStorage.removeItem(AUTH_KEY);
       return null;
     }
     const data = (await resp.json()) as {
-      user?: { id: string; email: string; role: UserRole; permissions?: string[] };
+      user?: {
+        id: string;
+        email: string;
+        role: UserRole;
+        permissions?: string[];
+        displayName?: string | null;
+      };
     };
     if (!data.user) return null;
     const updated: AuthSession = {
@@ -195,6 +207,7 @@ export async function fetchCurrentUser(): Promise<AuthSession | null> {
       email: data.user.email,
       role: data.user.role,
       userId: data.user.id,
+      displayName: data.user.displayName ?? null,
       permissions: resolvePermissions(data.user.role, data.user.permissions),
     };
     saveSession(updated);
@@ -202,4 +215,42 @@ export async function fetchCurrentUser(): Promise<AuthSession | null> {
   } catch {
     return session;
   }
+}
+
+export async function updateProfile(body: {
+  displayName?: string;
+  currentPassword?: string;
+  newPassword?: string;
+}): Promise<AuthSession> {
+  const session = getSession();
+  if (!session?.token) throw new Error("Not authenticated");
+
+  const resp = await apiFetch("/api/auth/profile", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = (await resp.json().catch(() => ({}))) as {
+    user?: {
+      id: string;
+      email: string;
+      role: UserRole;
+      permissions?: string[];
+      displayName?: string | null;
+    };
+    error?: string;
+  };
+  if (!resp.ok) throw new Error(data.error ?? "Update failed");
+  if (!data.user) throw new Error("Invalid response");
+
+  const updated: AuthSession = {
+    ...session,
+    email: data.user.email,
+    role: data.user.role,
+    userId: data.user.id,
+    displayName: data.user.displayName ?? null,
+    permissions: resolvePermissions(data.user.role, data.user.permissions),
+  };
+  saveSession(updated);
+  return updated;
 }

@@ -30,7 +30,7 @@ import {
   Zap,
 } from "lucide-react";
 import {
-  backupDownloadUrl,
+  downloadDatabaseBackup,
   createDatabaseBackup,
   fetchDatabaseConfig,
   fetchDatabaseStats,
@@ -509,16 +509,22 @@ export function DatabaseConnectionPanel() {
                       <TableCell className="text-xs">{new Date(b.createdAt).toLocaleString()}</TableCell>
                       <TableCell className="text-xs">{formatBytes(b.sizeBytes)}</TableCell>
                       <TableCell className="text-right space-x-1">
-                        <Button asChild size="sm" variant="outline">
-                          <a href={backupDownloadUrl(b.id, "json")} download>
-                            JSON
-                          </a>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          type="button"
+                          onClick={() => void downloadDatabaseBackup(b.id, "json").catch((e) => toast.error(e instanceof Error ? e.message : "Download failed"))}
+                        >
+                          JSON
                         </Button>
                         {b.hasSql ? (
-                          <Button asChild size="sm" variant="outline">
-                            <a href={backupDownloadUrl(b.id, "sql")} download>
-                              SQL
-                            </a>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            type="button"
+                            onClick={() => void downloadDatabaseBackup(b.id, "sql").catch((e) => toast.error(e instanceof Error ? e.message : "Download failed"))}
+                          >
+                            SQL
                           </Button>
                         ) : null}
                       </TableCell>

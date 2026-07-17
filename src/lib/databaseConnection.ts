@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 
 export type SupabaseConfig = {
   projectId: string;
@@ -62,7 +62,7 @@ async function parseJson<T>(res: Response): Promise<T & { error?: string }> {
 }
 
 export async function fetchDatabaseConfig(): Promise<DatabaseConfigResponse> {
-  const res = await fetch(apiUrl("/api/settings/database"));
+  const res = await apiFetch("/api/settings/database");
   return parseJson(res);
 }
 
@@ -71,7 +71,7 @@ export async function saveDatabaseConfig(body: {
   postgres?: Partial<PostgresConfig>;
   writeEnv?: boolean;
 }) {
-  const res = await fetch(apiUrl("/api/settings/database"), {
+  const res = await apiFetch("/api/settings/database", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -80,7 +80,7 @@ export async function saveDatabaseConfig(body: {
 }
 
 export async function testSupabaseConfig(config: { supabase: Partial<SupabaseConfig> }) {
-  const res = await fetch(apiUrl("/api/settings/database/test-supabase"), {
+  const res = await apiFetch("/api/settings/database/test-supabase", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
@@ -89,7 +89,7 @@ export async function testSupabaseConfig(config: { supabase: Partial<SupabaseCon
 }
 
 export async function testPostgresConfig(config: { postgres: Partial<PostgresConfig> }) {
-  const res = await fetch(apiUrl("/api/settings/database/test-postgres"), {
+  const res = await apiFetch("/api/settings/database/test-postgres", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(config),
@@ -98,7 +98,7 @@ export async function testPostgresConfig(config: { postgres: Partial<PostgresCon
 }
 
 export async function fetchDatabaseStats() {
-  const res = await fetch(apiUrl("/api/settings/database/stats"));
+  const res = await apiFetch("/api/settings/database/stats");
   return parseJson<{ stats: Record<string, { ok: boolean; count: number | null; error?: string }> }>(res);
 }
 
@@ -106,7 +106,7 @@ export async function createDatabaseBackup(options: {
   includeSql?: boolean;
   includeEmbeddings?: boolean;
 }) {
-  const res = await fetch(apiUrl("/api/settings/database/backup"), {
+  const res = await apiFetch("/api/settings/database/backup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options),
@@ -115,7 +115,7 @@ export async function createDatabaseBackup(options: {
 }
 
 export async function listDatabaseBackups() {
-  const res = await fetch(apiUrl("/api/settings/database/backups"));
+  const res = await apiFetch("/api/settings/database/backups");
   return parseJson<{ backups: BackupInfo[] }>(res);
 }
 
@@ -123,8 +123,28 @@ export function backupDownloadUrl(id: string, format: "json" | "sql" = "json") {
   return apiUrl(`/api/settings/database/backups/${encodeURIComponent(id)}/download?format=${format}`);
 }
 
+export async function downloadDatabaseBackup(id: string, format: "json" | "sql" = "json") {
+  const res = await apiFetch(
+    `/api/settings/database/backups/${encodeURIComponent(id)}/download?format=${format}`,
+  );
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(j.error ?? "Download failed");
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("Content-Disposition") ?? "";
+  const match = disposition.match(/filename="([^"]+)"/);
+  const filename = match?.[1] ?? `backup-${id}.${format}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function startDatabaseMigration(options: Record<string, unknown>) {
-  const res = await fetch(apiUrl("/api/settings/database/migrate"), {
+  const res = await apiFetch("/api/settings/database/migrate", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(options),
@@ -133,12 +153,12 @@ export async function startDatabaseMigration(options: Record<string, unknown>) {
 }
 
 export async function fetchMigrationJob(jobId: string) {
-  const res = await fetch(apiUrl(`/api/settings/database/migrate/${encodeURIComponent(jobId)}`));
+  const res = await apiFetch(`/api/settings/database/migrate/${encodeURIComponent(jobId)}`);
   return parseJson<MigrationJob>(res);
 }
 
 export async function fetchEnvSnippet() {
-  const res = await fetch(apiUrl("/api/settings/database/env-snippet"));
+  const res = await apiFetch("/api/settings/database/env-snippet");
   return parseJson<{ snippet: string }>(res);
 }
 

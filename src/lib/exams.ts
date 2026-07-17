@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiBase";
+import { apiFetch, apiUrl } from "@/lib/apiBase";
 
 export type ExamPerformance = {
   mcq: { correct: number; wrong: number; notTouched: number; positiveMarks: number; negativeMarks: number };
@@ -99,7 +99,7 @@ export async function createExam(payload: {
   questionIds: string[];
   createdBy?: string;
 }): Promise<{ exam: ExamSummary; questions: ExamQuestion[] }> {
-  const res = await fetch(apiUrl("/api/exams"), {
+  const res = await apiFetch("/api/exams", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -119,7 +119,7 @@ export async function updateExam(
     status: string;
   }>,
 ): Promise<{ exam: ExamSummary; questions: ExamQuestion[] }> {
-  const res = await fetch(apiUrl(`/api/exams/${id}`), {
+  const res = await apiFetch(`/api/exams/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -128,7 +128,7 @@ export async function updateExam(
 }
 
 export async function deleteExam(id: string): Promise<void> {
-  const res = await fetch(apiUrl(`/api/exams/${id}`), { method: "DELETE" });
+  const res = await apiFetch(`/api/exams/${id}`, { method: "DELETE" });
   await parseJson(res);
 }
 
