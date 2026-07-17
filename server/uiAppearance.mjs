@@ -3,6 +3,31 @@ import { getAppSetting } from "./appSettings.mjs";
 export const UI_APPEARANCE_KEY = "ui_appearance";
 export const UI_APPEARANCE_ROW_ID = "default";
 
+function defaultSidebarLabels(overrides = {}) {
+  return {
+    home: "Home",
+    suggestions: "Suggestions",
+    mySuggestions: "My Suggestions",
+    myProgress: "My progress",
+    myExams: "My exams",
+    dashboard: "Dashboard",
+    questionBank: "Question bank",
+    createQuestionAi: "Create question (AI)",
+    allQuestions: "All questions",
+    exam: "Exam",
+    createExam: "Create exam",
+    schedules: "Schedules",
+    student: "Student",
+    teacher: "Teacher",
+    organization: "Organization",
+    settings: "Settings",
+    general: "General",
+    appearance: "Appearance",
+    signOut: "Sign out",
+    ...overrides,
+  };
+}
+
 function defaultGlobal(overrides = {}) {
   return {
     fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
@@ -31,6 +56,7 @@ function defaultGlobal(overrides = {}) {
     cardHoverHighlight: true,
     pagePaddingPx: 24,
     sectionGapPx: 16,
+    sidebarLabels: defaultSidebarLabels(),
     ...overrides,
   };
 }
@@ -143,8 +169,16 @@ export function getDefaultUiAppearance() {
 
 function mergeDevice(base, patch) {
   const p = patch && typeof patch === "object" ? patch : {};
+  const pg = p.global && typeof p.global === "object" ? p.global : {};
   return {
-    global: { ...base.global, ...(p.global ?? {}) },
+    global: {
+      ...base.global,
+      ...pg,
+      sidebarLabels: {
+        ...base.global.sidebarLabels,
+        ...(pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}),
+      },
+    },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
   };
@@ -158,7 +192,14 @@ function fromV1(raw) {
     raw?.storyBasedLearning && typeof raw.storyBasedLearning === "object" ? raw.storyBasedLearning : {};
   const performance = raw?.performance && typeof raw.performance === "object" ? raw.performance : {};
   const shared = {
-    global: { ...base.desktop.global, ...global },
+    global: {
+      ...base.desktop.global,
+      ...global,
+      sidebarLabels: {
+        ...base.desktop.global.sidebarLabels,
+        ...(global.sidebarLabels && typeof global.sidebarLabels === "object" ? global.sidebarLabels : {}),
+      },
+    },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
   };

@@ -7,6 +7,28 @@ export type DeviceKey = "mobile" | "tablet" | "desktop";
 
 export type StoryDialogWidth = "md" | "lg" | "xl" | "2xl" | "full";
 
+export type SidebarLabels = {
+  home: string;
+  suggestions: string;
+  mySuggestions: string;
+  myProgress: string;
+  myExams: string;
+  dashboard: string;
+  questionBank: string;
+  createQuestionAi: string;
+  allQuestions: string;
+  exam: string;
+  createExam: string;
+  schedules: string;
+  student: string;
+  teacher: string;
+  organization: string;
+  settings: string;
+  general: string;
+  appearance: string;
+  signOut: string;
+};
+
 export type GlobalAppearance = {
   fontFamily: string;
   baseFontSizePx: number;
@@ -36,6 +58,8 @@ export type GlobalAppearance = {
   /** Page shell spacing */
   pagePaddingPx: number;
   sectionGapPx: number;
+  /** Sidebar labels */
+  sidebarLabels: SidebarLabels;
 };
 
 export type ConceptDetailsAppearance = {
@@ -108,6 +132,31 @@ export type UiAppearance = {
 export const UI_APPEARANCE_KEY = "ui_appearance";
 export const DEVICE_KEYS: DeviceKey[] = ["mobile", "tablet", "desktop"];
 
+function defaultSidebarLabels(overrides: Partial<SidebarLabels> = {}): SidebarLabels {
+  return {
+    home: "Home",
+    suggestions: "Suggestions",
+    mySuggestions: "My Suggestions",
+    myProgress: "My progress",
+    myExams: "My exams",
+    dashboard: "Dashboard",
+    questionBank: "Question bank",
+    createQuestionAi: "Create question (AI)",
+    allQuestions: "All questions",
+    exam: "Exam",
+    createExam: "Create exam",
+    schedules: "Schedules",
+    student: "Student",
+    teacher: "Teacher",
+    organization: "Organization",
+    settings: "Settings",
+    general: "General",
+    appearance: "Appearance",
+    signOut: "Sign out",
+    ...overrides,
+  };
+}
+
 function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppearance {
   return {
     fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
@@ -136,6 +185,7 @@ function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppeara
     cardHoverHighlight: true,
     pagePaddingPx: 24,
     sectionGapPx: 16,
+    sidebarLabels: defaultSidebarLabels(),
     ...overrides,
   };
 }
@@ -251,8 +301,16 @@ export function defaultUiAppearance(): UiAppearance {
 
 function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
   const p = (patch && typeof patch === "object" ? patch : {}) as Partial<DeviceAppearance>;
+  const pg = (p.global && typeof p.global === "object" ? p.global : {}) as Partial<GlobalAppearance>;
   return {
-    global: { ...base.global, ...(p.global ?? {}) },
+    global: {
+      ...base.global,
+      ...pg,
+      sidebarLabels: {
+        ...base.global.sidebarLabels,
+        ...((pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}) as Partial<SidebarLabels>),
+      },
+    },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
   };
@@ -272,7 +330,16 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     raw.performance && typeof raw.performance === "object" ? raw.performance : {}
   ) as Partial<UiAppearance["performance"]>;
   const sharedDevice: DeviceAppearance = {
-    global: { ...base.desktop.global, ...global },
+    global: {
+      ...base.desktop.global,
+      ...global,
+      sidebarLabels: {
+        ...base.desktop.global.sidebarLabels,
+        ...((global.sidebarLabels && typeof global.sidebarLabels === "object"
+          ? global.sidebarLabels
+          : {}) as Partial<SidebarLabels>),
+      },
+    },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
   };

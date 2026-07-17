@@ -15,6 +15,7 @@ import {
   defaultUiAppearance,
   detectDeviceKey,
   type DeviceKey,
+  type SidebarLabels,
   type StoryDialogWidth,
   type UiAppearance,
 } from "@/lib/uiAppearance";
@@ -114,6 +115,28 @@ const GLOBAL_LAYOUT_KEYS = [
   "cardBackdropBlur",
 ] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
 
+const SIDEBAR_LABEL_FIELDS = [
+  ["home", "Home"],
+  ["suggestions", "Suggestions"],
+  ["mySuggestions", "My Suggestions"],
+  ["myProgress", "My progress"],
+  ["myExams", "My exams"],
+  ["dashboard", "Dashboard"],
+  ["questionBank", "Question bank"],
+  ["createQuestionAi", "Create question (AI)"],
+  ["allQuestions", "All questions"],
+  ["exam", "Exam"],
+  ["createExam", "Create exam"],
+  ["schedules", "Schedules"],
+  ["student", "Student"],
+  ["teacher", "Teacher"],
+  ["organization", "Organization"],
+  ["settings", "Settings"],
+  ["general", "General"],
+  ["appearance", "Appearance"],
+  ["signOut", "Sign out"],
+] as const satisfies readonly [keyof SidebarLabels, string][];
+
 export default function AdminAppearance() {
   const {
     appearance,
@@ -164,6 +187,19 @@ export default function AdminAppearance() {
       [editDevice]: {
         ...deviceTheme,
         global: { ...deviceTheme.global, [key]: value },
+      },
+    });
+  };
+
+  const updateSidebarLabel = (key: keyof SidebarLabels, value: string) => {
+    commit({
+      ...theme,
+      [editDevice]: {
+        ...deviceTheme,
+        global: {
+          ...deviceTheme.global,
+          sidebarLabels: { ...deviceTheme.global.sidebarLabels, [key]: value },
+        },
       },
     });
   };
@@ -249,6 +285,23 @@ export default function AdminAppearance() {
     commit(next);
     const labels = targets.map((t) => deviceMeta[t].label).join(", ");
     toast.message(`Card & layout applied to ${labels} (unsaved)`);
+  };
+
+  const applySidebarLabelsTo = (targets: DeviceKey[]) => {
+    const sidebarLabels = structuredClone(deviceTheme.global.sidebarLabels);
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          global: { ...next[target].global, sidebarLabels: structuredClone(sidebarLabels) },
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Sidebar labels applied to ${labels} (unsaved)`);
   };
 
   /** Copy current device Story-based learning settings onto targets (preview until Save). */
@@ -594,6 +647,44 @@ export default function AdminAppearance() {
                 onChange={(v) => updateGlobal("cardHoverHighlight", v)}
                 hint="Primary-tinted border on hover"
               />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Sidebar page names</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarLabelsTo(["mobile"])}>
+                    Set to Phone
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarLabelsTo(["tablet"])}>
+                    Set to Tablet
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarLabelsTo(["desktop"])}>
+                    Set to Computer
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applySidebarLabelsTo(["mobile", "tablet", "desktop"])}
+                  >
+                    Set to all
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Change what each sidebar page is called for <strong>{deviceMeta[editDevice].label}</strong>.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {SIDEBAR_LABEL_FIELDS.map(([key, label]) => (
+                  <TextField
+                    key={key}
+                    label={label}
+                    value={g.sidebarLabels[key]}
+                    onChange={(v) => updateSidebarLabel(key, v)}
+                  />
+                ))}
+              </div>
             </div>
           </TabsContent>
 
