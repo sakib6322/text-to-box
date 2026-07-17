@@ -30,11 +30,11 @@ export function KeyPointStudySlide({ keyPoint, index, total, direction = "forwar
 
   return (
     <div className={direction === "back" ? "kp-study-slide--back" : "kp-study-slide"}>
-      <Card className="kp-study-card relative overflow-hidden border-primary/15 bg-gradient-to-br from-background via-background to-primary/[0.06] p-5 sm:p-6">
+      <Card className="kp-study-card relative overflow-hidden border-primary/15 bg-gradient-to-br from-background via-background to-primary/[0.06] p-4 sm:p-6">
         <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-12 -left-8 h-28 w-28 rounded-full bg-accent/20 blur-2xl" />
 
-        <div className="relative space-y-4">
+        <div className="relative min-w-0 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <Badge variant="outline" className="text-[10px] tracking-wide">
               Key point {index + 1} / {total || 1}
@@ -48,7 +48,7 @@ export function KeyPointStudySlide({ keyPoint, index, total, direction = "forwar
           </div>
 
           {boards.length ? (
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex max-w-full flex-wrap gap-1.5">
               {boards.map((b) => {
                 const clickable = Boolean(onBoardClick && b.id);
                 const className =
@@ -58,18 +58,18 @@ export function KeyPointStudySlide({ keyPoint, index, total, direction = "forwar
                     <button
                       key={b.key}
                       type="button"
-                      className="inline-flex"
+                      className="inline-flex max-w-full"
                       title={`Open ${b.name} questions`}
                       onClick={() => onBoardClick?.({ id: b.id!, name: b.name })}
                     >
-                      <Badge variant="outline" className={`${className} cursor-pointer hover:bg-red-100`}>
+                      <Badge variant="outline" className={`${className} max-w-full truncate cursor-pointer hover:bg-red-100`}>
                         {b.label}
                       </Badge>
                     </button>
                   );
                 }
                 return (
-                  <Badge key={b.key} variant="outline" className={className}>
+                  <Badge key={b.key} variant="outline" className={`${className} max-w-full truncate`}>
                     {b.label}
                   </Badge>
                 );
@@ -77,7 +77,7 @@ export function KeyPointStudySlide({ keyPoint, index, total, direction = "forwar
             </div>
           ) : null}
 
-          <p className="text-base leading-relaxed sm:text-lg sm:leading-relaxed">{keyPoint.content}</p>
+          <p className="break-words text-base leading-relaxed sm:text-lg sm:leading-relaxed">{keyPoint.content}</p>
         </div>
       </Card>
     </div>

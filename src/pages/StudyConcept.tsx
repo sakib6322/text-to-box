@@ -10,8 +10,11 @@ import { getStudyProgress, markKeyPointStudied, studyCompletionPct } from "@/lib
 import {
   userBottomBar,
   userBottomBarInner,
+  userHeaderActionBtn,
+  userHeaderActionLabel,
   userPageShell,
   userStickyHeader,
+  userStickyHeaderActions,
 } from "@/lib/userShell";
 import { toast } from "sonner";
 
@@ -86,18 +89,21 @@ export default function StudyConcept() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
           <p className="text-xs text-muted-foreground md:text-sm">Key point study</p>
           <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-8 shrink-0 text-xs">
-          <Link to={`/concept/${conceptId}/learn?tab=practice`}>
-            <Target className="mr-1 h-3 w-3" /> Practice
-          </Link>
-        </Button>
+        <div className={userStickyHeaderActions}>
+          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
+            <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+              <Target className="h-3.5 w-3.5 sm:mr-1" />
+              <span className={userHeaderActionLabel}>Practice</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <div className="space-y-2 px-4 md:px-0">
+      <div className="space-y-2 px-3 md:px-0">
         <div className="flex items-center justify-between text-xs text-muted-foreground md:text-sm">
           <span>
             Studied {studiedIds.size}/{keyPoints.length || 0}
@@ -107,7 +113,7 @@ export default function StudyConcept() {
         <Progress value={progressPct} className="h-2" />
       </div>
 
-      <div className="mx-auto w-full max-w-2xl px-4 md:px-0">
+      <div className="mx-auto w-full max-w-2xl min-w-0 overflow-hidden px-3 md:px-0">
         {currentKp ? (
           <KeyPointStudySlide
             key={`${currentKp.id ?? step}-${step}-${slideDir}`}
@@ -122,7 +128,7 @@ export default function StudyConcept() {
       </div>
 
       {keyPoints.length > 1 ? (
-        <div className="flex items-center justify-center gap-1.5 px-4">
+        <div className="flex max-w-full items-center justify-start gap-1.5 overflow-x-auto px-3 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:justify-center md:px-4">
           {keyPoints.map((kp, i) => {
             const done = kp.id ? studiedIds.has(kp.id) : false;
             const active = i === step;
@@ -131,7 +137,7 @@ export default function StudyConcept() {
                 key={kp.id ?? i}
                 type="button"
                 aria-label={`Go to key point ${i + 1}`}
-                className={`h-2 rounded-full transition-all duration-300 ${
+                className={`h-2 shrink-0 rounded-full transition-all duration-300 ${
                   active ? "w-6 bg-primary" : done ? "w-2 bg-primary/50" : "w-2 bg-muted-foreground/25"
                 }`}
                 onClick={() => {
@@ -144,7 +150,7 @@ export default function StudyConcept() {
         </div>
       ) : null}
 
-      <div className="flex items-center justify-center px-4">
+      <div className="flex items-center justify-center px-3">
         <Button asChild variant="ghost" size="sm" className="h-7 text-[10px] md:text-xs">
           <Link to={`/concept/${conceptId}/details`}>
             <BookOpen className="mr-1 h-3 w-3" /> Back to details

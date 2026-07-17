@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Loader2, Play } from "lucide-react";
+import { ArrowLeft, BookOpen, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -10,6 +10,15 @@ import { Badge } from "@/components/ui/badge";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchConceptByIdWithBoards } from "@/lib/conceptDetail";
 import { savePracticeSession, type PracticeSession } from "@/lib/userProgress";
+import {
+  userBottomBar,
+  userBottomBarInner,
+  userHeaderActionBtn,
+  userHeaderActionLabel,
+  userPageShellTight,
+  userStickyHeader,
+  userStickyHeaderActions,
+} from "@/lib/userShell";
 import { toast } from "sonner";
 
 type QRow = {
@@ -89,23 +98,28 @@ export default function PracticeSetup() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg space-y-4 px-0 pb-24 md:max-w-3xl md:px-2 lg:max-w-5xl">
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3 md:px-2 md:py-4 md:rounded-lg">
-        <Button asChild variant="ghost" size="icon">
+    <div className={userPageShellTight}>
+      <div className={userStickyHeader}>
+        <Button asChild variant="ghost" size="icon" className="shrink-0">
           <Link to="/my-suggestions">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
           <p className="text-xs text-muted-foreground md:text-sm">Practice setup</p>
           <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
         </div>
-        <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-          <Link to={`/study/${conceptId}`}>Study</Link>
-        </Button>
+        <div className={userStickyHeaderActions}>
+          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Study">
+            <Link to={`/study/${conceptId}`}>
+              <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+              <span className={userHeaderActionLabel}>Study</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Card className="mx-4 space-y-3 p-4 md:mx-0 md:p-6">
+      <Card className="mx-3 space-y-3 p-4 md:mx-0 md:p-6">
         <div className="space-y-2">
           <Label className="text-xs">Practice exam title</Label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -120,20 +134,22 @@ export default function PracticeSetup() {
         </p>
       </Card>
 
-      <div className="px-4 space-y-2">
+      <div className="space-y-2 px-3 md:px-0">
         {questions.length === 0 ? (
           <Card className="p-6 text-center text-sm text-muted-foreground">No questions linked to this concept yet.</Card>
         ) : (
           questions.map((q, i) => (
             <Card key={q.id} className="p-3">
-              <label className="flex gap-3 cursor-pointer items-start">
+              <label className="flex cursor-pointer items-start gap-3">
                 <Checkbox checked={selected.has(q.id)} onCheckedChange={() => toggle(q.id)} className="mt-0.5" />
-                <div className="flex-1 min-w-0 space-y-1">
-                  <div className="flex gap-2 items-center">
-                    <Badge variant="outline" className="text-[9px] uppercase">{q.questionMode}</Badge>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-[9px] uppercase">
+                      {q.questionMode}
+                    </Badge>
                     <span className="text-[10px] text-muted-foreground">Q{i + 1}</span>
                   </div>
-                  <p className="text-xs leading-snug line-clamp-3">{q.mcq?.stem ?? q.sba?.stem ?? "—"}</p>
+                  <p className="line-clamp-3 text-xs leading-snug">{q.mcq?.stem ?? q.sba?.stem ?? "—"}</p>
                 </div>
               </label>
             </Card>
@@ -141,10 +157,12 @@ export default function PracticeSetup() {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-background/95 border-t safe-area-pb">
-        <Button className="w-full h-12" onClick={startPractice} disabled={selected.size === 0}>
-          <Play className="mr-2 h-4 w-4" /> Start practice ({selected.size})
-        </Button>
+      <div className={userBottomBar}>
+        <div className={userBottomBarInner}>
+          <Button className="h-12 w-full" onClick={startPractice} disabled={selected.size === 0}>
+            <Play className="mr-2 h-4 w-4" /> Start practice ({selected.size})
+          </Button>
+        </div>
       </div>
     </div>
   );

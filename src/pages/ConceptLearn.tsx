@@ -35,8 +35,11 @@ import { toast } from "sonner";
 import {
   userBottomBar,
   userBottomBarInner,
+  userHeaderActionBtn,
+  userHeaderActionLabel,
   userPageShell,
   userStickyHeader,
+  userStickyHeaderActions,
 } from "@/lib/userShell";
 
 type QRow = {
@@ -213,27 +216,32 @@ export default function ConceptLearn() {
             <ArrowLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
           <p className="truncate text-xs text-muted-foreground md:text-sm">{topicName || "Concept"}</p>
           <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-8 shrink-0 text-xs"
-          onClick={openConceptQuestions}
-        >
-          <HelpCircle className="mr-1 h-3 w-3" /> Questions
-        </Button>
-        <Button asChild variant="outline" size="sm" className="h-8 shrink-0 text-xs">
-          <Link to={`/concept/${conceptId}/details`}>
-            <BookOpen className="mr-1 h-3 w-3" /> Details
-          </Link>
-        </Button>
+        <div className={userStickyHeaderActions}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className={userHeaderActionBtn}
+            onClick={openConceptQuestions}
+            title="Questions"
+          >
+            <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
+            <span className={userHeaderActionLabel}>Questions</span>
+          </Button>
+          <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Details">
+            <Link to={`/concept/${conceptId}/details`}>
+              <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+              <span className={userHeaderActionLabel}>Details</span>
+            </Link>
+          </Button>
+        </div>
       </div>
 
-      <Tabs value={tab} onValueChange={setTab} className="px-4 pt-4 md:px-0">
+      <Tabs value={tab} onValueChange={setTab} className="min-w-0 px-3 pt-3 md:px-0 md:pt-4">
         <TabsList className="grid h-10 w-full max-w-md grid-cols-2">
           <TabsTrigger value="study" className="text-xs md:text-sm">Study</TabsTrigger>
           <TabsTrigger value="practice" className="text-xs md:text-sm">
@@ -252,7 +260,7 @@ export default function ConceptLearn() {
             <Progress value={progressPct} className="h-2" />
           </div>
 
-          <div className="mx-auto w-full max-w-2xl">
+          <div className="mx-auto w-full max-w-2xl min-w-0 overflow-hidden">
             {currentKp ? (
               <KeyPointStudySlide
                 key={`${currentKp.id ?? step}-${step}-${slideDir}`}
@@ -268,7 +276,7 @@ export default function ConceptLearn() {
           </div>
 
           {keyPoints.length > 1 ? (
-            <div className="flex items-center justify-center gap-1.5 pt-1">
+            <div className="flex max-w-full items-center justify-start gap-1.5 overflow-x-auto px-0.5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {keyPoints.map((kp, i) => {
                 const done = kp.id ? studiedIds.has(kp.id) : false;
                 const active = i === step;
@@ -277,7 +285,7 @@ export default function ConceptLearn() {
                     key={kp.id ?? i}
                     type="button"
                     aria-label={`Go to key point ${i + 1}`}
-                    className={`h-2 rounded-full transition-all duration-300 ${
+                    className={`h-2 shrink-0 rounded-full transition-all duration-300 ${
                       active ? "w-6 bg-primary" : done ? "w-2 bg-primary/50" : "w-2 bg-muted-foreground/25"
                     }`}
                     onClick={() => {
@@ -290,14 +298,9 @@ export default function ConceptLearn() {
             </div>
           ) : null}
 
-          <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground md:text-xs">
-            <span>Swipe-style slides · Next marks as studied</span>
-            <Button asChild variant="ghost" size="sm" className="h-7 text-[10px] md:text-xs">
-              <Link to={`/concept/${conceptId}/details`}>
-                <BookOpen className="mr-1 h-3 w-3" /> Details
-              </Link>
-            </Button>
-          </div>
+          <p className="text-center text-[11px] text-muted-foreground md:text-xs">
+            Next marks the current key point as studied
+          </p>
 
           <div className={userBottomBar}>
             <div className={userBottomBarInner}>
