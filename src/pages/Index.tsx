@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Upload, Save, Sparkles, FileText } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload, Save, Sparkles, FileText, FileSpreadsheet } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
@@ -26,6 +26,7 @@ import {
   prepareSourceFileForUpload,
   readFilePreview,
 } from "@/lib/sourceInput";
+import { parseKeyPointsCsv, readCsvFileAsText } from "@/lib/bulkKeyPointsCsv";
 import { fetchSuggestionMatches, type SuggestionMatch } from "@/lib/suggestionMatch";
 import { Can, useCan } from "@/components/Can";
 import { guardPermission } from "@/lib/permissionGuard";
@@ -47,10 +48,12 @@ const emptyKeyPoint = (): KeyPoint => ({ content: "" });
 
 const Index = () => {
   const fileRef = useRef<HTMLInputElement>(null);
+  const csvFileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [importingCsv, setImportingCsv] = useState(false);
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -67,6 +70,7 @@ const Index = () => {
   const [sourceEditorOpen, setSourceEditorOpen] = useState(false);
 
   const canUpload = useCan("home.upload");
+  const canBulkCsv = useCan("home.bulk_csv");
   const canSourceText = useCan("home.source_text");
   const canExtract = useCan("home.extract");
   const canEdit = useCan("home.edit");
@@ -251,6 +255,32 @@ const Index = () => {
     setPoints((p) => [...p, emptyKeyPoint()]);
   };
 
+  const handleBulkCsv = async (file: File) => {
+    if (!guardPermission("home.bulk_csv")) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".csv") && file.type && !file.type.includes("csv") && !file.type.includes("text")) {
+      toast.error("Please choose a .csv file");
+      return;
+    }
+    setImportingCsv(true);
+    try {
+      const text = await readCsvFileAsText(file);
+      const parsed = parseKeyPointsCsv(text);
+      setPoints(parsed.points.map((content) => ({ content })));
+      setSuggestionLines([]);
+      setSuggestionMatches(new Map());
+      for (const w of parsed.warnings) toast.warning(w);
+      toast.success(
+        `CSV loaded · ${parsed.points.length} key points — type concept name, select taxonomy, then Save`,
+      );
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "CSV import failed");
+    } finally {
+      setImportingCsv(false);
+      if (csvFileRef.current) csvFileRef.current.value = "";
+    }
+  };
+
   const resetForm = () => {
     setImageFile(null);
     setImagePreview(null);
@@ -265,6 +295,7 @@ const Index = () => {
     setPoints([emptyKeyPoint()]);
     setDragOver(false);
     if (fileRef.current) fileRef.current.value = "";
+    if (csvFileRef.current) csvFileRef.current.value = "";
   };
 
   const handleSave = async () => {
@@ -479,6 +510,60 @@ const Index = () => {
             </Button>
             </Can>
           </Card>
+
+          <Can permission="home.bulk_csv">
+            <Card className="p-4 space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold">Bulk CSV (no AI)</h2>
+                <p className="text-xs text-muted-foreground mt-1">
+                  শুধু key points autofill। Header:{" "}
+                  <code className="text-[11px]">key_point</code> — concept name UI-তে টাইপ করুন, taxonomy
+                  select করে Save।
+                </p>
+              </div>
+
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => canBulkCsv && !importingCsv && csvFileRef.current?.click()}
+                onKeyDown={(e) =>
+                  e.key === "Enter" && canBulkCsv && !importingCsv && csvFileRef.current?.click()
+                }
+                className={[
+                  "rounded-lg border-2 border-dashed p-4 text-center transition-colors",
+                  canBulkCsv && !importingCsv ? "cursor-pointer hover:border-primary/50" : "cursor-not-allowed opacity-50",
+                  "border-muted-foreground/30",
+                ].join(" ")}
+              >
+                {importingCsv ? (
+                  <Loader2 className="mx-auto h-8 w-8 mb-2 text-muted-foreground animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+                )}
+                <p className="text-sm font-medium">
+                  {importingCsv ? "Parsing CSV…" : "CSV আপলোড করুন"}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">.csv only — client-side parse</p>
+                <Input
+                  ref={csvFileRef}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  disabled={!canBulkCsv || importingCsv}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleBulkCsv(f);
+                  }}
+                />
+              </div>
+
+              <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+                <a href="/samples/home-key-points-bulk.csv" download>
+                  Download sample CSV
+                </a>
+              </Button>
+            </Card>
+          </Can>
         </section>
 
         <section className="space-y-4">
@@ -498,7 +583,7 @@ const Index = () => {
                 id="concept-name"
                 value={conceptName}
                 onChange={(e) => setConceptName(e.target.value)}
-                placeholder="Concept title — AI extract করলে auto-fill, নাহলে নিজে টাইপ করুন"
+                placeholder="Concept title — AI extract বা নিজে টাইপ করুন"
                 className={conceptName ? "border-primary/40" : ""}
               />
             </div>

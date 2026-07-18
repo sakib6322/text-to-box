@@ -9,6 +9,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "home.view", label: "View page" },
       { key: "home.upload", label: "Upload image / PDF for extract" },
+      { key: "home.bulk_csv", label: "Bulk CSV key points (no AI)" },
       { key: "home.source_text", label: "Source text input" },
       { key: "home.extract", label: "Extract concept" },
       { key: "home.add", label: "Add / save concept" },
