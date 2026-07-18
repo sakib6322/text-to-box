@@ -2634,10 +2634,43 @@ app.patch("/api/key-points/:id", async (req, res) => {
     }
 
     if (hasBoardIds) {
+      const { data: beforeRows } = await db
+        .from("key_point_boards")
+        .select("board_id")
+        .eq("key_point_id", id);
+      const beforeSet = new Set(
+        (beforeRows ?? [])
+          .map((r) => (typeof r.board_id === "string" ? r.board_id.trim() : ""))
+          .filter(Boolean),
+      );
       await replaceKeyPointBoards(db, id, boardIds);
+      const newlyAdded = (boardIds ?? [])
+        .map((x) => String(x).trim())
+        .filter((bid) => bid && !beforeSet.has(bid));
+      if (newlyAdded.length) {
+        const { data: kpRow } = await db
+          .from("key_points")
+          .select("increment_count")
+          .eq("id", id)
+          .maybeSingle();
+        const nextInc = Number(kpRow?.increment_count ?? 0) + newlyAdded.length;
+        const { error: incErr } = await db
+          .from("key_points")
+          .update({ increment_count: nextInc })
+          .eq("id", id);
+        if (incErr) return res.status(500).json({ error: incErr.message });
+      }
     }
 
-    return res.json({ ok: true, id });
+    const { data: fresh } = await db
+      .from("key_points")
+      .select("id, content, position, increment_count, concept_id")
+      .eq("id", id)
+      .maybeSingle();
+    const enriched = fresh
+      ? await enrichKeyPointsWithBoards(db, fresh.concept_id, [fresh])
+      : [];
+    return res.json({ ok: true, id, key_point: enriched[0] ?? fresh ?? { id } });
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -2700,6 +2733,8 @@ app.post("/api/concepts/:id/key-points", async (req, res) => {
         content,
         language: "mixed",
         position: nextPosition,
+        // Same rule as approve-point save: count = number of selected boards
+        increment_count: boardIds.length,
         embedding: toPgVector(emb),
       })
       .select("id, content, position, increment_count")

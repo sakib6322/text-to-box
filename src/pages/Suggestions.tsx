@@ -555,7 +555,23 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     },
   ) => {
     if (!addTarget) return;
-    const nextBoards = boardLinksFromIds(boardIds, boardList);
+    const fromServer = Array.isArray(created?.board_links) && created.board_links.length > 0;
+    const nextBoards: BoardLink[] = fromServer
+      ? created!.board_links!.map((l) => ({
+          board_id: l.board_id ?? "",
+          mention_count: Math.max(1, Number(l.mention_count ?? 1) || 1),
+          boards: {
+            id: l.board_id ?? "",
+            name: (l.name ?? "").trim(),
+          },
+        }))
+      : boardLinksFromIds(boardIds, boardList);
+    // Prefer server count, but never show 0 when boards were selected (old API left count at 0).
+    const nextIncrement = Math.max(
+      typeof created?.increment_count === "number" ? Math.max(0, created.increment_count) : 0,
+      nextBoards.length,
+      boardIds.length,
+    );
     const template = rows.find((r) => r.concept_id === addTarget.conceptId);
     setRows((prev) => {
       if (prev.some((r) => r.id === newId)) {
@@ -564,6 +580,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             ? {
                 ...row,
                 content: created?.content ?? content,
+                increment_count: nextIncrement,
                 key_point_boards: nextBoards,
               }
             : row,
@@ -574,7 +591,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
           id: newId,
           content: created?.content ?? content,
           language: "mixed",
-          increment_count: Number(created?.increment_count ?? 0),
+          increment_count: nextIncrement,
           concept_id: addTarget.conceptId,
           concepts: template?.concepts ?? {
             title: addTarget.title,
@@ -596,6 +613,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               ? {
                   ...kp,
                   content: created?.content ?? content,
+                  incrementCount: nextIncrement,
                   boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
                   boardLinks: nextBoards.map((b) => ({
                     id: b.board_id,
@@ -609,7 +627,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         return [
           ...prev,
           {
-            ...apiKpToWithBoards({ ...created, content, id: newId }),
+            ...apiKpToWithBoards({
+              ...created,
+              content,
+              id: newId,
+              increment_count: nextIncrement,
+            }),
             boardNames: nextBoards.map((b) => b.boards?.name ?? "").filter(Boolean),
             boardLinks: nextBoards.map((b) => ({
               id: b.board_id,
@@ -647,7 +670,16 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
       });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      const j = (await r.json().catch(() => ({}))) as {
+        error?: string;
+        key_point?: {
+          id?: string;
+          content?: string;
+          increment_count?: number;
+          board_names?: string[];
+          board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+        };
+      };
       if (!r.ok) throw new Error(j.error ?? "Failed to update key point");
       applyCreatedKeyPointToState(
         draft.createdKeyPointId,
@@ -655,6 +687,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         syncBoards
           ? boardIds
           : boardIdsFromLinks(rows.find((r) => r.id === draft.createdKeyPointId)?.key_point_boards),
+        j.key_point,
       );
       return draft.createdKeyPointId;
     }
@@ -772,9 +805,23 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               headers: { "Content-Type": "application/json", ...getAuthHeaders() },
               body: JSON.stringify({ content: draft.content, board_ids: draft.boardIds }),
             });
-            const j = (await r.json().catch(() => ({}))) as { error?: string };
+            const j = (await r.json().catch(() => ({}))) as {
+              error?: string;
+              key_point?: {
+                id?: string;
+                content?: string;
+                increment_count?: number;
+                board_names?: string[];
+                board_links?: { board_id?: string | null; name?: string; mention_count?: number }[];
+              };
+            };
             if (!r.ok) throw new Error(j.error ?? "Update failed");
-            applyCreatedKeyPointToState(draft.createdKeyPointId, draft.content, draft.boardIds);
+            applyCreatedKeyPointToState(
+              draft.createdKeyPointId,
+              draft.content,
+              draft.boardIds,
+              j.key_point,
+            );
             ok++;
             continue;
           }
