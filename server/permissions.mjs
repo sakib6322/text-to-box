@@ -36,7 +36,7 @@ export const PERMISSION_GROUPS = [
       { key: "question_bank.create_ai.upload", label: "Upload image / PDF for extract" },
       { key: "question_bank.create_ai.source_text", label: "Source text input" },
       { key: "question_bank.create_ai.extract", label: "AI extract" },
-      { key: "question_bank.create_ai.bulk", label: "Bulk JSON questions (no AI)" },
+      { key: "question_bank.create_ai.bulk", label: "Bulk JSON / CSV questions (no AI)" },
       { key: "question_bank.create_ai.add", label: "Add / save questions" },
       { key: "question_bank.create_ai.edit", label: "Edit draft questions" },
       { key: "question_bank.create_ai.delete", label: "Delete from queue" },

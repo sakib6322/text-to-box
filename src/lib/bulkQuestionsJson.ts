@@ -85,6 +85,186 @@ function padFive(arr: string[], warnings: string[], label: string, qIndex: numbe
   return out;
 }
 
+/** Split multi-value CSV cell on | (trim empties kept for aligned correct/explanation lists). */
+function splitPipe(cell: string): string[] {
+  if (!cell.trim()) return [];
+  return cell.split("|").map((s) => s.trim());
+}
+
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cur += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += ch;
+    }
+  }
+  cells.push(cur);
+  return cells.map((c) => c.trim());
+}
+
+function splitCsvRows(text: string): string[] {
+  const rows: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"') {
+      inQuotes = !inQuotes;
+      cur += ch;
+      continue;
+    }
+    if (!inQuotes && (ch === "\n" || ch === "\r")) {
+      if (ch === "\r" && text[i + 1] === "\n") i++;
+      if (cur.trim()) rows.push(cur);
+      cur = "";
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) rows.push(cur);
+  return rows;
+}
+
+function normHeader(h: string): string {
+  return h.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+const TYPE_ALIASES = new Set(["type", "question_type", "question_mode"]);
+const STEM_ALIASES = new Set(["stem", "question", "question_stem"]);
+const BOARDS_ALIASES = new Set(["boards", "board", "board_names"]);
+const TEXTS_ALIASES = new Set(["texts", "items", "statements", "options", "text"]);
+const CORRECTS_ALIASES = new Set(["corrects", "correct", "correct_index", "answer"]);
+const EXPL_ALIASES = new Set(["explanations", "explanation", "option_explanations"]);
+
+/**
+ * One question per CSV row.
+ * Columns: type,stem,boards,texts,corrects,explanations
+ * Multi-values use | (pipe). MCQ: corrects = true|false… ; SBA: corrects = 0–4 index.
+ */
+export function parseBulkQuestionsCsv(raw: string): ParseBulkQuestionsResult {
+  const body = (() => {
+    const t = stripBom(raw).trim();
+    const fence = t.match(/^```(?:csv|json|text)?\s*\r?\n([\s\S]*?)\r?\n```$/i);
+    return fence ? fence[1].trim() : t;
+  })();
+
+  if (!body.trim()) throw new Error("CSV is empty");
+  const rows = splitCsvRows(body);
+  if (rows.length < 2) throw new Error("CSV needs a header row and at least one data row");
+
+  const headers = parseCsvLine(rows[0]).map(normHeader);
+  const col = (aliases: Set<string>) => headers.findIndex((h) => aliases.has(h));
+  const typeIdx = col(TYPE_ALIASES);
+  const stemIdx = col(STEM_ALIASES);
+  const boardsIdx = col(BOARDS_ALIASES);
+  const textsIdx = col(TEXTS_ALIASES);
+  const correctsIdx = col(CORRECTS_ALIASES);
+  const explIdx = col(EXPL_ALIASES);
+
+  if (typeIdx < 0) throw new Error('Missing "type" column (mcq|sba)');
+  if (stemIdx < 0) throw new Error('Missing "stem" column');
+  if (textsIdx < 0) throw new Error('Missing "texts" column (pipe-separated statements/options)');
+  if (correctsIdx < 0) throw new Error('Missing "corrects" column');
+
+  if (rows.length - 1 > MAX_QUESTIONS) {
+    throw new Error(`Too many questions (${rows.length - 1}). Maximum is ${MAX_QUESTIONS} per import.`);
+  }
+
+  const warnings: string[] = [];
+  const items: BulkQuestionItem[] = [];
+
+  for (let r = 1; r < rows.length; r++) {
+    const cells = parseCsvLine(rows[r]);
+    const type = (cells[typeIdx] ?? "").trim().toLowerCase();
+    const stem = (cells[stemIdx] ?? "").trim();
+    const boards = boardsIdx >= 0 ? splitPipe(cells[boardsIdx] ?? "") : [];
+    const texts = splitPipe(cells[textsIdx] ?? "");
+    const correctsRaw = (cells[correctsIdx] ?? "").trim();
+    const expls = explIdx >= 0 ? splitPipe(cells[explIdx] ?? "") : [];
+
+    if (!type && !stem && !texts.length) continue;
+    if (type !== "mcq" && type !== "sba") {
+      warnings.push(`Row ${r + 1}: skipped — type must be mcq or sba`);
+      continue;
+    }
+    if (!stem) {
+      warnings.push(`Row ${r + 1}: skipped — stem is required`);
+      continue;
+    }
+    if (!texts.length) {
+      warnings.push(`Row ${r + 1}: skipped — texts is empty`);
+      continue;
+    }
+
+    if (type === "mcq") {
+      if (texts.length > MAX_MCQ_STATEMENTS) {
+        warnings.push(`Row ${r + 1}: truncated statements to ${MAX_MCQ_STATEMENTS}`);
+      }
+      const correctParts = splitPipe(correctsRaw);
+      const statements: BulkMcqStatement[] = [];
+      const slice = texts.slice(0, MAX_MCQ_STATEMENTS);
+      for (let i = 0; i < slice.length; i++) {
+        const correct = parseCorrect(correctParts[i] ?? "false");
+        if (correct === null && correctParts[i]) {
+          warnings.push(`Row ${r + 1} statement ${i + 1}: invalid correct — defaulted to false`);
+        }
+        statements.push({
+          text: slice[i],
+          correct: correct ?? false,
+          explanation: expls[i] ?? "",
+        });
+      }
+      items.push({ type: "mcq", stem, boards, statements });
+    } else {
+      if (texts.length < 5) {
+        warnings.push(`Row ${r + 1}: skipped — SBA needs exactly 5 options in texts`);
+        continue;
+      }
+      const options = padFive(texts, warnings, "options", items.length);
+      if (options.some((o) => !o.trim())) {
+        warnings.push(`Row ${r + 1}: skipped — SBA options must be non-empty`);
+        continue;
+      }
+      let correctIndex = Number(correctsRaw.split("|")[0]?.trim() ?? "0");
+      if (!Number.isFinite(correctIndex) || correctIndex < 0 || correctIndex > 4) {
+        warnings.push(`Row ${r + 1}: invalid correct index — using 0`);
+        correctIndex = 0;
+      }
+      const optionExplanations = padFive(expls, warnings, "explanations", items.length);
+      items.push({
+        type: "sba",
+        stem,
+        boards,
+        options,
+        correctIndex: Math.trunc(correctIndex),
+        optionExplanations,
+      });
+    }
+  }
+
+  if (!items.length) throw new Error("No valid questions after CSV validation");
+  return { items, warnings };
+}
+
 function parseOneItem(raw: unknown, index: number, warnings: string[]): BulkQuestionItem | null {
   const obj = asRecord(raw);
   if (!obj) {
@@ -339,7 +519,7 @@ export function bulkItemsToDrafts(items: BulkQuestionItem[], ctx: BulkDraftConte
   return { drafts, warnings, boardsResolved };
 }
 
-/** External-AI prompt with live board names injected. */
+/** External-AI prompt with live board names injected (JSON output). */
 export function buildExternalBulkQuestionsPrompt(boardNames: string[]): string {
   const boardList =
     boardNames.length > 0
@@ -382,6 +562,43 @@ Rules:
 - SBA: exactly 5 options; correct_index is 0-based; every option gets a short explanation
 - One concept / topic only; 4–12 questions total unless I ask otherwise
 - Plain UTF-8 JSON only
+
+Source / concept notes:
+<<<PASTE TEXTBOOK NOTES OR TOPIC HERE>>>`;
+}
+
+/** External-AI prompt for CSV bulk (one question per row, pipe-separated multi-values). */
+export function buildExternalBulkQuestionsCsvPrompt(boardNames: string[]): string {
+  const boardList =
+    boardNames.length > 0
+      ? boardNames.join(" | ")
+      : "(no boards yet — leave boards cell empty)";
+
+  return `You are preparing exam questions for a medical question-bank app.
+
+Output ONLY a CSV file (no markdown fences, no commentary).
+
+Header row EXACTLY:
+type,stem,boards,texts,corrects,explanations
+
+Rules:
+- One question per data row
+- type: mcq or sba
+- boards: board names separated by | (pipe). Use exact names from: ${boardList}
+  If none: leave boards empty
+- texts: for MCQ = true/false statements separated by | ; for SBA = exactly 5 options separated by |
+- corrects: for MCQ = true|false|... aligned with texts ; for SBA = single 0-based index 0–4
+- explanations: pipe-separated, same count as texts (SBA must have 5)
+- Quote cells that contain commas
+- Do NOT put | inside a statement/option (use commas or rephrase)
+- Do NOT include subject/system/chapter/topic/concept
+- 4–12 questions; mix mcq and sba allowed
+- Plain UTF-8 CSV only
+
+Example:
+type,stem,boards,texts,corrects,explanations
+mcq,"Regarding the mitral valve:","BCPS|FCPS","It has two cusps|It guards the right AV orifice","true|false","Anterior and posterior leaflets.|It guards the left AV orifice."
+sba,"Which structure guards the left AV orifice?","MD","Tricuspid valve|Mitral valve|Aortic valve|Pulmonary valve|Eustachian valve","1","Right AV valve.|Correct — mitral.|LV outflow.|RV outflow.|IVC remnant."
 
 Source / concept notes:
 <<<PASTE TEXTBOOK NOTES OR TOPIC HERE>>>`;

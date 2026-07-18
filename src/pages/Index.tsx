@@ -27,6 +27,7 @@ import {
   readFilePreview,
 } from "@/lib/sourceInput";
 import {
+  buildExternalKeyPointsCsvPrompt,
   buildExternalKeyPointsJsonPrompt,
   parseKeyPointsCsv,
   parseKeyPointsJson,
@@ -54,6 +55,7 @@ const emptyKeyPoint = (): KeyPoint => ({ content: "" });
 const Index = () => {
   const fileRef = useRef<HTMLInputElement>(null);
   const csvFileRef = useRef<HTMLInputElement>(null);
+  const jsonFileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
@@ -292,28 +294,52 @@ const Index = () => {
     }
   };
 
-  const handleBulkJson = () => {
+  const handleBulkJson = (rawOverride?: string) => {
     if (!guardPermission("home.bulk_csv")) return;
-    const raw = bulkJsonText.trim();
+    const raw = (rawOverride ?? bulkJsonText).trim();
     if (!raw) {
-      toast.error("Paste JSON first");
+      toast.error("Paste JSON or upload a .json file first");
       return;
     }
     setImportingJson(true);
     try {
       const parsed = parseKeyPointsJson(raw);
+      setBulkJsonText(raw);
       applyBulkKeyPoints(parsed.points, parsed.warnings, "JSON");
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "JSON import failed");
     } finally {
       setImportingJson(false);
+      if (jsonFileRef.current) jsonFileRef.current.value = "";
     }
   };
 
-  const copyKeyPointsExternalPrompt = async () => {
+  const handleBulkJsonFile = async (file: File) => {
+    if (!guardPermission("home.bulk_csv")) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".json") && file.type && !file.type.includes("json") && !file.type.includes("text")) {
+      toast.error("Please choose a .json file");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(buildExternalKeyPointsJsonPrompt());
-      toast.success("External AI prompt copied — paste JSON result into the box below");
+      const text = await file.text();
+      handleBulkJson(text);
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "Failed to read JSON file");
+      if (jsonFileRef.current) jsonFileRef.current.value = "";
+    }
+  };
+
+  const copyKeyPointsExternalPrompt = async (format: "json" | "csv") => {
+    try {
+      const text =
+        format === "csv" ? buildExternalKeyPointsCsvPrompt() : buildExternalKeyPointsJsonPrompt();
+      await navigator.clipboard.writeText(text);
+      toast.success(
+        format === "csv"
+          ? "CSV prompt copied — paste into ChatGPT/Claude, then upload the CSV here"
+          : "JSON prompt copied — paste JSON into the box or upload .json",
+      );
     } catch {
       toast.error("Could not copy to clipboard");
     }
@@ -335,6 +361,7 @@ const Index = () => {
     setDragOver(false);
     if (fileRef.current) fileRef.current.value = "";
     if (csvFileRef.current) csvFileRef.current.value = "";
+    if (jsonFileRef.current) jsonFileRef.current.value = "";
   };
 
   const handleSave = async () => {
@@ -604,11 +631,24 @@ const Index = () => {
                     }}
                   />
                 </div>
-                <Button type="button" variant="outline" size="sm" className="w-full" asChild>
-                  <a href="/samples/home-key-points-bulk.csv" download>
-                    Download sample CSV
-                  </a>
-                </Button>
+                <div className="flex flex-col gap-2">
+                  <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+                    <a href="/samples/home-key-points-bulk.csv" download>
+                      Download sample CSV
+                    </a>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void copyKeyPointsExternalPrompt("csv")}
+                    disabled={importingJson || importingCsv}
+                  >
+                    <ClipboardCopy className="mr-2 h-4 w-4" />
+                    Copy CSV prompt
+                  </Button>
+                </div>
               </div>
 
               <div className="border-t pt-4 space-y-2">
@@ -628,7 +668,7 @@ const Index = () => {
                   <Button
                     type="button"
                     className="w-full"
-                    onClick={handleBulkJson}
+                    onClick={() => handleBulkJson()}
                     disabled={importingJson || importingCsv || !bulkJsonText.trim()}
                   >
                     {importingJson ? (
@@ -643,11 +683,33 @@ const Index = () => {
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => void copyKeyPointsExternalPrompt()}
+                    disabled={importingJson || importingCsv}
+                    onClick={() => jsonFileRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Upload .json
+                  </Button>
+                  <Input
+                    ref={jsonFileRef}
+                    type="file"
+                    accept=".json,application/json"
+                    className="sr-only"
+                    disabled={!canBulkCsv || importingJson || importingCsv}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleBulkJsonFile(f);
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void copyKeyPointsExternalPrompt("json")}
                     disabled={importingJson || importingCsv}
                   >
                     <ClipboardCopy className="mr-2 h-4 w-4" />
-                    Copy external AI prompt
+                    Copy JSON prompt
                   </Button>
                   <Button type="button" variant="outline" size="sm" className="w-full" asChild>
                     <a href="/samples/home-key-points-bulk.json" download>

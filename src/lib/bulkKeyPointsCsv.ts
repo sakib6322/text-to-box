@@ -209,6 +209,33 @@ Source / concept notes:
 <<<PASTE CONCEPT NAME + TEXTBOOK NOTES HERE>>>`;
 }
 
+/** External-AI prompt for Home key-points CSV. */
+export function buildExternalKeyPointsCsvPrompt(): string {
+  return `You are preparing high-yield medical key points for a question-bank app (Home concept builder).
+
+Output ONLY a CSV file (no markdown fences, no commentary).
+
+Header row EXACTLY:
+key_point
+
+Rules:
+- One key point per data row under the key_point column
+- Do NOT include concept_name, subject, system, chapter, or topic
+- 8–40 key points for one concept only
+- Each row: one clear exam-oriented recall line (not a paragraph)
+- If a cell has commas, wrap it in double quotes; escape internal quotes by doubling them ("")
+- Plain UTF-8 CSV only
+
+Example:
+key_point
+Mitral valve has two cusps
+Guards the left atrioventricular orifice
+"Opens in diastole; closes at the onset of ventricular systole"
+
+Source / concept notes:
+<<<PASTE CONCEPT NAME + TEXTBOOK NOTES HERE>>>`;
+}
+
 /** @deprecated Use parseKeyPointsCsv */
 export const parseConceptKeyPointsCsv = parseKeyPointsCsv;
 

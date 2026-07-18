@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, ClipboardCopy, FileJson, FileText, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { ChevronRight, ClipboardCopy, FileJson, FileSpreadsheet, FileText, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -49,9 +49,12 @@ import {
   type LegacySuggestionMatch,
 } from "@/lib/suggestionMatch";
 import {
+  buildExternalBulkQuestionsCsvPrompt,
   buildExternalBulkQuestionsPrompt,
   bulkItemsToDrafts,
+  parseBulkQuestionsCsv,
   parseBulkQuestionsJson,
+  type ParseBulkQuestionsResult,
 } from "@/lib/bulkQuestionsJson";
 
 type ExtractResult = {
@@ -256,6 +259,7 @@ export default function CreateQuestionAI() {
 
   const fileRef = useRef<HTMLInputElement>(null);
   const bulkFileRef = useRef<HTMLInputElement>(null);
+  const bulkCsvFileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
@@ -1145,56 +1149,10 @@ export default function CreateQuestionAI() {
       toast.error("Paste JSON or upload a .json file first");
       return;
     }
-    if (queuedQuestions.length > 0) {
-      const ok = window.confirm(
-        `Replace the current queue of ${queuedQuestions.length} question(s) with the bulk import?`,
-      );
-      if (!ok) return;
-    }
-
     setImportingBulk(true);
     try {
       const parsed = parseBulkQuestionsJson(raw);
-      const t = taxonomyNames();
-      const mapped = bulkItemsToDrafts(parsed.items, {
-        subject: t.subject,
-        system: t.system,
-        chapter: t.chapter,
-        topic: t.topic,
-        topicId: t.topicId,
-        concept: conceptTitle.trim(),
-        boardOptions,
-        difficulty,
-        status,
-        marks: Number(marks) || 1,
-        mkId,
-      });
-
-      const drafts: DraftQuestion[] = mapped.drafts.map((d) => ({
-        ...d,
-        topicId: t.topicId || undefined,
-        match: null,
-        matchApproved: false,
-        matchApproving: false,
-        matchApproveError: null,
-      }));
-
-      const allWarnings = [...parsed.warnings, ...mapped.warnings];
-      for (const w of allWarnings.slice(0, 8)) toast.warning(w);
-      if (allWarnings.length > 8) toast.warning(`${allWarnings.length - 8} more warning(s)…`);
-
-      setQueuedQuestions(drafts);
-      setActiveQuestionIndex(0);
-      setSelectedQuestionIds(new Set(drafts.map((d) => d.id)));
-      loadQuestionIntoForm(drafts[0]);
-      setBulkJsonText(raw);
-      setExtractedQuestionSummary(
-        `Bulk import · ${drafts.filter((d) => d.questionMode === "mcq").length} MCQ · ${drafts.filter((d) => d.questionMode === "sba").length} SBA`,
-      );
-
-      toast.success(
-        `Imported ${drafts.length} question(s) · ${mapped.boardsResolved} board link(s) — review queue, then Save`,
-      );
+      await commitBulkParsed(parsed, { jsonText: raw });
     } catch (error: unknown) {
       toast.error(error instanceof Error ? error.message : "Bulk import failed");
     } finally {
@@ -1203,11 +1161,94 @@ export default function CreateQuestionAI() {
     }
   };
 
-  const copyBulkExternalPrompt = async () => {
-    const prompt = buildExternalBulkQuestionsPrompt(boardOptions.map((b) => b.name));
+  const handleBulkCsv = async (file: File) => {
+    if (!guardPermission("question_bank.create_ai.bulk")) return;
+    if (!requireTaxonomy()) return;
+    if (!requireSelectedConcept()) return;
+    const name = file.name.toLowerCase();
+    if (!name.endsWith(".csv") && file.type && !file.type.includes("csv") && !file.type.includes("text")) {
+      toast.error("Please choose a .csv file");
+      return;
+    }
+    setImportingBulk(true);
+    try {
+      const text = await file.text();
+      const parsed = parseBulkQuestionsCsv(text);
+      await commitBulkParsed(parsed);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "CSV import failed");
+    } finally {
+      setImportingBulk(false);
+      if (bulkCsvFileRef.current) bulkCsvFileRef.current.value = "";
+    }
+  };
+
+  const commitBulkParsed = async (
+    parsed: ParseBulkQuestionsResult,
+    opts?: { jsonText?: string },
+  ) => {
+    if (queuedQuestions.length > 0) {
+      const ok = window.confirm(
+        `Replace the current queue of ${queuedQuestions.length} question(s) with the bulk import?`,
+      );
+      if (!ok) return;
+    }
+
+    const t = taxonomyNames();
+    const mapped = bulkItemsToDrafts(parsed.items, {
+      subject: t.subject,
+      system: t.system,
+      chapter: t.chapter,
+      topic: t.topic,
+      topicId: t.topicId,
+      concept: conceptTitle.trim(),
+      boardOptions,
+      difficulty,
+      status,
+      marks: Number(marks) || 1,
+      mkId,
+    });
+
+    const drafts: DraftQuestion[] = mapped.drafts.map((d) => ({
+      ...d,
+      topicId: t.topicId || undefined,
+      match: null,
+      matchApproved: false,
+      matchApproving: false,
+      matchApproveError: null,
+    }));
+
+    const allWarnings = [...parsed.warnings, ...mapped.warnings];
+    for (const w of allWarnings.slice(0, 8)) toast.warning(w);
+    if (allWarnings.length > 8) toast.warning(`${allWarnings.length - 8} more warning(s)…`);
+
+    setQueuedQuestions(drafts);
+    setActiveQuestionIndex(0);
+    setSelectedQuestionIds(new Set(drafts.map((d) => d.id)));
+    loadQuestionIntoForm(drafts[0]);
+    if (opts?.jsonText) setBulkJsonText(opts.jsonText);
+    setExtractedQuestionSummary(
+      `Bulk import · ${drafts.filter((d) => d.questionMode === "mcq").length} MCQ · ${drafts.filter((d) => d.questionMode === "sba").length} SBA`,
+    );
+
+    toast.success(
+      `Imported ${drafts.length} question(s) · ${mapped.boardsResolved} board link(s) — review queue, then Save`,
+    );
+  };
+
+  const copyBulkExternalPrompt = async (format: "json" | "csv" = "json") => {
+    const names = boardOptions.map((b) => b.name);
+    const prompt =
+      format === "csv"
+        ? buildExternalBulkQuestionsCsvPrompt(names)
+        : buildExternalBulkQuestionsPrompt(names);
     try {
       await navigator.clipboard.writeText(prompt);
-      toast.success("External AI prompt copied — paste into ChatGPT/Claude, then paste JSON back here");
+      toast.success(
+        format === "csv"
+          ? "CSV prompt copied — paste into ChatGPT/Claude, then upload the CSV here"
+          : "JSON prompt copied — paste into ChatGPT/Claude, then paste JSON back here",
+      );
     } catch {
       toast.error("Could not copy to clipboard");
     }
@@ -1391,16 +1432,72 @@ export default function CreateQuestionAI() {
       <Can permission="question_bank.create_ai.bulk">
         <Card className="p-4 space-y-4">
           <div>
-            <h2 className="text-sm font-semibold">Bulk JSON (no AI)</h2>
+            <h2 className="text-sm font-semibold">Bulk import (no AI)</h2>
             <p className="text-xs text-muted-foreground mt-1">
-              External AI দিয়ে JSON বানিয়ে এখানে paste করুন — Gemini ছাড়াই MCQ/SBA queue-তে যাবে। প্রতিটি
-              প্রশ্নের <code className="text-[11px]">boards</code> name দিয়ে auto-select হবে। Concept +
-              taxonomy আগে select করতে হবে।
+              JSON paste <strong>অথবা</strong> CSV upload — Gemini ছাড়াই MCQ/SBA queue-তে যাবে। প্রতিটি
+              প্রশ্নের boards name দিয়ে auto-select। Concept + taxonomy আগে select করতে হবে।
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="bulk-questions-json">Questions JSON</Label>
+            <Label className="text-xs font-medium text-muted-foreground">CSV file</Label>
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => canBulk && !importingBulk && bulkCsvFileRef.current?.click()}
+              onKeyDown={(e) =>
+                e.key === "Enter" && canBulk && !importingBulk && bulkCsvFileRef.current?.click()
+              }
+              className={[
+                "rounded-lg border-2 border-dashed p-4 text-center transition-colors max-w-xl",
+                canBulk && !importingBulk ? "cursor-pointer hover:border-primary/50" : "cursor-not-allowed opacity-50",
+                "border-muted-foreground/30",
+              ].join(" ")}
+            >
+              {importingBulk ? (
+                <Loader2 className="mx-auto h-8 w-8 mb-2 text-muted-foreground animate-spin" />
+              ) : (
+                <FileSpreadsheet className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+              )}
+              <p className="text-sm font-medium">{importingBulk ? "Importing…" : "CSV আপলোড করুন"}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Header: <code className="text-[11px]">type,stem,boards,texts,corrects,explanations</code>
+              </p>
+              <Input
+                ref={bulkCsvFileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                disabled={!canBulk || importingBulk}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void handleBulkCsv(f);
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" asChild>
+                <a href="/samples/create-question-bulk.csv" download>
+                  Download sample CSV
+                </a>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={importingBulk}
+                onClick={() => void copyBulkExternalPrompt("csv")}
+              >
+                <ClipboardCopy className="mr-2 h-4 w-4" />
+                Copy CSV prompt
+              </Button>
+            </div>
+          </div>
+
+          <div className="border-t pt-4 space-y-2">
+            <Label htmlFor="bulk-questions-json" className="text-xs font-medium text-muted-foreground">
+              JSON text
+            </Label>
             <Textarea
               id="bulk-questions-json"
               value={bulkJsonText}
@@ -1419,11 +1516,16 @@ export default function CreateQuestionAI() {
               disabled={importingBulk || !bulkJsonText.trim()}
             >
               {importingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileJson className="mr-2 h-4 w-4" />}
-              {importingBulk ? "Importing…" : "Import to queue"}
+              {importingBulk ? "Importing…" : "Import JSON"}
             </Button>
-            <Button type="button" variant="outline" onClick={() => void copyBulkExternalPrompt()} disabled={importingBulk}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void copyBulkExternalPrompt("json")}
+              disabled={importingBulk}
+            >
               <ClipboardCopy className="mr-2 h-4 w-4" />
-              Copy external AI prompt
+              Copy JSON prompt
             </Button>
             <Button type="button" variant="outline" asChild>
               <a href="/samples/create-question-bulk.json" download>

@@ -1,0 +1,3 @@
+type,stem,boards,texts,corrects,explanations
+mcq,"Regarding the mitral valve:",,"It has two cusps|It guards the right atrioventricular orifice","true|false","Anterior and posterior leaflets.|It guards the left atrioventricular orifice."
+sba,"Which structure guards the left atrioventricular orifice?",,"Tricuspid valve|Mitral valve|Aortic valve|Pulmonary valve|Eustachian valve","1","Right AV valve.|Correct — bicuspid / mitral valve.|Semilunar valve at LV outflow.|Semilunar valve at RV outflow.|IVC valve remnant."
