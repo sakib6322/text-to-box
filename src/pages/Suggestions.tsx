@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { ArrowLeft, ChevronRight, ClipboardCopy, FileJson, FileSpreadsheet, Loader2, RotateCcw, Upload } from "lucide-react";
+import { ArrowLeft, ChevronRight, ClipboardCopy, FileJson, FileSpreadsheet, Loader2, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
@@ -65,6 +65,24 @@ type Row = {
 
 type BoardOption = { id: string; name: string };
 type ConceptOption = { id: string; title: string | null };
+
+type AddDraftBox = {
+  localId: string;
+  content: string;
+  boardIds: string[];
+  createdKeyPointId: string | null;
+};
+
+const newAddDraft = (partial?: Partial<AddDraftBox>): AddDraftBox => ({
+  localId:
+    typeof crypto !== "undefined" && "randomUUID" in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`,
+  content: "",
+  boardIds: [],
+  createdKeyPointId: null,
+  ...partial,
+});
 
 function compactTaxonomy(c: ConceptJoin): string {
   if (!c) return "";
@@ -134,12 +152,9 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [editBoardIds, setEditBoardIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [addTarget, setAddTarget] = useState<{ conceptId: string; title: string } | null>(null);
-  const [addContent, setAddContent] = useState("");
-  const [addBoardIds, setAddBoardIds] = useState<string[]>([]);
-  const [addCreatedKeyPointId, setAddCreatedKeyPointId] = useState<string | null>(null);
+  const [addDrafts, setAddDrafts] = useState<AddDraftBox[]>(() => [newAddDraft()]);
   const [savingAdd, setSavingAdd] = useState(false);
   const [addBulkJsonText, setAddBulkJsonText] = useState("");
-  const [importingBulkKp, setImportingBulkKp] = useState(false);
   const addBulkCsvRef = useRef<HTMLInputElement>(null);
   const addBulkJsonRef = useRef<HTMLInputElement>(null);
   const [savingKeyPoint, setSavingKeyPoint] = useState(false);
@@ -188,7 +203,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     [search, adminView, browseStep],
   );
   useHeaderSearch(headerSearch);
-  const filtersVisible = useScrollUpVisible() && !searchFocused;
+  const filtersVisible = useScrollUpVisible() && !searchFocused && !addTarget;
 
   const subjectName = useMemo(
     () => (subjectId === "all" ? "" : subjects.find((s) => s.id === subjectId)?.name ?? ""),
@@ -391,21 +406,19 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     if (!guardPermission("suggestions.add")) return;
     if (addTarget?.conceptId === conceptId) {
       setAddTarget(null);
-      setAddCreatedKeyPointId(null);
+      setAddDrafts([newAddDraft()]);
       setAddBulkJsonText("");
       return;
     }
     setAddTarget({ conceptId, title });
-    setAddContent("");
-    setAddBoardIds([]);
-    setAddCreatedKeyPointId(null);
+    setAddDrafts([newAddDraft()]);
     setAddBulkJsonText("");
     setExpandedConceptIds((prev) => new Set(prev).add(conceptId));
   };
 
   const closeAddPanel = () => {
     setAddTarget(null);
-    setAddCreatedKeyPointId(null);
+    setAddDrafts([newAddDraft()]);
     setAddBulkJsonText("");
   };
 
@@ -608,37 +621,43 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
   };
 
-  /** Create key point if needed (for Add-box + optional questions), or update content/boards. */
+  /** Create/update the first draft box (for optional questions when only one box). */
   const ensureAddKeyPointId = async (opts?: { syncBoards?: boolean }): Promise<string> => {
     if (!addTarget) throw new Error("No concept selected");
     if (!guardPermission("suggestions.add") && !guardPermission("suggestions.edit")) {
       throw new Error("No permission");
     }
-    const content = addContent.trim();
+    const draft = addDrafts[0];
+    if (!draft) throw new Error("No key point box");
+    const content = draft.content.trim();
     if (!content) throw new Error("Key point content is required before saving questions");
     const syncBoards = opts?.syncBoards !== false;
+    const boardIds = draft.boardIds;
 
-    if (addCreatedKeyPointId) {
+    if (draft.createdKeyPointId) {
       const body: Record<string, unknown> = { content };
-      if (syncBoards) body.board_ids = addBoardIds;
-      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(addCreatedKeyPointId)}`), {
+      if (syncBoards) body.board_ids = boardIds;
+      const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(draft.createdKeyPointId)}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(body),
       });
       const j = (await r.json().catch(() => ({}))) as { error?: string };
       if (!r.ok) throw new Error(j.error ?? "Failed to update key point");
-      applyCreatedKeyPointToState(addCreatedKeyPointId, content, syncBoards ? addBoardIds : boardIdsFromLinks(
-        rows.find((r) => r.id === addCreatedKeyPointId)?.key_point_boards,
-      ));
-      return addCreatedKeyPointId;
+      applyCreatedKeyPointToState(
+        draft.createdKeyPointId,
+        content,
+        syncBoards
+          ? boardIds
+          : boardIdsFromLinks(rows.find((r) => r.id === draft.createdKeyPointId)?.key_point_boards),
+      );
+      return draft.createdKeyPointId;
     }
 
     const r = await fetch(apiUrl(`/api/concepts/${encodeURIComponent(addTarget.conceptId)}/key-points`), {
       method: "POST",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-      // Question save bumps boards via linkKeyPointBoards — avoid seeding counts here.
-      body: JSON.stringify({ content, board_ids: syncBoards ? addBoardIds : [] }),
+      body: JSON.stringify({ content, board_ids: syncBoards ? boardIds : [] }),
     });
     const j = (await r.json().catch(() => ({}))) as {
       error?: string;
@@ -653,8 +672,10 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     if (!r.ok) throw new Error(j.error ?? "Add failed");
     const created = j.key_point;
     const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
-    setAddCreatedKeyPointId(newId);
-    applyCreatedKeyPointToState(newId, content, syncBoards ? addBoardIds : [], created);
+    setAddDrafts((prev) =>
+      prev.map((d, i) => (i === 0 ? { ...d, createdKeyPointId: newId, content } : d)),
+    );
+    applyCreatedKeyPointToState(newId, content, syncBoards ? boardIds : [], created);
     return newId;
   };
 
@@ -665,6 +686,18 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       const arr = [...merged];
       if (arr.length === prev.length && arr.every((id) => prev.includes(id))) return prev;
       return arr;
+    });
+  };
+
+  const mergeFirstDraftBoards = (nextIds: string[]) => {
+    setAddDrafts((prev) => {
+      if (prev.length === 0) return prev;
+      const first = prev[0]!;
+      const merged = new Set(first.boardIds);
+      for (const id of nextIds) if (id) merged.add(id);
+      const arr = [...merged];
+      if (arr.length === first.boardIds.length && arr.every((id) => first.boardIds.includes(id))) return prev;
+      return prev.map((d, i) => (i === 0 ? { ...d, boardIds: arr } : d));
     });
   };
 
@@ -706,22 +739,51 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
           : prev,
       );
     }
-    if (addCreatedKeyPointId === update.keyPointId) {
-      setAddBoardIds(selectedIds);
+    if (addDrafts.some((d) => d.createdKeyPointId === update.keyPointId)) {
+      setAddDrafts((prev) =>
+        prev.map((d) =>
+          d.createdKeyPointId === update.keyPointId ? { ...d, boardIds: selectedIds } : d,
+        ),
+      );
     }
   };
 
   const saveAdd = async () => {
     if (!addTarget) return;
     if (!guardPermission("suggestions.add")) return;
-    const content = addContent.trim();
-    if (!content) return toast.error("Content is required");
+    const toSave = addDrafts
+      .map((d) => ({ ...d, content: d.content.trim() }))
+      .filter((d) => d.content);
+    if (!toSave.length) return toast.error("Add at least one key point with content");
     setSavingAdd(true);
     try {
-      const wasNew = !addCreatedKeyPointId;
-      await ensureAddKeyPointId({ syncBoards: true });
-      toast.success(wasNew ? "Key point added" : "Key point updated");
-      closeAddPanel();
+      let ok = 0;
+      const errors: string[] = [];
+      for (const draft of toSave) {
+        try {
+          if (draft.createdKeyPointId) {
+            const r = await fetch(apiUrl(`/api/key-points/${encodeURIComponent(draft.createdKeyPointId)}`), {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+              body: JSON.stringify({ content: draft.content, board_ids: draft.boardIds }),
+            });
+            const j = (await r.json().catch(() => ({}))) as { error?: string };
+            if (!r.ok) throw new Error(j.error ?? "Update failed");
+            applyCreatedKeyPointToState(draft.createdKeyPointId, draft.content, draft.boardIds);
+            ok++;
+            continue;
+          }
+          const created = await postOneKeyPoint(addTarget.conceptId, draft.content, draft.boardIds);
+          const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
+          applyCreatedKeyPointToState(newId, draft.content, draft.boardIds, created);
+          ok++;
+        } catch (e: unknown) {
+          errors.push(e instanceof Error ? e.message : "failed");
+        }
+      }
+      if (ok) toast.success(ok === 1 ? "Key point added" : `${ok} key points added`);
+      if (errors.length) toast.warning(`${errors.length} failed — ${errors[0]}`);
+      if (ok) closeAddPanel();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Add failed");
     } finally {
@@ -749,42 +811,25 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     return j.key_point;
   };
 
-  const importBulkKeyPoints = async (points: string[], sourceLabel: string) => {
-    if (!addTarget) return;
-    if (!guardPermission("suggestions.add")) return;
+  /** Load parsed points into UI boxes (does not call API until Save). */
+  const loadDraftBoxesFromPoints = (points: string[], sourceLabel: string) => {
     if (!points.length) {
       toast.error("No key points to import");
       return;
     }
-    setImportingBulkKp(true);
-    try {
-      let ok = 0;
-      const errors: string[] = [];
-      for (const content of points) {
-        try {
-          const created = await postOneKeyPoint(addTarget.conceptId, content, addBoardIds);
-          const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
-          applyCreatedKeyPointToState(newId, content, addBoardIds, created);
-          ok++;
-        } catch (e: unknown) {
-          errors.push(e instanceof Error ? e.message : "failed");
-        }
-      }
-      if (ok) toast.success(`${sourceLabel}: added ${ok} key point(s)`);
-      if (errors.length) toast.warning(`${errors.length} failed — ${errors[0]}`);
-      if (ok) closeAddPanel();
-    } finally {
-      setImportingBulkKp(false);
-      if (addBulkCsvRef.current) addBulkCsvRef.current.value = "";
-      if (addBulkJsonRef.current) addBulkJsonRef.current.value = "";
-    }
+    setAddDrafts(points.map((content) => newAddDraft({ content })));
+    toast.success(
+      `${sourceLabel}: ${points.length} box${points.length === 1 ? "" : "es"} ready — set boards per box, then Save`,
+    );
+    if (addBulkCsvRef.current) addBulkCsvRef.current.value = "";
+    if (addBulkJsonRef.current) addBulkJsonRef.current.value = "";
   };
 
   const handleAddBulkCsv = async (file: File) => {
     try {
       const parsed = parseKeyPointsCsv(await file.text());
       for (const w of parsed.warnings) toast.warning(w);
-      await importBulkKeyPoints(parsed.points, "CSV");
+      loadDraftBoxesFromPoints(parsed.points, "CSV");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "CSV import failed");
       if (addBulkCsvRef.current) addBulkCsvRef.current.value = "";
@@ -801,7 +846,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       const parsed = parseKeyPointsJson(raw);
       setAddBulkJsonText(raw);
       for (const w of parsed.warnings) toast.warning(w);
-      await importBulkKeyPoints(parsed.points, "JSON");
+      loadDraftBoxesFromPoints(parsed.points, "JSON");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "JSON import failed");
       if (addBulkJsonRef.current) addBulkJsonRef.current.value = "";
@@ -1439,47 +1484,28 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                     addTarget?.conceptId === g.conceptId ? (
                       <div className="space-y-4">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-semibold">Add key point</p>
+                          <p className="text-sm font-semibold">
+                            Add key point{addDrafts.length > 1 ? `s (${addDrafts.length})` : ""}
+                          </p>
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             className="h-7 text-xs"
                             onClick={closeAddPanel}
-                            disabled={savingAdd || importingBulkKp}
+                            disabled={savingAdd}
                           >
                             Close
                           </Button>
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Key point content</Label>
-                          <Textarea
-                            value={addContent}
-                            onChange={(e) => setAddContent(e.target.value)}
-                            rows={4}
-                            className="resize-y"
-                            placeholder="New key point…"
-                            disabled={importingBulkKp}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label>Boards (optional)</Label>
-                          <BoardCheckboxGroup
-                            boardOptions={boardList}
-                            selectedIds={addBoardIds}
-                            onChange={setAddBoardIds}
-                          />
-                          <p className="text-[11px] text-muted-foreground">
-                            Single Add এবং bulk key points দুটোতেই এই boards apply হবে।
-                          </p>
                         </div>
 
                         {canAdd ? (
                           <div className="space-y-3 rounded-lg border border-dashed p-3">
                             <div>
-                              <p className="text-sm font-medium">Bulk key points (no AI)</p>
+                              <p className="text-sm font-medium">Bulk load boxes (no AI)</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                CSV/JSON দিয়ে একসাথে অনেক key point — প্রতিটি আলাদা box হিসেবে create হবে।
+                                CSV/JSON আপলোড করলে এখানেই ততগুলো বক্স বসবে — প্রতিটিতে আলাদা boards
+                                select করে Save দিন।
                               </p>
                             </div>
                             <div className="space-y-2">
@@ -1489,14 +1515,10 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                 variant="outline"
                                 size="sm"
                                 className="w-full"
-                                disabled={importingBulkKp || savingAdd}
+                                disabled={savingAdd}
                                 onClick={() => addBulkCsvRef.current?.click()}
                               >
-                                {importingBulkKp ? (
-                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                  <FileSpreadsheet className="mr-2 h-4 w-4" />
-                                )}
+                                <FileSpreadsheet className="mr-2 h-4 w-4" />
                                 Upload key points CSV
                               </Button>
                               <Input
@@ -1504,7 +1526,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                 type="file"
                                 accept=".csv,text/csv"
                                 className="sr-only"
-                                disabled={importingBulkKp || savingAdd}
+                                disabled={savingAdd}
                                 onChange={(e) => {
                                   const f = e.target.files?.[0];
                                   if (f) void handleAddBulkCsv(f);
@@ -1520,7 +1542,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={importingBulkKp}
+                                  disabled={savingAdd}
                                   onClick={() => void copyAddKpPrompt("csv")}
                                 >
                                   <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
@@ -1536,30 +1558,26 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                 id="suggestions-bulk-kp-json"
                                 value={addBulkJsonText}
                                 onChange={(e) => setAddBulkJsonText(e.target.value)}
-                                rows={5}
-                                className="font-mono text-xs min-h-[90px]"
+                                rows={4}
+                                className="font-mono text-xs min-h-[80px]"
                                 placeholder='{ "key_points": ["Point one", "Point two"] }'
-                                disabled={importingBulkKp || savingAdd}
+                                disabled={savingAdd}
                               />
                               <div className="flex flex-wrap gap-2">
                                 <Button
                                   type="button"
                                   size="sm"
-                                  disabled={importingBulkKp || savingAdd || !addBulkJsonText.trim()}
+                                  disabled={savingAdd || !addBulkJsonText.trim()}
                                   onClick={() => void handleAddBulkJson()}
                                 >
-                                  {importingBulkKp ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <FileJson className="mr-2 h-4 w-4" />
-                                  )}
-                                  Import JSON
+                                  <FileJson className="mr-2 h-4 w-4" />
+                                  Load JSON boxes
                                 </Button>
                                 <Button
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={importingBulkKp || savingAdd}
+                                  disabled={savingAdd}
                                   onClick={() => addBulkJsonRef.current?.click()}
                                 >
                                   <Upload className="mr-2 h-3.5 w-3.5" />
@@ -1570,7 +1588,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                   type="file"
                                   accept=".json,application/json"
                                   className="sr-only"
-                                  disabled={importingBulkKp || savingAdd}
+                                  disabled={savingAdd}
                                   onChange={(e) => {
                                     const f = e.target.files?.[0];
                                     if (!f) return;
@@ -1587,7 +1605,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                   type="button"
                                   variant="outline"
                                   size="sm"
-                                  disabled={importingBulkKp}
+                                  disabled={savingAdd}
                                   onClick={() => void copyAddKpPrompt("json")}
                                 >
                                   <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
@@ -1603,30 +1621,115 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                           </div>
                         ) : null}
 
-                        <KeyPointQuestionsEditor
-                          keyPointId={addCreatedKeyPointId}
-                          defaultBoardIds={addBoardIds}
-                          boardOptions={boardList}
-                          concept={{
-                            subject: (
-                              rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.subject ?? ""
-                            ).trim(),
-                            system: (
-                              rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.system ?? ""
-                            ).trim(),
-                            chapter: (
-                              rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.chapter ?? ""
-                            ).trim(),
-                            topic: (
-                              rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.topic ?? ""
-                            ).trim(),
-                            concept: addTarget.title.trim(),
-                          }}
-                          resetKey={`add-${addTarget.conceptId}`}
-                          onKeyPointBoardsChange={(ids) => mergeKeyPointBoardSelection(setAddBoardIds, ids)}
-                          onKeyPointLinked={applyKeyPointLinkedUpdate}
-                          ensureKeyPointId={() => ensureAddKeyPointId({ syncBoards: false })}
-                        />
+                        <div className="space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <Label className="text-xs text-muted-foreground">Key point boxes</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              disabled={savingAdd}
+                              onClick={() => setAddDrafts((prev) => [...prev, newAddDraft()])}
+                            >
+                              <Plus className="mr-1 h-3.5 w-3.5" />
+                              Add box
+                            </Button>
+                          </div>
+                          {addDrafts.map((draft, idx) => (
+                            <div
+                              key={draft.localId}
+                              className="space-y-2 rounded-md border bg-muted/20 p-3"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-xs font-medium text-muted-foreground">
+                                  Box #{idx + 1}
+                                  {draft.createdKeyPointId ? " · linked" : ""}
+                                </p>
+                                {addDrafts.length > 1 ? (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 text-destructive"
+                                    disabled={savingAdd}
+                                    onClick={() =>
+                                      setAddDrafts((prev) => prev.filter((d) => d.localId !== draft.localId))
+                                    }
+                                    aria-label={`Remove box ${idx + 1}`}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                ) : null}
+                              </div>
+                              <Textarea
+                                value={draft.content}
+                                onChange={(e) => {
+                                  const v = e.target.value;
+                                  setAddDrafts((prev) =>
+                                    prev.map((d) =>
+                                      d.localId === draft.localId ? { ...d, content: v } : d,
+                                    ),
+                                  );
+                                }}
+                                rows={3}
+                                className="resize-y"
+                                placeholder="Key point…"
+                                disabled={savingAdd}
+                              />
+                              <div className="space-y-1.5">
+                                <Label className="text-xs">Boards for this box</Label>
+                                <BoardCheckboxGroup
+                                  boardOptions={boardList}
+                                  selectedIds={draft.boardIds}
+                                  onChange={(ids) =>
+                                    setAddDrafts((prev) =>
+                                      prev.map((d) =>
+                                        d.localId === draft.localId ? { ...d, boardIds: ids } : d,
+                                      ),
+                                    )
+                                  }
+                                  compact
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {addDrafts.length === 1 ? (
+                          <KeyPointQuestionsEditor
+                            keyPointId={addDrafts[0]?.createdKeyPointId ?? null}
+                            defaultBoardIds={addDrafts[0]?.boardIds ?? []}
+                            boardOptions={boardList}
+                            concept={{
+                              subject: (
+                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.subject ??
+                                ""
+                              ).trim(),
+                              system: (
+                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.system ??
+                                ""
+                              ).trim(),
+                              chapter: (
+                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.chapter ??
+                                ""
+                              ).trim(),
+                              topic: (
+                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.topic ?? ""
+                              ).trim(),
+                              concept: addTarget.title.trim(),
+                            }}
+                            resetKey={`add-${addTarget.conceptId}-${addDrafts[0]?.localId ?? "0"}`}
+                            onKeyPointBoardsChange={mergeFirstDraftBoards}
+                            onKeyPointLinked={applyKeyPointLinkedUpdate}
+                            ensureKeyPointId={() => ensureAddKeyPointId({ syncBoards: false })}
+                          />
+                        ) : (
+                          <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3">
+                            Optional questions একসাথে এক বক্সেই — একাধিক বক্স থাকলে আগে Save করুন, পরে Edit
+                            থেকে questions যোগ করতে পারবেন।
+                          </p>
+                        )}
 
                         <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
                           <Button
@@ -1634,18 +1737,22 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                             variant="outline"
                             size="sm"
                             onClick={closeAddPanel}
-                            disabled={savingAdd || importingBulkKp}
+                            disabled={savingAdd}
                           >
-                            {addCreatedKeyPointId ? "Close" : "Cancel"}
+                            Cancel
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             onClick={() => void saveAdd()}
-                            disabled={savingAdd || importingBulkKp || !addContent.trim()}
+                            disabled={
+                              savingAdd || !addDrafts.some((d) => d.content.trim())
+                            }
                           >
                             {savingAdd ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            {addCreatedKeyPointId ? "Save key point" : "Add"}
+                            {addDrafts.filter((d) => d.content.trim()).length > 1
+                              ? `Save all ${addDrafts.filter((d) => d.content.trim()).length}`
+                              : "Save"}
                           </Button>
                         </div>
                       </div>
