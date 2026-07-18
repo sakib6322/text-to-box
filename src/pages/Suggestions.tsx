@@ -153,6 +153,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [addTarget, setAddTarget] = useState<{ conceptId: string; title: string } | null>(null);
   const [addDrafts, setAddDrafts] = useState<AddDraftBox[]>(() => [newAddDraft()]);
+  const addDraftsRef = useRef(addDrafts);
+  addDraftsRef.current = addDrafts;
   const [savingAdd, setSavingAdd] = useState(false);
   const [addBulkJsonText, setAddBulkJsonText] = useState("");
   const addBulkCsvRef = useRef<HTMLInputElement>(null);
@@ -621,13 +623,16 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setExpandedConceptIds((prev) => new Set(prev).add(addTarget.conceptId));
   };
 
-  /** Create/update the first draft box (for optional questions when only one box). */
-  const ensureAddKeyPointId = async (opts?: { syncBoards?: boolean }): Promise<string> => {
+  /** Create/update a specific draft box (for optional questions on that box). */
+  const ensureAddKeyPointIdForDraft = async (
+    localId: string,
+    opts?: { syncBoards?: boolean },
+  ): Promise<string> => {
     if (!addTarget) throw new Error("No concept selected");
     if (!guardPermission("suggestions.add") && !guardPermission("suggestions.edit")) {
       throw new Error("No permission");
     }
-    const draft = addDrafts[0];
+    const draft = addDraftsRef.current.find((d) => d.localId === localId);
     if (!draft) throw new Error("No key point box");
     const content = draft.content.trim();
     if (!content) throw new Error("Key point content is required before saving questions");
@@ -673,7 +678,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     const created = j.key_point;
     const newId = typeof created?.id === "string" ? created.id : crypto.randomUUID();
     setAddDrafts((prev) =>
-      prev.map((d, i) => (i === 0 ? { ...d, createdKeyPointId: newId, content } : d)),
+      prev.map((d) => (d.localId === localId ? { ...d, createdKeyPointId: newId, content } : d)),
     );
     applyCreatedKeyPointToState(newId, content, syncBoards ? boardIds : [], created);
     return newId;
@@ -689,15 +694,15 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     });
   };
 
-  const mergeFirstDraftBoards = (nextIds: string[]) => {
+  const mergeDraftBoards = (localId: string, nextIds: string[]) => {
     setAddDrafts((prev) => {
-      if (prev.length === 0) return prev;
-      const first = prev[0]!;
-      const merged = new Set(first.boardIds);
+      const draft = prev.find((d) => d.localId === localId);
+      if (!draft) return prev;
+      const merged = new Set(draft.boardIds);
       for (const id of nextIds) if (id) merged.add(id);
       const arr = [...merged];
-      if (arr.length === first.boardIds.length && arr.every((id) => first.boardIds.includes(id))) return prev;
-      return prev.map((d, i) => (i === 0 ? { ...d, boardIds: arr } : d));
+      if (arr.length === draft.boardIds.length && arr.every((id) => draft.boardIds.includes(id))) return prev;
+      return prev.map((d) => (d.localId === localId ? { ...d, boardIds: arr } : d));
     });
   };
 
@@ -1692,44 +1697,39 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                                   compact
                                 />
                               </div>
+                              <KeyPointQuestionsEditor
+                                keyPointId={draft.createdKeyPointId}
+                                defaultBoardIds={draft.boardIds}
+                                boardOptions={boardList}
+                                concept={{
+                                  subject: (
+                                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts
+                                      ?.subject ?? ""
+                                  ).trim(),
+                                  system: (
+                                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts
+                                      ?.system ?? ""
+                                  ).trim(),
+                                  chapter: (
+                                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts
+                                      ?.chapter ?? ""
+                                  ).trim(),
+                                  topic: (
+                                    rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts
+                                      ?.topic ?? ""
+                                  ).trim(),
+                                  concept: addTarget.title.trim(),
+                                }}
+                                resetKey={`add-${addTarget.conceptId}-${draft.localId}`}
+                                onKeyPointBoardsChange={(ids) => mergeDraftBoards(draft.localId, ids)}
+                                onKeyPointLinked={applyKeyPointLinkedUpdate}
+                                ensureKeyPointId={() =>
+                                  ensureAddKeyPointIdForDraft(draft.localId, { syncBoards: false })
+                                }
+                              />
                             </div>
                           ))}
                         </div>
-
-                        {addDrafts.length === 1 ? (
-                          <KeyPointQuestionsEditor
-                            keyPointId={addDrafts[0]?.createdKeyPointId ?? null}
-                            defaultBoardIds={addDrafts[0]?.boardIds ?? []}
-                            boardOptions={boardList}
-                            concept={{
-                              subject: (
-                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.subject ??
-                                ""
-                              ).trim(),
-                              system: (
-                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.system ??
-                                ""
-                              ).trim(),
-                              chapter: (
-                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.chapter ??
-                                ""
-                              ).trim(),
-                              topic: (
-                                rows.find((r) => r.concept_id === addTarget.conceptId)?.concepts?.topic ?? ""
-                              ).trim(),
-                              concept: addTarget.title.trim(),
-                            }}
-                            resetKey={`add-${addTarget.conceptId}-${addDrafts[0]?.localId ?? "0"}`}
-                            onKeyPointBoardsChange={mergeFirstDraftBoards}
-                            onKeyPointLinked={applyKeyPointLinkedUpdate}
-                            ensureKeyPointId={() => ensureAddKeyPointId({ syncBoards: false })}
-                          />
-                        ) : (
-                          <p className="text-xs text-muted-foreground rounded-md border border-dashed p-3">
-                            Optional questions একসাথে এক বক্সেই — একাধিক বক্স থাকলে আগে Save করুন, পরে Edit
-                            থেকে questions যোগ করতে পারবেন।
-                          </p>
-                        )}
 
                         <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
                           <Button
