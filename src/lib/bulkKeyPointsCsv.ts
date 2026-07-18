@@ -118,6 +118,97 @@ export function parseKeyPointsCsv(raw: string): ParsedKeyPointsCsv {
   return { points, warnings };
 }
 
+function stripJsonFence(text: string): string {
+  const trimmed = text.trim();
+  const fence = trimmed.match(/^```(?:json|text)?\s*\r?\n([\s\S]*?)\r?\n```$/i);
+  return fence ? fence[1].trim() : trimmed;
+}
+
+function finalizeKeyPoints(points: string[]): ParsedKeyPointsCsv {
+  const cleaned = points.map((p) => p.trim()).filter(Boolean);
+  if (!cleaned.length) throw new Error("No key points found — add at least one entry");
+  if (cleaned.length > MAX_POINTS) {
+    throw new Error(`Too many key points (${cleaned.length}). Maximum is ${MAX_POINTS} per upload.`);
+  }
+  const warnings: string[] = [];
+  let dupes = 0;
+  for (let i = 1; i < cleaned.length; i++) {
+    if (cleaned[i] === cleaned[i - 1]) dupes++;
+  }
+  if (dupes > 0) warnings.push(`${dupes} consecutive duplicate key point(s) kept — review before save.`);
+  return { points: cleaned, warnings };
+}
+
+/**
+ * Parse Home bulk JSON: key points only (concept name typed in the UI).
+ * Accepts `{ "key_points": ["..."] }`, `{ "points": [...] }`, or a bare string array.
+ * Objects like `{ "key_point": "..." }` / `{ "content": "..." }` in an array are also accepted.
+ */
+export function parseKeyPointsJson(raw: string): ParsedKeyPointsCsv {
+  const text = stripJsonFence(stripBom(raw));
+  if (!text.trim()) throw new Error("JSON is empty");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Invalid JSON — fix syntax and try again");
+  }
+
+  let list: unknown[];
+  if (Array.isArray(parsed)) {
+    list = parsed;
+  } else if (parsed && typeof parsed === "object") {
+    const root = parsed as Record<string, unknown>;
+    const arr = root.key_points ?? root.keyPoints ?? root.points ?? root.high_yield_points;
+    if (!Array.isArray(arr)) {
+      throw new Error('Root must be an array or { "key_points": ["..."] }');
+    }
+    list = arr;
+  } else {
+    throw new Error('Root must be an array or { "key_points": ["..."] }');
+  }
+
+  const points: string[] = [];
+  for (const row of list) {
+    if (typeof row === "string" || typeof row === "number") {
+      const s = String(row).trim();
+      if (s) points.push(s);
+      continue;
+    }
+    if (row && typeof row === "object") {
+      const o = row as Record<string, unknown>;
+      const s = String(o.key_point ?? o.keyPoint ?? o.content ?? o.text ?? "").trim();
+      if (s) points.push(s);
+    }
+  }
+
+  return finalizeKeyPoints(points);
+}
+
+/** External-AI prompt for Home key-points JSON (no taxonomy / concept in output). */
+export function buildExternalKeyPointsJsonPrompt(): string {
+  return `You are preparing high-yield medical key points for a question-bank app (Home concept builder).
+
+Output ONLY valid JSON (no markdown fences, no commentary) with this exact shape:
+
+{
+  "key_points": [
+    "One clear exam-oriented fact per string",
+    "Another key point"
+  ]
+}
+
+Rules:
+- Do NOT include concept_name, subject, system, chapter, or topic (user types/selects those in the app)
+- 8–40 key points for one concept only
+- Each string: one recall line (not a paragraph)
+- Plain UTF-8 JSON only
+
+Source / concept notes:
+<<<PASTE CONCEPT NAME + TEXTBOOK NOTES HERE>>>`;
+}
+
 /** @deprecated Use parseKeyPointsCsv */
 export const parseConceptKeyPointsCsv = parseKeyPointsCsv;
 

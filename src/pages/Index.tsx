@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Plus, Trash2, Upload, Save, Sparkles, FileText, FileSpreadsheet } from "lucide-react";
+import { Loader2, Plus, Trash2, Upload, Save, Sparkles, FileText, FileSpreadsheet, ClipboardCopy, FileJson } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
@@ -26,7 +26,12 @@ import {
   prepareSourceFileForUpload,
   readFilePreview,
 } from "@/lib/sourceInput";
-import { parseKeyPointsCsv, readCsvFileAsText } from "@/lib/bulkKeyPointsCsv";
+import {
+  buildExternalKeyPointsJsonPrompt,
+  parseKeyPointsCsv,
+  parseKeyPointsJson,
+  readCsvFileAsText,
+} from "@/lib/bulkKeyPointsCsv";
 import { fetchSuggestionMatches, type SuggestionMatch } from "@/lib/suggestionMatch";
 import { Can, useCan } from "@/components/Can";
 import { guardPermission } from "@/lib/permissionGuard";
@@ -54,6 +59,8 @@ const Index = () => {
   const [isPdf, setIsPdf] = useState(false);
   const [extracting, setExtracting] = useState(false);
   const [importingCsv, setImportingCsv] = useState(false);
+  const [bulkJsonText, setBulkJsonText] = useState("");
+  const [importingJson, setImportingJson] = useState(false);
   const [matching, setMatching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -255,6 +262,16 @@ const Index = () => {
     setPoints((p) => [...p, emptyKeyPoint()]);
   };
 
+  const applyBulkKeyPoints = (points: string[], warnings: string[], sourceLabel: string) => {
+    setPoints(points.map((content) => ({ content })));
+    setSuggestionLines([]);
+    setSuggestionMatches(new Map());
+    for (const w of warnings) toast.warning(w);
+    toast.success(
+      `${sourceLabel} loaded · ${points.length} key points — type concept name, select taxonomy, then Save`,
+    );
+  };
+
   const handleBulkCsv = async (file: File) => {
     if (!guardPermission("home.bulk_csv")) return;
     const name = file.name.toLowerCase();
@@ -266,18 +283,39 @@ const Index = () => {
     try {
       const text = await readCsvFileAsText(file);
       const parsed = parseKeyPointsCsv(text);
-      setPoints(parsed.points.map((content) => ({ content })));
-      setSuggestionLines([]);
-      setSuggestionMatches(new Map());
-      for (const w of parsed.warnings) toast.warning(w);
-      toast.success(
-        `CSV loaded · ${parsed.points.length} key points — type concept name, select taxonomy, then Save`,
-      );
+      applyBulkKeyPoints(parsed.points, parsed.warnings, "CSV");
     } catch (error: unknown) {
       toast.error(toErrorMessage(error) ?? "CSV import failed");
     } finally {
       setImportingCsv(false);
       if (csvFileRef.current) csvFileRef.current.value = "";
+    }
+  };
+
+  const handleBulkJson = () => {
+    if (!guardPermission("home.bulk_csv")) return;
+    const raw = bulkJsonText.trim();
+    if (!raw) {
+      toast.error("Paste JSON first");
+      return;
+    }
+    setImportingJson(true);
+    try {
+      const parsed = parseKeyPointsJson(raw);
+      applyBulkKeyPoints(parsed.points, parsed.warnings, "JSON");
+    } catch (error: unknown) {
+      toast.error(toErrorMessage(error) ?? "JSON import failed");
+    } finally {
+      setImportingJson(false);
+    }
+  };
+
+  const copyKeyPointsExternalPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(buildExternalKeyPointsJsonPrompt());
+      toast.success("External AI prompt copied — paste JSON result into the box below");
+    } catch {
+      toast.error("Could not copy to clipboard");
     }
   };
 
@@ -293,6 +331,7 @@ const Index = () => {
     setSuggestionMatches(new Map());
     setTaxonomy(emptyTaxonomySelection());
     setPoints([emptyKeyPoint()]);
+    setBulkJsonText("");
     setDragOver(false);
     if (fileRef.current) fileRef.current.value = "";
     if (csvFileRef.current) csvFileRef.current.value = "";
@@ -514,54 +553,109 @@ const Index = () => {
           <Can permission="home.bulk_csv">
             <Card className="p-4 space-y-4">
               <div>
-                <h2 className="text-sm font-semibold">Bulk CSV (no AI)</h2>
+                <h2 className="text-sm font-semibold">Bulk import (no AI)</h2>
                 <p className="text-xs text-muted-foreground mt-1">
-                  শুধু key points autofill। Header:{" "}
-                  <code className="text-[11px]">key_point</code> — concept name UI-তে টাইপ করুন, taxonomy
-                  select করে Save।
+                  শুধু key points autofill — CSV file <strong>অথবা</strong> JSON text। Concept name UI-তে
+                  টাইপ করুন, taxonomy select করে Save।
                 </p>
               </div>
 
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => canBulkCsv && !importingCsv && csvFileRef.current?.click()}
-                onKeyDown={(e) =>
-                  e.key === "Enter" && canBulkCsv && !importingCsv && csvFileRef.current?.click()
-                }
-                className={[
-                  "rounded-lg border-2 border-dashed p-4 text-center transition-colors",
-                  canBulkCsv && !importingCsv ? "cursor-pointer hover:border-primary/50" : "cursor-not-allowed opacity-50",
-                  "border-muted-foreground/30",
-                ].join(" ")}
-              >
-                {importingCsv ? (
-                  <Loader2 className="mx-auto h-8 w-8 mb-2 text-muted-foreground animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
-                )}
-                <p className="text-sm font-medium">
-                  {importingCsv ? "Parsing CSV…" : "CSV আপলোড করুন"}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">.csv only — client-side parse</p>
-                <Input
-                  ref={csvFileRef}
-                  type="file"
-                  accept=".csv,text/csv"
-                  className="sr-only"
-                  disabled={!canBulkCsv || importingCsv}
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) void handleBulkCsv(f);
-                  }}
+              <div className="space-y-2">
+                <Label className="text-xs font-medium text-muted-foreground">CSV file</Label>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => canBulkCsv && !importingCsv && !importingJson && csvFileRef.current?.click()}
+                  onKeyDown={(e) =>
+                    e.key === "Enter" &&
+                    canBulkCsv &&
+                    !importingCsv &&
+                    !importingJson &&
+                    csvFileRef.current?.click()
+                  }
+                  className={[
+                    "rounded-lg border-2 border-dashed p-4 text-center transition-colors",
+                    canBulkCsv && !importingCsv && !importingJson
+                      ? "cursor-pointer hover:border-primary/50"
+                      : "cursor-not-allowed opacity-50",
+                    "border-muted-foreground/30",
+                  ].join(" ")}
+                >
+                  {importingCsv ? (
+                    <Loader2 className="mx-auto h-8 w-8 mb-2 text-muted-foreground animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+                  )}
+                  <p className="text-sm font-medium">
+                    {importingCsv ? "Parsing CSV…" : "CSV আপলোড করুন"}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Header: <code className="text-[11px]">key_point</code>
+                  </p>
+                  <Input
+                    ref={csvFileRef}
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="sr-only"
+                    disabled={!canBulkCsv || importingCsv || importingJson}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void handleBulkCsv(f);
+                    }}
+                  />
+                </div>
+                <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+                  <a href="/samples/home-key-points-bulk.csv" download>
+                    Download sample CSV
+                  </a>
+                </Button>
+              </div>
+
+              <div className="border-t pt-4 space-y-2">
+                <Label htmlFor="home-bulk-json" className="text-xs font-medium text-muted-foreground">
+                  JSON text
+                </Label>
+                <Textarea
+                  id="home-bulk-json"
+                  value={bulkJsonText}
+                  onChange={(e) => canBulkCsv && setBulkJsonText(e.target.value)}
+                  readOnly={!canBulkCsv || importingJson || importingCsv}
+                  rows={8}
+                  className="font-mono text-xs min-h-[120px]"
+                  placeholder='{ "key_points": ["Point one", "Point two"] }'
                 />
+                <div className="flex flex-col gap-2">
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={handleBulkJson}
+                    disabled={importingJson || importingCsv || !bulkJsonText.trim()}
+                  >
+                    {importingJson ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileJson className="mr-2 h-4 w-4" />
+                    )}
+                    {importingJson ? "Importing…" : "Import JSON"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => void copyKeyPointsExternalPrompt()}
+                    disabled={importingJson || importingCsv}
+                  >
+                    <ClipboardCopy className="mr-2 h-4 w-4" />
+                    Copy external AI prompt
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className="w-full" asChild>
+                    <a href="/samples/home-key-points-bulk.json" download>
+                      Download sample JSON
+                    </a>
+                  </Button>
+                </div>
               </div>
-
-              <Button type="button" variant="outline" size="sm" className="w-full" asChild>
-                <a href="/samples/home-key-points-bulk.csv" download>
-                  Download sample CSV
-                </a>
-              </Button>
             </Card>
           </Can>
         </section>

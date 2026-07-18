@@ -9,7 +9,7 @@ export const PERMISSION_GROUPS = [
     permissions: [
       { key: "home.view", label: "View page" },
       { key: "home.upload", label: "Upload image / PDF for extract" },
-      { key: "home.bulk_csv", label: "Bulk CSV key points (no AI)" },
+      { key: "home.bulk_csv", label: "Bulk CSV / JSON key points (no AI)" },
       { key: "home.source_text", label: "Source text input" },
       { key: "home.extract", label: "Extract concept" },
       { key: "home.add", label: "Add / save concept" },
@@ -36,6 +36,7 @@ export const PERMISSION_GROUPS = [
       { key: "question_bank.create_ai.upload", label: "Upload image / PDF for extract" },
       { key: "question_bank.create_ai.source_text", label: "Source text input" },
       { key: "question_bank.create_ai.extract", label: "AI extract" },
+      { key: "question_bank.create_ai.bulk", label: "Bulk JSON questions (no AI)" },
       { key: "question_bank.create_ai.add", label: "Add / save questions" },
       { key: "question_bank.create_ai.edit", label: "Edit draft questions" },
       { key: "question_bank.create_ai.delete", label: "Delete from queue" },

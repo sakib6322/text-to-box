@@ -1,0 +1,41 @@
+{
+  "questions": [
+    {
+      "type": "mcq",
+      "stem": "Regarding the mitral valve:",
+      "boards": [],
+      "statements": [
+        {
+          "text": "It has two cusps",
+          "correct": true,
+          "explanation": "Anterior and posterior leaflets."
+        },
+        {
+          "text": "It guards the right atrioventricular orifice",
+          "correct": false,
+          "explanation": "It guards the left atrioventricular orifice."
+        }
+      ]
+    },
+    {
+      "type": "sba",
+      "stem": "Which structure guards the left atrioventricular orifice?",
+      "boards": [],
+      "options": [
+        "Tricuspid valve",
+        "Mitral valve",
+        "Aortic valve",
+        "Pulmonary valve",
+        "Eustachian valve"
+      ],
+      "correct_index": 1,
+      "option_explanations": [
+        "Right AV valve.",
+        "Correct — bicuspid / mitral valve.",
+        "Semilunar valve at LV outflow.",
+        "Semilunar valve at RV outflow.",
+        "IVC valve remnant."
+      ]
+    }
+  ]
+}

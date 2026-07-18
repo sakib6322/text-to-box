@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronRight, FileText, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { ChevronRight, ClipboardCopy, FileJson, FileText, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -48,6 +48,11 @@ import {
   toLegacyMatch,
   type LegacySuggestionMatch,
 } from "@/lib/suggestionMatch";
+import {
+  buildExternalBulkQuestionsPrompt,
+  bulkItemsToDrafts,
+  parseBulkQuestionsJson,
+} from "@/lib/bulkQuestionsJson";
 
 type ExtractResult = {
   concept_name: string;
@@ -236,6 +241,7 @@ export default function CreateQuestionAI() {
   const canUpload = useCan("question_bank.create_ai.upload");
   const canSourceText = useCan("question_bank.create_ai.source_text");
   const canExtract = useCan("question_bank.create_ai.extract");
+  const canBulk = useCan("question_bank.create_ai.bulk");
   const canAdd = useCan("question_bank.create_ai.add");
   const canEdit = useCan("question_bank.create_ai.edit");
   const canDelete = useCan("question_bank.create_ai.delete");
@@ -249,12 +255,15 @@ export default function CreateQuestionAI() {
   const [enableHelper, setEnableHelper] = useState(true);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const bulkFileRef = useRef<HTMLInputElement>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [isPdf, setIsPdf] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [sourceText, setSourceText] = useState("");
   const [extracting, setExtracting] = useState(false);
+  const [bulkJsonText, setBulkJsonText] = useState("");
+  const [importingBulk, setImportingBulk] = useState(false);
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [points, setPoints] = useState<ApprovedPoint[]>([]);
 
@@ -1127,6 +1136,83 @@ export default function CreateQuestionAI() {
     loadQuestionIntoForm(q);
   };
 
+  const handleBulkImport = async (rawOverride?: string) => {
+    if (!guardPermission("question_bank.create_ai.bulk")) return;
+    if (!requireTaxonomy()) return;
+    if (!requireSelectedConcept()) return;
+    const raw = (rawOverride ?? bulkJsonText).trim();
+    if (!raw) {
+      toast.error("Paste JSON or upload a .json file first");
+      return;
+    }
+    if (queuedQuestions.length > 0) {
+      const ok = window.confirm(
+        `Replace the current queue of ${queuedQuestions.length} question(s) with the bulk import?`,
+      );
+      if (!ok) return;
+    }
+
+    setImportingBulk(true);
+    try {
+      const parsed = parseBulkQuestionsJson(raw);
+      const t = taxonomyNames();
+      const mapped = bulkItemsToDrafts(parsed.items, {
+        subject: t.subject,
+        system: t.system,
+        chapter: t.chapter,
+        topic: t.topic,
+        topicId: t.topicId,
+        concept: conceptTitle.trim(),
+        boardOptions,
+        difficulty,
+        status,
+        marks: Number(marks) || 1,
+        mkId,
+      });
+
+      const drafts: DraftQuestion[] = mapped.drafts.map((d) => ({
+        ...d,
+        topicId: t.topicId || undefined,
+        match: null,
+        matchApproved: false,
+        matchApproving: false,
+        matchApproveError: null,
+      }));
+
+      const allWarnings = [...parsed.warnings, ...mapped.warnings];
+      for (const w of allWarnings.slice(0, 8)) toast.warning(w);
+      if (allWarnings.length > 8) toast.warning(`${allWarnings.length - 8} more warning(s)…`);
+
+      setQueuedQuestions(drafts);
+      setActiveQuestionIndex(0);
+      setSelectedQuestionIds(new Set(drafts.map((d) => d.id)));
+      loadQuestionIntoForm(drafts[0]);
+      setBulkJsonText(raw);
+      setExtractedQuestionSummary(
+        `Bulk import · ${drafts.filter((d) => d.questionMode === "mcq").length} MCQ · ${drafts.filter((d) => d.questionMode === "sba").length} SBA`,
+      );
+
+      toast.success(
+        `Imported ${drafts.length} question(s) · ${mapped.boardsResolved} board link(s) — review queue, then Save`,
+      );
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Bulk import failed");
+    } finally {
+      setImportingBulk(false);
+      if (bulkFileRef.current) bulkFileRef.current.value = "";
+    }
+  };
+
+  const copyBulkExternalPrompt = async () => {
+    const prompt = buildExternalBulkQuestionsPrompt(boardOptions.map((b) => b.name));
+    try {
+      await navigator.clipboard.writeText(prompt);
+      toast.success("External AI prompt copied — paste into ChatGPT/Claude, then paste JSON back here");
+    } catch {
+      toast.error("Could not copy to clipboard");
+    }
+  };
+
   const buildCurrentDraftFromForm = (): DraftQuestion => {
     const t = taxonomyNames();
     const existing = queuedQuestions[activeQuestionIndex];
@@ -1301,6 +1387,81 @@ export default function CreateQuestionAI() {
         </div>
         </Can>
       </Card>
+
+      <Can permission="question_bank.create_ai.bulk">
+        <Card className="p-4 space-y-4">
+          <div>
+            <h2 className="text-sm font-semibold">Bulk JSON (no AI)</h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              External AI দিয়ে JSON বানিয়ে এখানে paste করুন — Gemini ছাড়াই MCQ/SBA queue-তে যাবে। প্রতিটি
+              প্রশ্নের <code className="text-[11px]">boards</code> name দিয়ে auto-select হবে। Concept +
+              taxonomy আগে select করতে হবে।
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-questions-json">Questions JSON</Label>
+            <Textarea
+              id="bulk-questions-json"
+              value={bulkJsonText}
+              onChange={(e) => canBulk && setBulkJsonText(e.target.value)}
+              readOnly={!canBulk || importingBulk}
+              rows={10}
+              className="font-mono text-xs min-h-[160px]"
+              placeholder='{ "questions": [ { "type": "mcq", "stem": "...", "boards": [], "statements": [...] }, ... ] }'
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleBulkImport()}
+              disabled={importingBulk || !bulkJsonText.trim()}
+            >
+              {importingBulk ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileJson className="mr-2 h-4 w-4" />}
+              {importingBulk ? "Importing…" : "Import to queue"}
+            </Button>
+            <Button type="button" variant="outline" onClick={() => void copyBulkExternalPrompt()} disabled={importingBulk}>
+              <ClipboardCopy className="mr-2 h-4 w-4" />
+              Copy external AI prompt
+            </Button>
+            <Button type="button" variant="outline" asChild>
+              <a href="/samples/create-question-bulk.json" download>
+                Download sample JSON
+              </a>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={importingBulk}
+              onClick={() => bulkFileRef.current?.click()}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Upload .json
+            </Button>
+            <Input
+              ref={bulkFileRef}
+              type="file"
+              accept=".json,application/json"
+              className="sr-only"
+              disabled={!canBulk || importingBulk}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                void (async () => {
+                  try {
+                    const text = await f.text();
+                    setBulkJsonText(text);
+                    await handleBulkImport(text);
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : "Failed to read file");
+                  }
+                })();
+              }}
+            />
+          </div>
+        </Card>
+      </Can>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
         <Card className="p-4">
