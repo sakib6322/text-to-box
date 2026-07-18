@@ -23,7 +23,7 @@ export const PERMISSION_GROUPS = [
     label: "Suggestions",
     permissions: [
       { key: "suggestions.view", label: "View page" },
-      { key: "suggestions.add", label: "Add key point" },
+      { key: "suggestions.add", label: "Add key point (incl. bulk CSV/JSON)" },
       { key: "suggestions.edit", label: "Edit key point" },
       { key: "suggestions.delete", label: "Delete key point" },
     ],

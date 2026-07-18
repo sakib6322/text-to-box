@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { apiUrl } from "@/lib/apiBase";
+import { apiUrl, apiFetch } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
 import { guardPermission } from "@/lib/permissionGuard";
 import { useCan } from "@/components/Can";
@@ -31,6 +31,7 @@ import {
   type ExtractedQuestion,
   type TfItem,
 } from "@/lib/questionDrafts";
+import { BulkQuestionsImportPanel } from "@/components/BulkQuestionsImportPanel";
 
 type ConceptCtx = {
   subject: string;
@@ -97,9 +98,33 @@ export function KeyPointQuestionsEditor({
   const [sbaCorrect, setSbaCorrect] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [summary, setSummary] = useState<string | null>(null);
+  const [fetchedBoards, setFetchedBoards] = useState<BoardOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await apiFetch("/api/boards");
+        const j = (await r.json().catch(() => ({}))) as { boards?: BoardOption[] };
+        if (cancelled || !r.ok || !Array.isArray(j.boards)) return;
+        setFetchedBoards(
+          j.boards
+            .map((b) => ({ id: String(b.id ?? "").trim(), name: String(b.name ?? "").trim() }))
+            .filter((b) => b.id && b.name),
+        );
+      } catch {
+        /* non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const effectiveBoardOptions = boardOptions.length > 0 ? boardOptions : fetchedBoards;
 
   const boardNamesFor = (ids: string[]) =>
-    ids.map((id) => boardOptions.find((b) => b.id === id)?.name ?? "").filter(Boolean);
+    ids.map((id) => effectiveBoardOptions.find((b) => b.id === id)?.name ?? "").filter(Boolean);
 
   useEffect(() => {
     setOpen(false);
@@ -519,7 +544,7 @@ export function KeyPointQuestionsEditor({
           >
             <span>Add questions (optional)</span>
             <span className="text-xs font-normal text-muted-foreground">
-              {open ? "Hide" : "Show"} · AI extract or manual
+              {open ? "Hide" : "Show"} · AI, bulk, or manual
             </span>
           </button>
         </CollapsibleTrigger>
@@ -571,6 +596,26 @@ export function KeyPointQuestionsEditor({
                 </>
               ) : null}
             </div>
+
+            <BulkQuestionsImportPanel
+              boardOptions={effectiveBoardOptions}
+              concept={concept}
+              difficulty={difficulty}
+              status={status}
+              marks={Number(marks) || 1}
+              queueLength={queuedQuestions.length}
+              onImport={(drafts) => {
+                if (!drafts.length) return;
+                setQueuedQuestions(drafts);
+                setActiveQuestionIndex(0);
+                loadQuestionIntoForm(drafts[0]!);
+                syncKeyPointBoardsFromQuestions(drafts, 0, drafts[0]?.boardIds ?? []);
+                const mcqN = drafts.filter((d) => d.questionMode === "mcq").length;
+                const sbaN = drafts.filter((d) => d.questionMode === "sba").length;
+                setSummary(`Bulk · ${mcqN} MCQ · ${sbaN} SBA`);
+                setOpen(true);
+              }}
+            />
 
             {summary ? (
               <p className="text-xs text-muted-foreground">
@@ -631,7 +676,7 @@ export function KeyPointQuestionsEditor({
                     Each question can have different boards. Select the question in the queue first.
                   </p>
                   <BoardCheckboxGroup
-                    boardOptions={boardOptions}
+                    boardOptions={effectiveBoardOptions}
                     selectedIds={selectedBoardIds}
                     onChange={setActiveBoardIds}
                     compact
