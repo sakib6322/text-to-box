@@ -195,6 +195,18 @@ export type LandingFaqAppearance = {
   items: LandingFaqItem[];
 };
 
+/** Why PG Diary feature / testimonial cards on the landing about section. */
+export type LandingWhyItem = {
+  id: string;
+  /** Lucide icon name (e.g. Brain, PencilRuler) or a CSS class for an icon font */
+  iconClass: string;
+  text: string;
+  iconColor: string;
+  iconBg: string;
+  textColor: string;
+  cardBg: string;
+};
+
 /** Public course landing — colors + copy (shared, not per-device). */
 export type LandingPageAppearance = {
   /** Page background gradient stops */
@@ -244,6 +256,11 @@ export type LandingPageAppearance = {
   aboutEyebrow: string;
   aboutTitle: string;
   aboutBody: string;
+  /** Continuous Why-card carousel */
+  whyItems: LandingWhyItem[];
+  whyAutoplay: boolean;
+  whyIntervalSec: number;
+  whyTransitionSec: number;
   fabLabel: string;
   footerNote: string;
 };
@@ -611,19 +628,105 @@ export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {
     routineLabel: "Routine",
     routineEmpty: "এখনো কোনো রুটিন সেট করা হয়নি।",
     aboutEyebrow: "Why PG Diary",
-    aboutTitle: "",
+    aboutTitle: "কেন PG Diary বেছে নিবেন?",
     aboutBody: "",
+    whyItems: overrides.whyItems ?? defaultWhyItems(),
+    whyAutoplay: true,
+    whyIntervalSec: 3,
+    whyTransitionSec: 0.55,
     fabLabel: "সরাসরি দেখুন",
     footerNote: "PG Diary",
     ...overrides,
   };
 }
 
+export function defaultWhyItems(): LandingWhyItem[] {
+  return [
+    {
+      id: "why-1",
+      iconClass: "PencilRuler",
+      text: "ভর্তি পরীক্ষার পূর্ণ প্রস্তুতি",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-2",
+      iconClass: "Brain",
+      text: "বিষয়ভিত্তিক সহজবোধ্য ও কার্যকরী পাঠদান",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-3",
+      iconClass: "ClipboardCheck",
+      text: "নিয়মিত মডেল টেস্ট এবং ফলাফল বিশ্লেষণ",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-4",
+      iconClass: "GraduationCap",
+      text: "পরামর্শ ও গাইডলাইন",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-5",
+      iconClass: "BookOpen",
+      text: "সিলেবাস-ম্যাপড হাই-ইল্ড টপিক",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-6",
+      iconClass: "Target",
+      text: "ধাপে ধাপে অগ্রগতি ট্র্যাকিং",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+  ];
+}
+
+export function newWhyId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `why-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function normalizeWhyItem(raw: unknown, fallbackId: string): LandingWhyItem | null {
+  if (!raw || typeof raw !== "object") return null;
+  const it = raw as Partial<LandingWhyItem>;
+  if (typeof it.text !== "string") return null;
+  return {
+    id: typeof it.id === "string" && it.id.trim() ? it.id : fallbackId,
+    iconClass: typeof it.iconClass === "string" ? it.iconClass.trim() : "Sparkles",
+    text: it.text,
+    iconColor: typeof it.iconColor === "string" && it.iconColor.trim() ? it.iconColor : "#0ea5e9",
+    iconBg: typeof it.iconBg === "string" && it.iconBg.trim() ? it.iconBg : "rgba(255,255,255,0.92)",
+    textColor: typeof it.textColor === "string" && it.textColor.trim() ? it.textColor : "#ecfeff",
+    cardBg: typeof it.cardBg === "string" && it.cardBg.trim() ? it.cardBg : "transparent",
+  };
+}
+
 export function mergeLandingPage(base: LandingPageAppearance, patch: unknown): LandingPageAppearance {
   if (!patch || typeof patch !== "object") return base;
-  const p = patch as Partial<LandingPageAppearance>;
+  const p = patch as Partial<LandingPageAppearance> & { whyItems?: unknown };
   const next = { ...base };
   for (const key of Object.keys(base) as (keyof LandingPageAppearance)[]) {
+    if (key === "whyItems") continue;
     const val = p[key];
     if (typeof val === "string" && typeof base[key] === "string") {
       (next as Record<string, unknown>)[key] = val;
@@ -639,6 +742,11 @@ export function mergeLandingPage(base: LandingPageAppearance, patch: unknown): L
     p.featuredTransition === "scale"
   ) {
     next.featuredTransition = p.featuredTransition;
+  }
+  if (Array.isArray(p.whyItems)) {
+    next.whyItems = p.whyItems
+      .map((it, i) => normalizeWhyItem(it, `why-${i + 1}`))
+      .filter((it): it is LandingWhyItem => it != null);
   }
   return next;
 }
@@ -658,6 +766,7 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
     "--pg-faq-card-bg": lp.faqCardBg,
     "--pg-featured-shine-sec": `${Math.max(1, lp.featuredShineSec || 6)}s`,
     "--pg-featured-transition-sec": `${Math.max(0.1, lp.featuredTransitionSec || 0.45)}s`,
+    "--pg-why-transition-sec": `${Math.max(0.15, lp.whyTransitionSec || 0.55)}s`,
   };
 }
 

@@ -4,6 +4,7 @@ import { ArrowRight, BookOpen, CalendarDays, ChevronRight, Headphones, Menu, Pla
 import { apiUrl } from "@/lib/apiBase";
 import { getSession, isAuthenticated } from "@/lib/auth";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { WhyCarousel } from "@/components/WhyCarousel";
 import { landingPageStyleVars, type LandingFaqItem } from "@/lib/uiAppearance";
 
 type CourseRoutine = {
@@ -372,12 +373,24 @@ export default function CourseLanding() {
           </div>
         </section>
 
-        <section id="about" className="pg-glass-panel">
-          <div className="mx-auto max-w-3xl px-4 py-14 text-center sm:px-6 sm:py-16">
+        <section id="about" className="pg-glass-panel pg-why-section">
+          <div className="mx-auto max-w-6xl px-4 py-14 text-center sm:px-6 sm:py-16">
             <p className="pg-eyebrow mx-auto justify-center">{lp.aboutEyebrow}</p>
             {lp.aboutTitle.trim() ? <h2 className="pg-section-title mt-3">{lp.aboutTitle}</h2> : null}
             {lp.aboutBody.trim() ? (
-              <p className="pg-section-copy mt-3 text-sm leading-relaxed sm:text-base">{lp.aboutBody}</p>
+              <p className="pg-section-copy mx-auto mt-3 max-w-3xl text-sm leading-relaxed sm:text-base">
+                {lp.aboutBody}
+              </p>
+            ) : null}
+            {(lp.whyItems?.filter((it) => it.text.trim()).length ?? 0) > 0 ? (
+              <div className="mt-10 sm:mt-12">
+                <WhyCarousel
+                  items={lp.whyItems.filter((it) => it.text.trim())}
+                  autoplay={lp.whyAutoplay !== false}
+                  intervalSec={lp.whyIntervalSec || 3}
+                  transitionSec={lp.whyTransitionSec || 0.55}
+                />
+              </div>
             ) : null}
           </div>
         </section>

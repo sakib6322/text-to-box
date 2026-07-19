@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { COURSE_PLAN_META, COURSE_PLAN_SECTIONS } from "@/lib/courseMappingPlan";
 import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
+import { CountUp } from "@/components/CountUp";
 
 const QUICK_LINKS = [
   { to: "/admin/courses", label: "Courses", icon: BookOpen, desc: "Create & publish programs" },
@@ -115,19 +116,19 @@ export default function AdminDashboard() {
             Courses
           </div>
           <p className="mt-3 text-3xl font-bold tabular-nums">
-            {statsLoading ? "—" : stats.courses.total}
+            {statsLoading ? "—" : <CountUp value={stats.courses.total} delayMs={0} />}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-lg border bg-muted/30 p-2.5">
               <p className="text-muted-foreground">Published</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                {statsLoading ? "—" : stats.courses.published}
+                {statsLoading ? "—" : <CountUp value={stats.courses.published} delayMs={180} />}
               </p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-2.5">
               <p className="text-muted-foreground">Unpublished</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                {statsLoading ? "—" : stats.courses.unpublished}
+                {statsLoading ? "—" : <CountUp value={stats.courses.unpublished} delayMs={360} />}
               </p>
             </div>
           </div>
@@ -142,8 +143,14 @@ export default function AdminDashboard() {
             Enrollments
           </div>
           <p className="mt-3 text-3xl font-bold tabular-nums">
-            {statsLoading ? "—" : stats.enrollments.total}
-            <span className="ml-2 text-sm font-normal text-muted-foreground">total requests</span>
+            {statsLoading ? (
+              "—"
+            ) : (
+              <>
+                <CountUp value={stats.enrollments.total} delayMs={520} />
+                <span className="ml-2 text-sm font-normal text-muted-foreground">total requests</span>
+              </>
+            )}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
             <div className="rounded-lg border bg-muted/30 p-2.5">
@@ -151,7 +158,7 @@ export default function AdminDashboard() {
                 <FileText className="h-3 w-3" /> Enrolled
               </p>
               <p className="mt-1 text-lg font-semibold tabular-nums">
-                {statsLoading ? "—" : stats.enrollments.total}
+                {statsLoading ? "—" : <CountUp value={stats.enrollments.total} delayMs={700} />}
               </p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-2.5">
@@ -159,7 +166,7 @@ export default function AdminDashboard() {
                 <Clock3 className="h-3 w-3" /> Pending
               </p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-amber-700 dark:text-amber-400">
-                {statsLoading ? "—" : stats.enrollments.pending}
+                {statsLoading ? "—" : <CountUp value={stats.enrollments.pending} delayMs={880} />}
               </p>
             </div>
             <div className="rounded-lg border bg-muted/30 p-2.5 col-span-2 sm:col-span-1">
@@ -167,7 +174,7 @@ export default function AdminDashboard() {
                 <CheckCircle2 className="h-3 w-3" /> Approved
               </p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                {statsLoading ? "—" : stats.enrollments.approved}
+                {statsLoading ? "—" : <CountUp value={stats.enrollments.approved} delayMs={1060} />}
               </p>
             </div>
           </div>

@@ -1303,6 +1303,114 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   color: #67e8f9;
 }
 
+.pg-why-section {
+  overflow: hidden;
+}
+
+.pg-why-carousel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pg-why-viewport {
+  width: 100%;
+  overflow: hidden;
+  margin-inline: auto;
+  cursor: pointer;
+  border-radius: 0.75rem;
+}
+
+.pg-why-carousel.is-paused .pg-why-viewport {
+  outline: 1px solid rgba(103, 232, 249, 0.35);
+  outline-offset: 2px;
+}
+
+.pg-why-nav {
+  flex-shrink: 0;
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--pg-text, #ecfeff);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.pg-why-nav:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(103, 232, 249, 0.55);
+}
+
+.pg-why-nav:active {
+  transform: scale(0.96);
+}
+
+@media (max-width: 639px) {
+  .pg-why-nav {
+    height: 2.15rem;
+    width: 2.15rem;
+  }
+}
+
+.pg-why-track {
+  display: flex;
+  will-change: transform;
+}
+
+.pg-why-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 1rem;
+  padding: 0.75rem 0.85rem 0.5rem;
+  text-align: center;
+  pointer-events: none;
+  user-select: none;
+}
+
+.pg-why-icon {
+  display: flex;
+  height: 4.25rem;
+  width: 4.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+@media (min-width: 768px) {
+  .pg-why-icon {
+    height: 4.75rem;
+    width: 4.75rem;
+    border-radius: 1.15rem;
+  }
+}
+
+.pg-why-text {
+  margin: 0;
+  max-width: 11.5rem;
+  font-family: "DM Sans", "Segoe UI", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+}
+
+@media (min-width: 768px) {
+  .pg-why-text {
+    max-width: 12.5rem;
+    font-size: 1rem;
+  }
+}
+
 .pg-landing-footer {
   position: relative;
   z-index: 20;

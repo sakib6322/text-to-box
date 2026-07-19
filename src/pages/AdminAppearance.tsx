@@ -15,10 +15,12 @@ import {
   defaultUiAppearance,
   detectDeviceKey,
   newFaqId,
+  newWhyId,
   type DeviceKey,
   type LandingFaqAppearance,
   type LandingFaqItem,
   type LandingPageAppearance,
+  type LandingWhyItem,
   type SidebarLabels,
   type StoryDialogWidth,
   type UiAppearance,
@@ -320,6 +322,35 @@ export default function AdminAppearance() {
           : it,
       ),
     );
+  };
+
+  const whyItems = lp.whyItems ?? [];
+
+  const setWhyItems = (items: LandingWhyItem[]) => {
+    updateLandingPage("whyItems", items);
+  };
+
+  const addWhyItem = () => {
+    setWhyItems([
+      ...whyItems,
+      {
+        id: newWhyId(),
+        iconClass: "Sparkles",
+        text: "",
+        iconColor: "#0ea5e9",
+        iconBg: "rgba(255, 255, 255, 0.92)",
+        textColor: "#ecfeff",
+        cardBg: "transparent",
+      },
+    ]);
+  };
+
+  const updateWhyItem = (id: string, patch: Partial<LandingWhyItem>) => {
+    setWhyItems(whyItems.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  };
+
+  const removeWhyItem = (id: string) => {
+    setWhyItems(whyItems.filter((it) => it.id !== id));
   };
 
   const copyFrom = (from: DeviceKey) => {
@@ -1292,7 +1323,7 @@ export default function AdminAppearance() {
                   ["hero", "Hero"],
                   ["featured", "Featured card"],
                   ["courses", "Courses"],
-                  ["about", "About"],
+                  ["about", "Why / About"],
                   ["faq", "FAQ"],
                   ["footer", "Footer"],
                 ] as const
@@ -1534,20 +1565,128 @@ export default function AdminAppearance() {
             ) : null}
 
             {landingSection === "about" ? (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <TextField
                   label="Eyebrow"
                   value={lp.aboutEyebrow}
                   onChange={(v) => updateLandingPage("aboutEyebrow", v)}
                 />
-                <TextField label="Title (optional)" value={lp.aboutTitle} onChange={(v) => updateLandingPage("aboutTitle", v)} />
+                <TextField label="Title" value={lp.aboutTitle} onChange={(v) => updateLandingPage("aboutTitle", v)} />
                 <Field label="Body (optional)">
                   <Textarea
                     value={lp.aboutBody}
                     onChange={(e) => updateLandingPage("aboutBody", e.target.value)}
-                    rows={4}
+                    rows={3}
                   />
                 </Field>
+
+                <div className="space-y-3 rounded-lg border p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Why cards carousel</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Desktop shows 4 cards at a time, mobile shows 2. Advances one card continuously.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <BoolField
+                      label="Autoplay"
+                      checked={lp.whyAutoplay !== false}
+                      onChange={(v) => updateLandingPage("whyAutoplay", v)}
+                    />
+                    <NumberField
+                      label="Interval (sec)"
+                      value={lp.whyIntervalSec || 3}
+                      min={1.5}
+                      max={20}
+                      step={0.5}
+                      onChange={(n) => updateLandingPage("whyIntervalSec", n)}
+                    />
+                    <NumberField
+                      label="Transition (sec)"
+                      value={lp.whyTransitionSec || 0.55}
+                      min={0.15}
+                      max={2}
+                      step={0.05}
+                      onChange={(n) => updateLandingPage("whyTransitionSec", n)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Cards ({whyItems.length})
+                  </p>
+                  <Button type="button" size="sm" className="gap-1" onClick={addWhyItem}>
+                    <Plus className="h-4 w-4" /> Add card
+                  </Button>
+                </div>
+
+                {whyItems.length === 0 ? (
+                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No Why cards yet. Add cards with an icon class, text, and colors.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {whyItems.map((item, idx) => (
+                      <Card key={item.id} className="space-y-3 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">Card {idx + 1}</p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => removeWhyItem(item.id)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <TextField
+                            label="Icon class / Lucide name"
+                            value={item.iconClass}
+                            onChange={(v) => updateWhyItem(item.id, { iconClass: v })}
+                            hint="e.g. Brain, PencilRuler, GraduationCap — or a CSS icon class"
+                          />
+                          <Field label="Text">
+                            <Textarea
+                              value={item.text}
+                              onChange={(e) => updateWhyItem(item.id, { text: e.target.value })}
+                              rows={2}
+                              placeholder="কার্ডের লেখা…"
+                            />
+                          </Field>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <ColorField
+                            label="Icon color"
+                            value={item.iconColor}
+                            onChange={(v) => updateWhyItem(item.id, { iconColor: v })}
+                          />
+                          <ColorField
+                            label="Icon background"
+                            value={item.iconBg}
+                            onChange={(v) => updateWhyItem(item.id, { iconBg: v })}
+                          />
+                          <ColorField
+                            label="Text color"
+                            value={item.textColor}
+                            onChange={(v) => updateWhyItem(item.id, { textColor: v })}
+                          />
+                          <ColorField
+                            label="Card background"
+                            value={item.cardBg.startsWith("#") ? item.cardBg : "#ffffff"}
+                            onChange={(v) => updateWhyItem(item.id, { cardBg: v })}
+                          />
+                        </div>
+                        <TextField
+                          label="Card background (CSS)"
+                          value={item.cardBg}
+                          onChange={(v) => updateWhyItem(item.id, { cardBg: v })}
+                          hint="e.g. transparent, rgba(255,255,255,0.08), #ffffff"
+                        />
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : null}
 

@@ -359,11 +359,88 @@ function defaultLandingPage(overrides = {}) {
     routineLabel: "Routine",
     routineEmpty: "এখনো কোনো রুটিন সেট করা হয়নি।",
     aboutEyebrow: "Why PG Diary",
-    aboutTitle: "",
+    aboutTitle: "কেন PG Diary বেছে নিবেন?",
     aboutBody: "",
+    whyItems: overrides.whyItems ?? defaultWhyItems(),
+    whyAutoplay: true,
+    whyIntervalSec: 3,
+    whyTransitionSec: 0.55,
     fabLabel: "সরাসরি দেখুন",
     footerNote: "PG Diary",
     ...overrides,
+  };
+}
+
+function defaultWhyItems() {
+  return [
+    {
+      id: "why-1",
+      iconClass: "PencilRuler",
+      text: "ভর্তি পরীক্ষার পূর্ণ প্রস্তুতি",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-2",
+      iconClass: "Brain",
+      text: "বিষয়ভিত্তিক সহজবোধ্য ও কার্যকরী পাঠদান",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-3",
+      iconClass: "ClipboardCheck",
+      text: "নিয়মিত মডেল টেস্ট এবং ফলাফল বিশ্লেষণ",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-4",
+      iconClass: "GraduationCap",
+      text: "পরামর্শ ও গাইডলাইন",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-5",
+      iconClass: "BookOpen",
+      text: "সিলেবাস-ম্যাপড হাই-ইল্ড টপিক",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+    {
+      id: "why-6",
+      iconClass: "Target",
+      text: "ধাপে ধাপে অগ্রগতি ট্র্যাকিং",
+      iconColor: "#0ea5e9",
+      iconBg: "rgba(255, 255, 255, 0.92)",
+      textColor: "#ecfeff",
+      cardBg: "transparent",
+    },
+  ];
+}
+
+function normalizeWhyItem(raw, fallbackId) {
+  if (!raw || typeof raw !== "object") return null;
+  if (typeof raw.text !== "string") return null;
+  return {
+    id: typeof raw.id === "string" && raw.id.trim() ? raw.id : fallbackId,
+    iconClass: typeof raw.iconClass === "string" ? raw.iconClass.trim() : "Sparkles",
+    text: raw.text,
+    iconColor: typeof raw.iconColor === "string" && raw.iconColor.trim() ? raw.iconColor : "#0ea5e9",
+    iconBg: typeof raw.iconBg === "string" && raw.iconBg.trim() ? raw.iconBg : "rgba(255,255,255,0.92)",
+    textColor: typeof raw.textColor === "string" && raw.textColor.trim() ? raw.textColor : "#ecfeff",
+    cardBg: typeof raw.cardBg === "string" && raw.cardBg.trim() ? raw.cardBg : "transparent",
   };
 }
 
@@ -371,12 +448,18 @@ function mergeLandingPage(base, patch) {
   if (!patch || typeof patch !== "object") return base;
   const next = { ...base };
   for (const key of Object.keys(base)) {
+    if (key === "whyItems") continue;
     const val = patch[key];
     if (typeof val === "string" && typeof base[key] === "string") next[key] = val;
     else if (typeof val === "number" && typeof base[key] === "number" && Number.isFinite(val)) next[key] = val;
     else if (typeof val === "boolean" && typeof base[key] === "boolean") next[key] = val;
   }
   if (valIsTransition(patch.featuredTransition)) next.featuredTransition = patch.featuredTransition;
+  if (Array.isArray(patch.whyItems)) {
+    next.whyItems = patch.whyItems
+      .map((it, i) => normalizeWhyItem(it, `why-${i + 1}`))
+      .filter(Boolean);
+  }
   return next;
 }
 
