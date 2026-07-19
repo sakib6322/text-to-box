@@ -35,6 +35,7 @@ type Props = {
 
 /** Continuous Why-cards: 4 visible on desktop, 2 on mobile; advances one card at a time. */
 export function WhyCarousel({ items, autoplay, intervalSec, transitionSec }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
   const [instant, setInstant] = useState(false);
@@ -94,6 +95,19 @@ export function WhyCarousel({ items, autoplay, intervalSec, transitionSec }: Pro
     return () => window.clearInterval(t);
   }, [autoplay, paused, count, intervalSec, inView, tabVisible]);
 
+  // Click outside carousel → resume autoplay
+  useEffect(() => {
+    if (!paused) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const root = rootRef.current;
+      if (!root) return;
+      if (e.target instanceof Node && root.contains(e.target)) return;
+      setPaused(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [paused]);
+
   useEffect(() => {
     if (count === 0 || index < count || jumpingRef.current) return;
     const dur = Math.max(150, (transitionSec || 0.55) * 1000);
@@ -143,7 +157,7 @@ export function WhyCarousel({ items, autoplay, intervalSec, transitionSec }: Pro
   };
 
   return (
-    <div className={`pg-why-carousel${paused ? " is-paused" : ""}`}>
+    <div ref={rootRef} className={`pg-why-carousel${paused ? " is-paused" : ""}`}>
       <button type="button" className="pg-why-nav pg-why-nav-prev" aria-label="Previous" onClick={goPrev}>
         <ChevronLeft className="h-5 w-5" strokeWidth={2.25} />
       </button>
@@ -153,8 +167,12 @@ export function WhyCarousel({ items, autoplay, intervalSec, transitionSec }: Pro
         className="pg-why-viewport"
         style={{ ["--pg-why-visible" as string]: String(visible) }}
         aria-roledescription="carousel"
-        aria-label={paused ? "Carousel paused — use arrows or click to resume" : "Carousel playing — click to pause"}
-        onClick={() => setPaused((p) => !p)}
+        aria-label={
+          paused
+            ? "Carousel paused — use arrows, or click outside to resume"
+            : "Carousel playing — click to pause"
+        }
+        onClick={() => setPaused(true)}
         role="group"
       >
         <div className="pg-why-track" style={trackStyle}>
