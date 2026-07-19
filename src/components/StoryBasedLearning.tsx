@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
-import { BookMarked, Loader2 } from "lucide-react";
+import { BookMarked, ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CKEditorField } from "@/components/CKEditorField";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -16,15 +10,7 @@ import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasStoryContent, withStoryHtml } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { cn } from "@/lib/utils";
-import { resolveDeviceTheme, type StoryDialogWidth } from "@/lib/uiAppearance";
-
-const DIALOG_WIDTH_CLASS: Record<StoryDialogWidth, string> = {
-  md: "max-w-3xl",
-  lg: "max-w-4xl",
-  xl: "max-w-5xl",
-  "2xl": "max-w-6xl",
-  full: "max-w-[min(96vw,90rem)]",
-};
+import { resolveDeviceTheme } from "@/lib/uiAppearance";
 
 type StoryBasedLearningButtonProps = {
   detail: ConceptDetail;
@@ -70,114 +56,106 @@ export function StoryBasedLearningButton({
     await onSave(withStoryHtml(detail, draftStory));
   };
 
-  const showPreview = editable;
   const empty = isHtmlEmpty(draftStory) && isHtmlEmpty(detail.storyHtml);
-  const widthClass = DIALOG_WIDTH_CLASS[sbl.dialogMaxWidth] ?? DIALOG_WIDTH_CLASS.lg;
-  const editWidthClass =
-    sbl.dialogMaxWidth === "full" || sbl.dialogMaxWidth === "2xl" ? widthClass : "max-w-6xl";
 
   return (
-    <>
-      <Button
-        type="button"
-        variant={variant}
-        size={size}
-        className={className}
-        onClick={() => setOpen(true)}
-      >
-        {sbl.showButtonIcon ? <BookMarked className="mr-2 h-4 w-4" /> : null}
-        {sbl.buttonLabel}
-        {hasStoryContent(detail) ? (
-          <span
-            className="ml-1.5 h-1.5 w-1.5 rounded-full story-based-learning-accent"
-            style={{ background: "var(--sbl-accent, hsl(var(--primary)))" }}
-            aria-hidden
-          />
-        ) : null}
-      </Button>
+    <Collapsible
+      open={open}
+      onOpenChange={setOpen}
+      className={cn("story-based-learning-root w-full", className)}
+    >
+      <div className="flex justify-end">
+        <CollapsibleTrigger asChild>
+          <Button type="button" variant={variant} size={size} className="gap-1.5" aria-expanded={open}>
+            {sbl.showButtonIcon ? <BookMarked className="h-4 w-4" /> : null}
+            {sbl.buttonLabel}
+            {hasStoryContent(detail) ? (
+              <span
+                className="h-1.5 w-1.5 rounded-full story-based-learning-accent"
+                style={{ background: "var(--sbl-accent, hsl(var(--primary)))" }}
+                aria-hidden
+              />
+            ) : null}
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 shrink-0 opacity-70 transition-transform", open && "rotate-180")}
+            />
+          </Button>
+        </CollapsibleTrigger>
+      </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          className={cn(
-            "story-based-learning-dialog overflow-hidden flex flex-col",
-            editable ? `${editWidthClass} max-h-[90vh]` : `${widthClass} max-h-[85vh] overflow-y-auto`,
-          )}
-        >
-          <DialogHeader>
-            <DialogTitle data-sbl-title>
+      <CollapsibleContent className="story-based-learning-dropdown data-[state=open]:animate-in data-[state=closed]:animate-out">
+        <div className="story-based-learning-panel mt-2 overflow-hidden">
+          <div
+            className="shrink-0 border-b px-3 py-2 sm:px-4"
+            style={{ borderColor: "var(--sbl-border)" }}
+            data-sbl-title
+          >
+            <p className="text-sm font-semibold">
               {sbl.buttonLabel}
               {conceptName ? `: ${conceptName}` : ""}
-            </DialogTitle>
-          </DialogHeader>
+            </p>
+          </div>
 
           {editable ? (
-            <div className="grid lg:grid-cols-2 gap-4 min-h-0 flex-1 overflow-hidden">
-              <div className="flex flex-col min-h-0 story-based-learning-panel">
-                <div className="shrink-0 border-b px-4 py-2" style={{ borderColor: "var(--sbl-border)" }}>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Edit
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
+            <div className="grid gap-3 p-3 sm:p-4 lg:grid-cols-2">
+              <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
+                <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Edit</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
                     যেভাবে লিখবেন সেভাবেই সেভ হবে — কোনো AI পরিবর্তন নেই
                   </p>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 max-h-[58vh]">
+                <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto p-3">
                   <CKEditorField
                     value={draftStory}
                     onChange={handleStoryChange}
                     placeholder="Story লিখুন — heading, bold, list, table…"
-                    minHeight="360px"
+                    minHeight="280px"
                     className="w-full"
                   />
                 </div>
               </div>
 
-              {showPreview ? (
-                <div className="flex flex-col min-h-0 story-based-learning-panel">
-                  <div className="shrink-0 border-b px-4 py-2" style={{ borderColor: "var(--sbl-border)" }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Preview
-                    </p>
-                  </div>
-                  <div className="flex-1 overflow-y-auto max-h-[58vh]">
-                    {isHtmlEmpty(draftStory) ? (
-                      <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
-                    ) : (
-                      <div className="story-based-learning m-3">
-                        <RichHtmlContent content={draftStory} className="story-based-learning-rich" />
-                      </div>
-                    )}
-                  </div>
+              <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
+                <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
                 </div>
-              ) : null}
+                <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto">
+                  {isHtmlEmpty(draftStory) ? (
+                    <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
+                  ) : (
+                    <div className="story-based-learning m-3">
+                      <RichHtmlContent content={draftStory} className="story-based-learning-rich" />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 lg:col-span-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={saving}>
+                  Close
+                </Button>
+                {onSave ? (
+                  <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
+                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Save story
+                  </Button>
+                ) : (
+                  <Button type="button" size="sm" onClick={() => setOpen(false)}>
+                    Done
+                  </Button>
+                )}
+              </div>
             </div>
           ) : empty ? (
             <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
           ) : (
-            <div className="story-based-learning">
+            <div className="story-based-learning max-h-[min(70vh,32rem)] overflow-y-auto p-3 sm:p-4">
               <RichHtmlContent content={detail.storyHtml} className="story-based-learning-rich" />
             </div>
           )}
-
-          {editable ? (
-            <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
-                Close
-              </Button>
-              {onSave ? (
-                <Button type="button" onClick={() => void handleSave()} disabled={saving}>
-                  {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Save story
-                </Button>
-              ) : (
-                <Button type="button" onClick={() => setOpen(false)}>
-                  Done
-                </Button>
-              )}
-            </DialogFooter>
-          ) : null}
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

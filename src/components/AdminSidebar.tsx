@@ -2,20 +2,19 @@ import { useState, type ComponentType } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Bell,
+  BookMarked,
   BookOpen,
+  BookOpenCheck,
   ChevronDown,
   ClipboardList,
-  GraduationCap,
   LayoutDashboard,
   LogOut,
   School,
   Settings,
   Target,
   User,
-  Users,
   FileCheck,
   BarChart3,
-  Library,
 } from "lucide-react";
 import { logout, canAccessAdmin, hasPermission, isAdmin } from "@/lib/auth";
 import { SETTINGS_TAB_ANY_VIEW } from "@/lib/permissions";
@@ -48,7 +47,7 @@ type NavItem = {
 };
 
 const userItems: NavItem[] = [
-  { label: "My courses", to: "/my-courses", icon: Library, permission: "user.courses.view" },
+  { label: "My courses", to: "/my-courses", icon: BookOpenCheck, permission: "user.courses.view" },
   { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
   { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
   { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
@@ -58,14 +57,14 @@ const adminUserItems: NavItem[] = [
   { label: "Home", labelKey: "home", to: "/builder", icon: School, permission: "home.view" },
   { label: "Suggestions", labelKey: "suggestions", to: "/suggestions", icon: Target, permission: "suggestions.view" },
   { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
-  { label: "My courses", to: "/my-courses", icon: Library, permission: "user.courses.view" },
+  { label: "My courses", to: "/my-courses", icon: BookOpenCheck, permission: "user.courses.view" },
   { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
   { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
 ];
 
 const adminItems: NavItem[] = [
   { label: "Dashboard", labelKey: "dashboard", to: "/admin", icon: LayoutDashboard, permission: "dashboard.view" },
-  { label: "Courses", to: "/admin/courses", icon: Library, permission: "courses.view" },
+  { label: "Courses", to: "/admin/courses", icon: BookMarked, permission: "courses.view" },
   {
     label: "Question bank",
     labelKey: "questionBank",
@@ -94,8 +93,6 @@ const adminItems: NavItem[] = [
       { label: "Schedules", labelKey: "schedules", to: "/admin/exam/schedules", permission: "exam.schedules.view" },
     ],
   },
-  { label: "Student", labelKey: "student", to: "/admin/students", icon: GraduationCap, permission: "students.view" },
-  { label: "Teacher", labelKey: "teacher", to: "/admin/teachers", icon: Users, permission: "teachers.view" },
   { label: "Organization", labelKey: "organization", to: "/admin/organization", icon: Bell, permission: "organization.view" },
   {
     label: "Settings",

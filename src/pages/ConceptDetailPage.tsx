@@ -97,11 +97,13 @@ export default function ConceptDetailPage() {
       </div>
 
       <Card className={userContentCard}>
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
+          </div>
           <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+          <ConceptDetailBody detail={detail} showVerbatim />
         </div>
-        <ConceptDetailBody detail={detail} showVerbatim />
         {keyPoints.length ? (
           <div className="space-y-2 border-t pt-4">
             <div className="flex flex-wrap items-center justify-between gap-2">

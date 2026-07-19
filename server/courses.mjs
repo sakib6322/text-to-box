@@ -132,7 +132,51 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
       if (error) return res.status(500).json({ error: error.message });
-      return res.json({ courses: data ?? [] });
+      const courses = data ?? [];
+      const courseIds = courses.map((c) => c.id);
+      if (!courseIds.length) return res.json({ courses: [] });
+
+      const { data: routines, error: rErr } = await db
+        .from("course_routines")
+        .select("id, course_id, system_id, publish_date, label")
+        .in("course_id", courseIds)
+        .order("publish_date", { ascending: true });
+      if (rErr) return res.status(500).json({ error: rErr.message });
+
+      const systemIds = [...new Set((routines ?? []).map((r) => r.system_id))];
+      const { data: systems } = systemIds.length
+        ? await db.from("systems").select("id, name, subject_id").in("id", systemIds)
+        : { data: [] };
+      const subjectIds = [...new Set((systems ?? []).map((s) => s.subject_id).filter(Boolean))];
+      const { data: subjects } = subjectIds.length
+        ? await db.from("subjects").select("id, name").in("id", subjectIds)
+        : { data: [] };
+      const sysMap = new Map((systems ?? []).map((s) => [s.id, s]));
+      const subMap = new Map((subjects ?? []).map((s) => [s.id, s]));
+
+      const routinesByCourse = new Map();
+      for (const r of routines ?? []) {
+        const sys = sysMap.get(r.system_id);
+        const sub = sys ? subMap.get(sys.subject_id) : null;
+        const row = {
+          id: r.id,
+          publish_date: r.publish_date,
+          label: r.label ?? "",
+          system_id: r.system_id,
+          system_name: sys?.name ?? null,
+          subject_name: sub?.name ?? null,
+        };
+        const list = routinesByCourse.get(r.course_id) ?? [];
+        list.push(row);
+        routinesByCourse.set(r.course_id, list);
+      }
+
+      return res.json({
+        courses: courses.map((c) => ({
+          ...c,
+          routines: routinesByCourse.get(c.id) ?? [],
+        })),
+      });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });

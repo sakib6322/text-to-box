@@ -1,17 +1,20 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Lock, Star } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, ChevronRight, Lock, Star } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
 import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
+import type { TaxonomyItem } from "@/lib/taxonomy";
 
-type Topic = {
+type TopicRow = {
   topic_id: string;
   topic_name: string;
-  path: string;
+  chapter_id: string | null;
+  chapter_name: string | null;
   stars: number;
   concept_count: number;
 };
@@ -19,18 +22,21 @@ type Topic = {
 type SystemBlock = {
   system_id: string;
   system_name: string | null;
+  subject_id: string | null;
   subject_name: string | null;
   unlocked: boolean;
   publish_date: string | null;
   label: string;
-  topics: Topic[];
+  topics: TopicRow[];
 };
+
+type BrowseStep = "subjects" | "systems" | "chapters" | "topics";
 
 function Stars({ n }: { n: number }) {
   if (n <= 0) return null;
   return (
     <span className="inline-flex text-amber-500" aria-label={`${n} stars`}>
-      {Array.from({ length: n }, (_, i) => (
+      {Array.from({ length: Math.min(n, 3) }, (_, i) => (
         <Star key={i} className="h-3.5 w-3.5 fill-current" />
       ))}
     </span>
@@ -39,13 +45,20 @@ function Stars({ n }: { n: number }) {
 
 export default function MyCourseBrowse() {
   const { courseId = "" } = useParams();
+  const navigate = useNavigate();
   const [name, setName] = useState("Course");
   const [today, setToday] = useState("");
   const [systems, setSystems] = useState<SystemBlock[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [step, setStep] = useState<BrowseStep>("subjects");
+  const [subjectId, setSubjectId] = useState<string | null>(null);
+  const [systemId, setSystemId] = useState<string | null>(null);
+  const [chapterId, setChapterId] = useState<string | null>(null);
+
   useEffect(() => {
     void (async () => {
+      setLoading(true);
       try {
         const r = await fetch(apiUrl(`/api/me/courses/${courseId}/browse`), { headers: getAuthHeaders() });
         const j = (await r.json().catch(() => ({}))) as {
@@ -58,6 +71,10 @@ export default function MyCourseBrowse() {
         setName(j.course?.name ?? "Course");
         setToday(j.today ?? "");
         setSystems(j.systems ?? []);
+        setStep("subjects");
+        setSubjectId(null);
+        setSystemId(null);
+        setChapterId(null);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Load failed");
       } finally {
@@ -66,6 +83,86 @@ export default function MyCourseBrowse() {
     })();
   }, [courseId]);
 
+  const subjectName = useMemo(() => {
+    if (!subjectId) return "";
+    return systems.find((s) => s.subject_id === subjectId)?.subject_name ?? "";
+  }, [systems, subjectId]);
+
+  const selectedSystem = useMemo(
+    () => (systemId ? systems.find((s) => s.system_id === systemId) ?? null : null),
+    [systems, systemId],
+  );
+
+  const chapterName = useMemo(() => {
+    if (!chapterId || !selectedSystem) return "";
+    return selectedSystem.topics.find((t) => t.chapter_id === chapterId)?.chapter_name ?? "";
+  }, [selectedSystem, chapterId]);
+
+  const subjectItems: TaxonomyItem[] = useMemo(() => {
+    const map = new Map<string, TaxonomyItem>();
+    for (const s of systems) {
+      if (!s.subject_id || !s.subject_name) continue;
+      if (!map.has(s.subject_id)) map.set(s.subject_id, { id: s.subject_id, name: s.subject_name });
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [systems]);
+
+  const systemItems: TaxonomyItem[] = useMemo(() => {
+    if (!subjectId) return [];
+    return systems
+      .filter((s) => s.subject_id === subjectId)
+      .map((s) => ({
+        id: s.system_id,
+        name: s.unlocked
+          ? s.system_name ?? "System"
+          : `${s.system_name ?? "System"} (locked${s.publish_date ? ` · ${s.publish_date}` : ""})`,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [systems, subjectId]);
+
+  const chapterItems: TaxonomyItem[] = useMemo(() => {
+    if (!selectedSystem?.unlocked) return [];
+    const map = new Map<string, TaxonomyItem>();
+    for (const t of selectedSystem.topics) {
+      if (!t.chapter_id || !t.chapter_name) continue;
+      if (!map.has(t.chapter_id)) map.set(t.chapter_id, { id: t.chapter_id, name: t.chapter_name });
+    }
+    return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [selectedSystem]);
+
+  const topicRows = useMemo(() => {
+    if (!selectedSystem?.unlocked || !chapterId) return [];
+    return selectedSystem.topics
+      .filter((t) => t.chapter_id === chapterId)
+      .sort((a, b) => a.topic_name.localeCompare(b.topic_name));
+  }, [selectedSystem, chapterId]);
+
+  const goBack = () => {
+    if (step === "topics") {
+      setChapterId(null);
+      setStep("chapters");
+      return;
+    }
+    if (step === "chapters") {
+      setSystemId(null);
+      setStep("systems");
+      return;
+    }
+    if (step === "systems") {
+      setSubjectId(null);
+      setStep("subjects");
+    }
+  };
+
+  const stepTitle =
+    step === "subjects"
+      ? "Select subject"
+      : step === "systems"
+        ? "Select system"
+        : step === "chapters"
+          ? "Select chapter"
+          : "Select topic";
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-10">
       <Button asChild variant="ghost" size="sm">
@@ -73,70 +170,175 @@ export default function MyCourseBrowse() {
           <ArrowLeft className="mr-1 h-4 w-4" /> My courses
         </Link>
       </Button>
+
       <div>
         <h1 className="page-title">{name}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Unlocked by routine date · today (Dhaka): {today || "—"}
+        <p className="mt-1 text-sm text-muted-foreground">
+          Subject → System → Chapter → Topic · today (Dhaka): {today || "—"}
         </p>
       </div>
+
+      {!loading && systems.length > 0 ? (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            <button
+              type="button"
+              className="font-medium text-primary hover:underline"
+              onClick={() => {
+                setStep("subjects");
+                setSubjectId(null);
+                setSystemId(null);
+                setChapterId(null);
+              }}
+            >
+              Subjects
+            </button>
+            {subjectName ? (
+              <>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+                <button
+                  type="button"
+                  className={
+                    step === "systems" ? "font-semibold text-foreground" : "text-primary hover:underline"
+                  }
+                  onClick={() => {
+                    setStep("systems");
+                    setSystemId(null);
+                    setChapterId(null);
+                  }}
+                >
+                  {subjectName}
+                </button>
+              </>
+            ) : null}
+            {selectedSystem?.system_name ? (
+              <>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+                <button
+                  type="button"
+                  className={
+                    step === "chapters" ? "font-semibold text-foreground" : "text-primary hover:underline"
+                  }
+                  onClick={() => {
+                    setStep("chapters");
+                    setChapterId(null);
+                  }}
+                >
+                  {selectedSystem.system_name}
+                </button>
+              </>
+            ) : null}
+            {chapterName ? (
+              <>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+                <span className="font-semibold text-foreground">{chapterName}</span>
+              </>
+            ) : null}
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold">{stepTitle}</h2>
+            {step !== "subjects" ? (
+              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={goBack}>
+                <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : systems.length === 0 ? (
-        <Card className="p-6 text-sm text-muted-foreground text-center">
+        <Card className="p-6 text-center text-sm text-muted-foreground">
           No mapped topics yet. Ask your admin to map the syllabus and publish a routine.
         </Card>
+      ) : step === "subjects" ? (
+        <TaxonomyBrowseList
+          items={subjectItems}
+          emptyLabel="No subjects mapped in this course"
+          onSelect={(item) => {
+            setSubjectId(item.id);
+            setSystemId(null);
+            setChapterId(null);
+            setStep("systems");
+          }}
+        />
+      ) : step === "systems" ? (
+        <TaxonomyBrowseList
+          items={systemItems}
+          emptyLabel="No systems under this subject"
+          onSelect={(item) => {
+            const sys = systems.find((s) => s.system_id === item.id);
+            setSystemId(item.id);
+            setChapterId(null);
+            if (sys && !sys.unlocked) {
+              toast.message(
+                sys.publish_date
+                  ? `This system unlocks on ${sys.publish_date}`
+                  : "This system is not scheduled yet",
+              );
+            }
+            setStep("chapters");
+          }}
+        />
+      ) : step === "chapters" ? (
+        selectedSystem && !selectedSystem.unlocked ? (
+          <Card className="space-y-2 p-6 text-center">
+            <Badge variant="secondary" className="gap-1">
+              <Lock className="h-3 w-3" /> Locked
+            </Badge>
+            <p className="text-sm font-medium">{selectedSystem.system_name}</p>
+            <p className="text-xs text-muted-foreground">
+              {selectedSystem.publish_date
+                ? `Content unlocks on ${selectedSystem.publish_date}`
+                : "Not scheduled in the course routine yet"}
+              {selectedSystem.label ? ` · ${selectedSystem.label}` : ""}
+            </p>
+            <Button type="button" variant="outline" size="sm" onClick={goBack}>
+              Choose another system
+            </Button>
+          </Card>
+        ) : (
+          <TaxonomyBrowseList
+            items={chapterItems}
+            emptyLabel="No chapters under this system"
+            onSelect={(item) => {
+              setChapterId(item.id);
+              setStep("topics");
+            }}
+          />
+        )
       ) : (
-        <div className="space-y-3">
-          {systems.map((sys) => (
-            <Card key={sys.system_id} className="overflow-hidden">
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-muted/30 px-4 py-3">
-                <div>
-                  <p className="text-sm font-semibold">
-                    {sys.subject_name ? `${sys.subject_name} · ` : ""}
-                    {sys.system_name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {sys.publish_date
-                      ? sys.unlocked
-                        ? `Unlocked · ${sys.publish_date}`
-                        : `Unlocks on ${sys.publish_date}`
-                      : "Not scheduled"}
-                    {sys.label ? ` · ${sys.label}` : ""}
-                  </p>
-                </div>
-                {sys.unlocked ? (
-                  <Badge>Open</Badge>
-                ) : (
-                  <Badge variant="secondary" className="gap-1">
-                    <Lock className="h-3 w-3" /> Locked
-                  </Badge>
-                )}
-              </div>
-              {sys.unlocked ? (
-                <ul className="divide-y">
-                  {sys.topics.map((t) => (
-                    <li key={t.topic_id}>
-                      <Link
-                        to={`/my-courses/${courseId}/topics/${t.topic_id}`}
-                        className="flex items-center justify-between gap-2 px-4 py-3 text-sm hover:bg-muted/40"
-                      >
-                        <span>
-                          <span className="font-medium">{t.topic_name}</span>
-                          <span className="ml-2 text-xs text-muted-foreground">{t.concept_count} concepts</span>
-                        </span>
-                        <Stars n={t.stars} />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="px-4 py-3 text-xs text-muted-foreground">
-                  Content stays hidden until the publish date.
-                </p>
-              )}
+        <div className="mx-auto w-full max-w-2xl space-y-2">
+          {topicRows.length === 0 ? (
+            <Card className="border-dashed p-10 text-center text-sm text-muted-foreground">
+              No topics in this chapter
             </Card>
-          ))}
+          ) : (
+            topicRows.map((t) => (
+              <button
+                key={t.topic_id}
+                type="button"
+                onClick={() => navigate(`/my-courses/${courseId}/topics/${t.topic_id}`)}
+                className="flex w-full min-w-0 items-start gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
+                  {t.topic_name.trim().charAt(0).toUpperCase() || "?"}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium leading-snug">{t.topic_name}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {t.concept_count} concepts
+                  </span>
+                </span>
+                <span className="mt-1 flex shrink-0 items-center gap-2">
+                  <Stars n={t.stars} />
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </span>
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

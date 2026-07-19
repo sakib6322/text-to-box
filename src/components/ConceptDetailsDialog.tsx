@@ -148,7 +148,6 @@ export function ConceptDetailsDialog({
         <DialogHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <DialogTitle className="pr-2">Concept: {conceptName || "Untitled"}</DialogTitle>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            {storyButton}
             {showDownloadPdf && !loading ? (
               <Button
                 type="button"
@@ -167,6 +166,8 @@ export function ConceptDetailsDialog({
             ) : null}
           </div>
         </DialogHeader>
+
+        {storyButton ? <div className="w-full">{storyButton}</div> : null}
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground">

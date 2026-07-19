@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Home, Loader2, Monitor, RotateCcw, Save, Smartphone, Tablet } from "lucide-react";
+import { ChevronRight, Home, Loader2, Monitor, Plus, RotateCcw, Save, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,11 +14,16 @@ import {
   applyUiAppearance,
   defaultUiAppearance,
   detectDeviceKey,
+  newFaqId,
   type DeviceKey,
+  type LandingFaqAppearance,
+  type LandingFaqItem,
+  type LandingPageAppearance,
   type SidebarLabels,
   type StoryDialogWidth,
   type UiAppearance,
 } from "@/lib/uiAppearance";
+import { Textarea } from "@/components/ui/textarea";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -152,6 +157,9 @@ export default function AdminAppearance() {
   const [draft, setDraft] = useState<UiAppearance | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [landingSection, setLandingSection] = useState<
+    "colors" | "nav" | "hero" | "featured" | "courses" | "about" | "faq" | "footer"
+  >("colors");
   const savedRef = useRef(appearance);
   savedRef.current = appearance;
 
@@ -248,6 +256,70 @@ export default function AdminAppearance() {
     value: UiAppearance["performance"][K],
   ) => {
     commit({ ...theme, performance: { ...theme.performance, [key]: value } });
+  };
+
+  const faq = theme.landingFaq;
+  const lp = theme.landingPage;
+
+  const updateLandingFaq = (patch: Partial<LandingFaqAppearance>) => {
+    commit({ ...theme, landingFaq: { ...theme.landingFaq, ...patch } });
+  };
+
+  const updateLandingPage = <K extends keyof LandingPageAppearance>(key: K, value: LandingPageAppearance[K]) => {
+    commit({ ...theme, landingPage: { ...theme.landingPage, [key]: value } });
+  };
+
+  const setFaqItems = (items: LandingFaqItem[]) => {
+    updateLandingFaq({ items });
+  };
+
+  const addFaqItem = () => {
+    setFaqItems([
+      ...faq.items,
+      { id: newFaqId(), question: "", answers: [{ id: newFaqId(), text: "" }] },
+    ]);
+  };
+
+  const updateFaqItem = (id: string, patch: Partial<Pick<LandingFaqItem, "question">>) => {
+    setFaqItems(faq.items.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+  };
+
+  const removeFaqItem = (id: string) => {
+    setFaqItems(faq.items.filter((it) => it.id !== id));
+  };
+
+  const addFaqAnswer = (faqId: string) => {
+    setFaqItems(
+      faq.items.map((it) =>
+        it.id === faqId ? { ...it, answers: [...it.answers, { id: newFaqId(), text: "" }] } : it,
+      ),
+    );
+  };
+
+  const updateFaqAnswer = (faqId: string, answerId: string, text: string) => {
+    setFaqItems(
+      faq.items.map((it) =>
+        it.id === faqId
+          ? { ...it, answers: it.answers.map((a) => (a.id === answerId ? { ...a, text } : a)) }
+          : it,
+      ),
+    );
+  };
+
+  const removeFaqAnswer = (faqId: string, answerId: string) => {
+    setFaqItems(
+      faq.items.map((it) =>
+        it.id === faqId
+          ? {
+              ...it,
+              answers:
+                it.answers.length <= 1
+                  ? [{ id: newFaqId(), text: "" }]
+                  : it.answers.filter((a) => a.id !== answerId),
+            }
+          : it,
+      ),
+    );
   };
 
   const copyFrom = (from: DeviceKey) => {
@@ -562,6 +634,7 @@ export default function AdminAppearance() {
             <TabsTrigger value="concept">{deviceMeta[editDevice].label} · Concept details</TabsTrigger>
             <TabsTrigger value="story">{deviceMeta[editDevice].label} · Story learning</TabsTrigger>
             <TabsTrigger value="questions">{deviceMeta[editDevice].label} · All questions</TabsTrigger>
+            <TabsTrigger value="landing">Landing page</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
@@ -1204,6 +1277,384 @@ export default function AdminAppearance() {
                 </div>
               </article>
             </div>
+          </TabsContent>
+
+          <TabsContent value="landing" className="mt-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Public landing page (shared). Edit colors, section copy, and FAQ. Save to database to publish.
+            </p>
+
+            <div className="flex flex-wrap gap-1.5">
+              {(
+                [
+                  ["colors", "Colors"],
+                  ["nav", "Header & nav"],
+                  ["hero", "Hero"],
+                  ["featured", "Featured card"],
+                  ["courses", "Courses"],
+                  ["about", "About"],
+                  ["faq", "FAQ"],
+                  ["footer", "Footer"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={landingSection === id ? "default" : "outline"}
+                  className="h-8"
+                  onClick={() => setLandingSection(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+            {landingSection === "colors" ? (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorField label="Background color 1" value={lp.bgColor1} onChange={(v) => updateLandingPage("bgColor1", v)} />
+                <ColorField label="Background color 2" value={lp.bgColor2} onChange={(v) => updateLandingPage("bgColor2", v)} />
+                <ColorField label="Background color 3" value={lp.bgColor3} onChange={(v) => updateLandingPage("bgColor3", v)} />
+                <ColorField label="Text color" value={lp.textColor} onChange={(v) => updateLandingPage("textColor", v)} />
+                <TextField
+                  label="Muted text (color / rgba)"
+                  value={lp.mutedTextColor}
+                  onChange={(v) => updateLandingPage("mutedTextColor", v)}
+                />
+                <ColorField label="Accent color" value={lp.accentColor} onChange={(v) => updateLandingPage("accentColor", v)} />
+                <TextField
+                  label="Course card background"
+                  value={lp.courseCardBg}
+                  onChange={(v) => updateLandingPage("courseCardBg", v)}
+                  hint="Hex or rgba(…)"
+                />
+                <TextField
+                  label="Course card border"
+                  value={lp.courseCardBorder}
+                  onChange={(v) => updateLandingPage("courseCardBorder", v)}
+                />
+                <TextField
+                  label="Routine panel background"
+                  value={lp.courseRoutineBg}
+                  onChange={(v) => updateLandingPage("courseRoutineBg", v)}
+                />
+                <TextField
+                  label="FAQ card background"
+                  value={lp.faqCardBg}
+                  onChange={(v) => updateLandingPage("faqCardBg", v)}
+                />
+              </div>
+            ) : null}
+
+            {landingSection === "nav" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField label="Brand name" value={lp.brandName} onChange={(v) => updateLandingPage("brandName", v)} />
+                <TextField label="Nav · Courses" value={lp.navCourses} onChange={(v) => updateLandingPage("navCourses", v)} />
+                <TextField label="Nav · About" value={lp.navAbout} onChange={(v) => updateLandingPage("navAbout", v)} />
+                <TextField label="Nav · FAQ" value={lp.navFaq} onChange={(v) => updateLandingPage("navFaq", v)} />
+                <TextField
+                  label="Login / Register button"
+                  value={lp.loginButtonLabel}
+                  onChange={(v) => updateLandingPage("loginButtonLabel", v)}
+                />
+                <TextField
+                  label="Go to app button"
+                  value={lp.goToAppLabel}
+                  onChange={(v) => updateLandingPage("goToAppLabel", v)}
+                />
+              </div>
+            ) : null}
+
+            {landingSection === "hero" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField label="Eyebrow" value={lp.heroEyebrow} onChange={(v) => updateLandingPage("heroEyebrow", v)} />
+                <TextField
+                  label="Headline"
+                  value={lp.heroHeadline}
+                  onChange={(v) => updateLandingPage("heroHeadline", v)}
+                />
+                <div className="sm:col-span-2">
+                  <Field label="Supporting text">
+                    <Textarea
+                      value={lp.heroSubtext}
+                      onChange={(e) => updateLandingPage("heroSubtext", e.target.value)}
+                      rows={3}
+                    />
+                  </Field>
+                </div>
+                <TextField
+                  label="Explore CTA"
+                  value={lp.heroCtaExplore}
+                  onChange={(v) => updateLandingPage("heroCtaExplore", v)}
+                />
+                <TextField
+                  label="Featured label"
+                  value={lp.heroFeaturedLabel}
+                  onChange={(v) => updateLandingPage("heroFeaturedLabel", v)}
+                />
+                <TextField
+                  label="Fallback course title"
+                  value={lp.heroFallbackTitle}
+                  onChange={(v) => updateLandingPage("heroFallbackTitle", v)}
+                />
+                <TextField
+                  label="Fallback course description"
+                  value={lp.heroFallbackDesc}
+                  onChange={(v) => updateLandingPage("heroFallbackDesc", v)}
+                />
+              </div>
+            ) : null}
+
+            {landingSection === "featured" ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Featured Track card — light by default (shine/tilt off) to avoid lag. Prefer Fade + short
+                  transition. Shine &amp; 3D tilt are heavier; enable only if needed.
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <BoolField
+                    label="Autoplay slides"
+                    checked={lp.featuredAutoplay}
+                    onChange={(v) => updateLandingPage("featuredAutoplay", v)}
+                    hint="Rotate featured courses automatically"
+                  />
+                  <NumberField
+                    label="Slide interval (seconds)"
+                    value={lp.featuredIntervalSec}
+                    min={1}
+                    max={30}
+                    step={0.5}
+                    onChange={(n) => updateLandingPage("featuredIntervalSec", n)}
+                    hint="How long each course stays before switching"
+                  />
+                  <NumberField
+                    label="Transition duration (seconds)"
+                    value={lp.featuredTransitionSec}
+                    min={0.1}
+                    max={3}
+                    step={0.05}
+                    onChange={(n) => updateLandingPage("featuredTransitionSec", n)}
+                    hint="Fade / slide / scale animation length"
+                  />
+                  <Field label="Transition style">
+                    <Select
+                      value={lp.featuredTransition}
+                      onValueChange={(v) =>
+                        updateLandingPage("featuredTransition", v as "fade" | "slide" | "scale")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fade">Fade</SelectItem>
+                        <SelectItem value="slide">Slide</SelectItem>
+                        <SelectItem value="scale">Scale</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <NumberField
+                    label="Max slides"
+                    value={lp.featuredMaxSlides}
+                    min={1}
+                    max={8}
+                    step={1}
+                    onChange={(n) => updateLandingPage("featuredMaxSlides", Math.round(n))}
+                  />
+                  <BoolField
+                    label="Shine animation"
+                    checked={lp.featuredShineEnabled}
+                    onChange={(v) => updateLandingPage("featuredShineEnabled", v)}
+                  />
+                  <NumberField
+                    label="Shine loop (seconds)"
+                    value={lp.featuredShineSec}
+                    min={1}
+                    max={20}
+                    step={0.5}
+                    onChange={(n) => updateLandingPage("featuredShineSec", n)}
+                    hint="One full shine sweep duration"
+                  />
+                  <BoolField
+                    label="3D tilt"
+                    checked={lp.featuredTiltEnabled}
+                    onChange={(v) => updateLandingPage("featuredTiltEnabled", v)}
+                  />
+                  <BoolField
+                    label="Hover lift"
+                    checked={lp.featuredHoverLift}
+                    onChange={(v) => updateLandingPage("featuredHoverLift", v)}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {landingSection === "courses" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField
+                  label="Section title"
+                  value={lp.coursesTitle}
+                  onChange={(v) => updateLandingPage("coursesTitle", v)}
+                />
+                <TextField
+                  label="View course label"
+                  value={lp.courseViewLabel}
+                  onChange={(v) => updateLandingPage("courseViewLabel", v)}
+                />
+                <div className="sm:col-span-2">
+                  <Field label="Section subtitle">
+                    <Textarea
+                      value={lp.coursesSubtitle}
+                      onChange={(e) => updateLandingPage("coursesSubtitle", e.target.value)}
+                      rows={2}
+                    />
+                  </Field>
+                </div>
+                <TextField
+                  label="Loading text"
+                  value={lp.coursesLoading}
+                  onChange={(v) => updateLandingPage("coursesLoading", v)}
+                />
+                <TextField
+                  label="Empty text"
+                  value={lp.coursesEmpty}
+                  onChange={(v) => updateLandingPage("coursesEmpty", v)}
+                />
+                <TextField
+                  label="Routine heading"
+                  value={lp.routineLabel}
+                  onChange={(v) => updateLandingPage("routineLabel", v)}
+                />
+                <TextField
+                  label="Routine empty"
+                  value={lp.routineEmpty}
+                  onChange={(v) => updateLandingPage("routineEmpty", v)}
+                />
+              </div>
+            ) : null}
+
+            {landingSection === "about" ? (
+              <div className="space-y-3">
+                <TextField
+                  label="Eyebrow"
+                  value={lp.aboutEyebrow}
+                  onChange={(v) => updateLandingPage("aboutEyebrow", v)}
+                />
+                <TextField label="Title (optional)" value={lp.aboutTitle} onChange={(v) => updateLandingPage("aboutTitle", v)} />
+                <Field label="Body (optional)">
+                  <Textarea
+                    value={lp.aboutBody}
+                    onChange={(e) => updateLandingPage("aboutBody", e.target.value)}
+                    rows={4}
+                  />
+                </Field>
+              </div>
+            ) : null}
+
+            {landingSection === "faq" ? (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <TextField label="Section title" value={faq.title} onChange={(v) => updateLandingFaq({ title: v })} />
+                  <TextField
+                    label="“See answer” label"
+                    value={faq.seeAnswerLabel}
+                    onChange={(v) => updateLandingFaq({ seeAnswerLabel: v })}
+                  />
+                </div>
+                <Field label="Section subtitle">
+                  <Textarea
+                    value={faq.subtitle}
+                    onChange={(e) => updateLandingFaq({ subtitle: e.target.value })}
+                    rows={2}
+                  />
+                </Field>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Questions ({faq.items.length})
+                  </p>
+                  <Button type="button" size="sm" className="gap-1" onClick={addFaqItem}>
+                    <Plus className="h-4 w-4" /> Add question
+                  </Button>
+                </div>
+                {faq.items.length === 0 ? (
+                  <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+                    No FAQ items yet. Add a question, then add one or more answers under it.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {faq.items.map((item, idx) => (
+                      <Card key={item.id} className="space-y-3 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <p className="text-xs font-semibold uppercase text-muted-foreground">Question {idx + 1}</p>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            onClick={() => removeFaqItem(item.id)}
+                          >
+                            <Trash2 className="mr-1 h-3.5 w-3.5" /> Delete question
+                          </Button>
+                        </div>
+                        <Field label="Question text">
+                          <Textarea
+                            value={item.question}
+                            onChange={(e) => updateFaqItem(item.id, { question: e.target.value })}
+                            rows={2}
+                            placeholder="প্রশ্ন লিখুন…"
+                          />
+                        </Field>
+                        <div className="space-y-2 rounded-lg border bg-muted/20 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs font-medium text-muted-foreground">
+                              Answers ({item.answers.length})
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-1"
+                              onClick={() => addFaqAnswer(item.id)}
+                            >
+                              <Plus className="h-3.5 w-3.5" /> Add answer
+                            </Button>
+                          </div>
+                          {item.answers.map((ans, aIdx) => (
+                            <div key={ans.id} className="space-y-1.5 rounded-md border bg-background p-2.5">
+                              <div className="flex items-center justify-between gap-2">
+                                <Label className="text-xs">Answer {aIdx + 1}</Label>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-destructive"
+                                  onClick={() => removeFaqAnswer(item.id, ans.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                              <Textarea
+                                value={ans.text}
+                                onChange={(e) => updateFaqAnswer(item.id, ans.id, e.target.value)}
+                                rows={3}
+                                placeholder="উত্তর লিখুন…"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            {landingSection === "footer" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField label="Footer note" value={lp.footerNote} onChange={(v) => updateLandingPage("footerNote", v)} />
+                <TextField label="FAB label" value={lp.fabLabel} onChange={(v) => updateLandingPage("fabLabel", v)} />
+              </div>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="performance" className="mt-4 space-y-3">

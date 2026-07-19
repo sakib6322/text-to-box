@@ -174,6 +174,80 @@ export type DeviceAppearance = {
   allQuestions: AllQuestionsAppearance;
 };
 
+/** Landing page FAQ — shared (not per-device). One question → one or many answers. */
+export type LandingFaqAnswer = {
+  id: string;
+  text: string;
+};
+
+export type LandingFaqItem = {
+  id: string;
+  question: string;
+  answers: LandingFaqAnswer[];
+};
+
+export type LandingFaqAppearance = {
+  title: string;
+  subtitle: string;
+  seeAnswerLabel: string;
+  /** Bump when default FAQ set changes so stale copies refresh once. */
+  contentVersion: number;
+  items: LandingFaqItem[];
+};
+
+/** Public course landing — colors + copy (shared, not per-device). */
+export type LandingPageAppearance = {
+  /** Page background gradient stops */
+  bgColor1: string;
+  bgColor2: string;
+  bgColor3: string;
+  textColor: string;
+  mutedTextColor: string;
+  accentColor: string;
+  courseCardBg: string;
+  courseCardBorder: string;
+  courseRoutineBg: string;
+  faqCardBg: string;
+  brandName: string;
+  navCourses: string;
+  navAbout: string;
+  navFaq: string;
+  loginButtonLabel: string;
+  goToAppLabel: string;
+  heroEyebrow: string;
+  heroHeadline: string;
+  heroSubtext: string;
+  heroCtaExplore: string;
+  heroFeaturedLabel: string;
+  heroFallbackTitle: string;
+  heroFallbackDesc: string;
+  /** Featured track card — advanced animation options */
+  featuredAutoplay: boolean;
+  /** Seconds between slide changes */
+  featuredIntervalSec: number;
+  /** Seconds for content enter/exit transition */
+  featuredTransitionSec: number;
+  featuredTransition: "fade" | "slide" | "scale";
+  featuredShineEnabled: boolean;
+  /** Seconds for one shine loop */
+  featuredShineSec: number;
+  featuredTiltEnabled: boolean;
+  featuredHoverLift: boolean;
+  featuredMaxSlides: number;
+  coursesTitle: string;
+  coursesSubtitle: string;
+  coursesEmpty: string;
+  coursesLoading: string;
+  courseViewLabel: string;
+  routineLabel: string;
+  routineEmpty: string;
+  aboutEyebrow: string;
+  aboutTitle: string;
+  aboutBody: string;
+  fabLabel: string;
+  footerNote: string;
+};
+
 export type UiAppearance = {
   version: 2;
   mobile: DeviceAppearance;
@@ -183,6 +257,10 @@ export type UiAppearance = {
     smoothScroll: boolean;
     reduceMotion: boolean;
   };
+  /** Public course landing FAQ section */
+  landingFaq: LandingFaqAppearance;
+  /** Public course landing design + copy */
+  landingPage: LandingPageAppearance;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -404,6 +482,185 @@ function defaultDevice(kind: DeviceKey): DeviceAppearance {
   };
 }
 
+export function defaultLandingFaqItems(): LandingFaqItem[] {
+  return [
+    {
+      id: "faq-pg-what-is",
+      question: "PG Diary কী এবং কীভাবে সাহায্য করে?",
+      answers: [
+        {
+          id: "faq-pg-what-is-a1",
+          text: "PG Diary মেডিকেল পোস্ট-গ্রাজুয়েশন প্রস্তুতির প্ল্যাটফর্ম — কোর্সভিত্তিক সিলেবাস, হাই‑ইল্ড টপিক এবং তারিখভিত্তিক আনলক এক জায়গায়।",
+        },
+        {
+          id: "faq-pg-what-is-a2",
+          text: "এখানে পুরো প্রশ্নব্যাংক একসাথে না খুলে আপনার এনরোল্ড কোর্সের ম্যাপড কনটেন্ট ধাপে ধাপে দেখা যায়।",
+        },
+      ],
+    },
+    {
+      id: "faq-pg-enroll",
+      question: "কোর্সে এনরোল কীভাবে করব? অ্যাপ্রুভাল লাগে কি?",
+      answers: [
+        {
+          id: "faq-pg-enroll-a1",
+          text: "ল্যান্ডিং থেকে কোর্স বেছে লগইন করে Enroll চাপুন। সেলফ‑এনরোল প্রথমে Pending থাকে; অ্যাডমিন Approve করলেই কোর্স অ্যাক্সেস পাবেন।",
+        },
+        {
+          id: "faq-pg-enroll-a2",
+          text: "অ্যাডমিন সরাসরি Assign করলে এনরোলমেন্ট সাথে সাথে Approved হয় — আলাদা অপেক্ষা লাগে না।",
+        },
+      ],
+    },
+    {
+      id: "faq-pg-unlock",
+      question: "রুটিন অনুযায়ী কনটেন্ট কখন আনলক হয়?",
+      answers: [
+        {
+          id: "faq-pg-unlock-a1",
+          text: "অ্যাডমিন কোর্স রুটিনে সিস্টেম/টপিকের তারিখ সেট করে। ওই তারিখ আসার পর সংশ্লিষ্ট অংশ আপনার কোর্সে খুলে যায়।",
+        },
+        {
+          id: "faq-pg-unlock-a2",
+          text: "আগে থেকে পুরো সিলেবাস দেখা যায় না — শুধু আনলকড অংশ My Courses থেকে পড়া যায়।",
+        },
+      ],
+    },
+    {
+      id: "faq-pg-stars",
+      question: "টপিকের স্টার বা বোর্ড‑কাউন্ট মানে কী?",
+      answers: [
+        {
+          id: "faq-pg-stars-a1",
+          text: "স্টার (১–৩) টপিকের গুরুত্ব বোঝায় — যেখানে বোর্ড/ইনক্রিমেন্ট কাউন্ট বেশি, সেখানে হাই‑ইল্ড হিসেবে চিহ্নিত।",
+        },
+        {
+          id: "faq-pg-stars-a2",
+          text: "প্রথমে বেশি স্টারওয়ালা টপিক রিভিশন করলে সময় বাঁচে এবং পরীক্ষায় বেশি ফোকাসড প্রস্তুতি হয়।",
+        },
+      ],
+    },
+    {
+      id: "faq-pg-suggestions",
+      question: "My Suggestions‑এ কী দেখা যায় এবং কীভাবে কাজ করে?",
+      answers: [
+        {
+          id: "faq-pg-suggestions-a1",
+          text: "এনরোল্ড ও অ্যাপ্রুভড কোর্সের ম্যাপড সাবজেক্ট → সিস্টেম → চ্যাপ্টার → টপিক থেকেই সাজেশন/কী‑পয়েন্ট যোগ বা এডিট করা যায়।",
+        },
+        {
+          id: "faq-pg-suggestions-a2",
+          text: "কোর্সের বাইরের ট্যাক্সোনমি সাধারণত দেখায় না — তাই প্রস্তুতি শুধু আপনার কোর্স স্কোপেই থাকে।",
+        },
+      ],
+    },
+  ];
+}
+
+export const LANDING_FAQ_CONTENT_VERSION = 2;
+
+export function defaultLandingFaq(overrides: Partial<LandingFaqAppearance> = {}): LandingFaqAppearance {
+  return {
+    title: overrides.title ?? "আপনার প্রশ্নগুলির উত্তর",
+    subtitle: overrides.subtitle ?? "সচরাচর যেসব প্রশ্ন আমাদের সেবাগ্রহীতাগণ করে থাকেন",
+    seeAnswerLabel: overrides.seeAnswerLabel ?? "উত্তর দেখুন",
+    contentVersion: overrides.contentVersion ?? LANDING_FAQ_CONTENT_VERSION,
+    items: overrides.items ?? defaultLandingFaqItems(),
+  };
+}
+
+export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {}): LandingPageAppearance {
+  return {
+    bgColor1: "#0a3d4d",
+    bgColor2: "#127a7a",
+    bgColor3: "#134e4a",
+    textColor: "#ecfeff",
+    mutedTextColor: "rgba(236, 254, 255, 0.82)",
+    accentColor: "#67e8f9",
+    courseCardBg: "rgba(255, 255, 255, 0.12)",
+    courseCardBorder: "rgba(255, 255, 255, 0.2)",
+    courseRoutineBg: "rgba(255, 255, 255, 0.08)",
+    faqCardBg: "rgba(255, 255, 255, 0.1)",
+    brandName: "PG Diary",
+    navCourses: "Courses",
+    navAbout: "About",
+    navFaq: "FAQ",
+    loginButtonLabel: "Login / Register",
+    goToAppLabel: "Go to app",
+    heroEyebrow: "Medical PG preparation",
+    heroHeadline: "পরিবারে আপনাকে স্বাগতম!",
+    heroSubtext: "পোস্ট-গ্রাজুয়েশন জগতে সিলেবাস-ম্যাপড কোর্স, হাই-ইল্ড টপিক — আপনার সফলতার সঙ্গী।",
+    heroCtaExplore: "Explore courses",
+    heroFeaturedLabel: "Featured track",
+    heroFallbackTitle: "Your PG journey starts here",
+    heroFallbackDesc: "Mapped syllabus · date unlocks · board-count importance stars",
+    featuredAutoplay: true,
+    featuredIntervalSec: 5,
+    featuredTransitionSec: 0.3,
+    featuredTransition: "fade",
+    featuredShineEnabled: false,
+    featuredShineSec: 8,
+    featuredTiltEnabled: false,
+    featuredHoverLift: true,
+    featuredMaxSlides: 4,
+    coursesTitle: "আপনার কাঙ্ক্ষিত কোর্সটি খুঁজে নিন",
+    coursesSubtitle: "নিচের ক্যাটাগরিতে প্রবেশ করে আপনার পছন্দের কোর্সে এনরোল করুন",
+    coursesEmpty: "Published courses will appear here soon.",
+    coursesLoading: "Loading courses…",
+    courseViewLabel: "কোর্স দেখুন",
+    routineLabel: "Routine",
+    routineEmpty: "এখনো কোনো রুটিন সেট করা হয়নি।",
+    aboutEyebrow: "Why PG Diary",
+    aboutTitle: "",
+    aboutBody: "",
+    fabLabel: "সরাসরি দেখুন",
+    footerNote: "PG Diary",
+    ...overrides,
+  };
+}
+
+export function mergeLandingPage(base: LandingPageAppearance, patch: unknown): LandingPageAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<LandingPageAppearance>;
+  const next = { ...base };
+  for (const key of Object.keys(base) as (keyof LandingPageAppearance)[]) {
+    const val = p[key];
+    if (typeof val === "string" && typeof base[key] === "string") {
+      (next as Record<string, unknown>)[key] = val;
+    } else if (typeof val === "number" && typeof base[key] === "number" && Number.isFinite(val)) {
+      (next as Record<string, unknown>)[key] = val;
+    } else if (typeof val === "boolean" && typeof base[key] === "boolean") {
+      (next as Record<string, unknown>)[key] = val;
+    }
+  }
+  if (
+    p.featuredTransition === "fade" ||
+    p.featuredTransition === "slide" ||
+    p.featuredTransition === "scale"
+  ) {
+    next.featuredTransition = p.featuredTransition;
+  }
+  return next;
+}
+
+/** Inline CSS variables for `.pg-landing` root */
+export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, string> {
+  return {
+    "--pg-bg-1": lp.bgColor1,
+    "--pg-bg-2": lp.bgColor2,
+    "--pg-bg-3": lp.bgColor3,
+    "--pg-text": lp.textColor,
+    "--pg-muted": lp.mutedTextColor,
+    "--pg-accent": lp.accentColor,
+    "--pg-course-card-bg": lp.courseCardBg,
+    "--pg-course-card-border": lp.courseCardBorder,
+    "--pg-course-routine-bg": lp.courseRoutineBg,
+    "--pg-faq-card-bg": lp.faqCardBg,
+    "--pg-featured-shine-sec": `${Math.max(1, lp.featuredShineSec || 6)}s`,
+    "--pg-featured-transition-sec": `${Math.max(0.1, lp.featuredTransitionSec || 0.45)}s`,
+  };
+}
+
 export function defaultUiAppearance(): UiAppearance {
   return {
     version: 2,
@@ -414,6 +671,55 @@ export function defaultUiAppearance(): UiAppearance {
       smoothScroll: false,
       reduceMotion: false,
     },
+    landingFaq: defaultLandingFaq(),
+    landingPage: defaultLandingPage(),
+  };
+}
+
+export function newFaqId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `faq-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+export function mergeLandingFaq(base: LandingFaqAppearance, patch: unknown): LandingFaqAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<LandingFaqAppearance> & { items?: unknown };
+  const patchVersion = typeof p.contentVersion === "number" ? p.contentVersion : 0;
+  const useSavedItems =
+    Array.isArray(p.items) && p.items.length > 0 && patchVersion >= LANDING_FAQ_CONTENT_VERSION;
+
+  let items = base.items;
+  if (useSavedItems) {
+    items = [];
+    for (const raw of p.items as unknown[]) {
+      if (!raw || typeof raw !== "object") continue;
+      const it = raw as Record<string, unknown>;
+      const answers: LandingFaqAnswer[] = [];
+      if (Array.isArray(it.answers)) {
+        for (const rawAns of it.answers) {
+          if (!rawAns || typeof rawAns !== "object") continue;
+          const a = rawAns as Record<string, unknown>;
+          answers.push({
+            id: String(a.id ?? "").trim() || newFaqId(),
+            text: String(a.text ?? ""),
+          });
+        }
+      }
+      items.push({
+        id: String(it.id ?? "").trim() || newFaqId(),
+        question: String(it.question ?? ""),
+        answers,
+      });
+    }
+  }
+  return {
+    title: typeof p.title === "string" ? p.title : base.title,
+    subtitle: typeof p.subtitle === "string" ? p.subtitle : base.subtitle,
+    seeAnswerLabel: typeof p.seeAnswerLabel === "string" ? p.seeAnswerLabel : base.seeAnswerLabel,
+    contentVersion: Math.max(patchVersion, base.contentVersion, LANDING_FAQ_CONTENT_VERSION),
+    items,
   };
 }
 
@@ -492,6 +798,8 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     },
     desktop: sharedDevice,
     performance: { ...base.performance, ...performance },
+    landingFaq: mergeLandingFaq(base.landingFaq, raw.landingFaq),
+    landingPage: mergeLandingPage(base.landingPage, raw.landingPage),
   };
 }
 
@@ -510,6 +818,8 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
       ...base.performance,
       ...((p.performance && typeof p.performance === "object" ? p.performance : {}) as object),
     },
+    landingFaq: mergeLandingFaq(base.landingFaq, p.landingFaq),
+    landingPage: mergeLandingPage(base.landingPage, p.landingPage),
   };
 }
 
