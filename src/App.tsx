@@ -18,6 +18,11 @@ const AdminLayout = lazy(() => import("./layouts/AdminLayout.tsx"));
 const AppSidebarLayout = lazy(() => import("./layouts/AppSidebarLayout.tsx"));
 const CreateQuestionAI = lazy(() => import("./pages/CreateQuestionAI.tsx"));
 const AdminPlaceholder = lazy(() => import("./pages/AdminPlaceholder.tsx"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard.tsx"));
+const AdminCourses = lazy(() => import("./pages/AdminCourses.tsx"));
+const AdminCourseMapping = lazy(() => import("./pages/AdminCourseMapping.tsx"));
+const AdminCourseRoutine = lazy(() => import("./pages/AdminCourseRoutine.tsx"));
+const AdminCourseEnrollments = lazy(() => import("./pages/AdminCourseEnrollments.tsx"));
 const AllQuestions = lazy(() => import("./pages/AllQuestions.tsx"));
 const AdminSettings = lazy(() => import("./pages/AdminSettings.tsx"));
 const AdminAppearance = lazy(() => import("./pages/AdminAppearance.tsx"));
@@ -31,6 +36,11 @@ const ConceptDetailPage = lazy(() => import("./pages/ConceptDetailPage.tsx"));
 const PracticeTake = lazy(() => import("./pages/PracticeTake.tsx"));
 const StudyProgressPage = lazy(() => import("./pages/StudyProgressPage.tsx"));
 const MyProfile = lazy(() => import("./pages/MyProfile.tsx"));
+const CourseLanding = lazy(() => import("./pages/CourseLanding.tsx"));
+const CoursePublicDetail = lazy(() => import("./pages/CoursePublicDetail.tsx"));
+const MyCourses = lazy(() => import("./pages/MyCourses.tsx"));
+const MyCourseBrowse = lazy(() => import("./pages/MyCourseBrowse.tsx"));
+const MyCourseTopic = lazy(() => import("./pages/MyCourseTopic.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -53,17 +63,21 @@ const App = () => (
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/login" element={<Login />} />
+                <Route path="/" element={<CourseLanding />} />
+                <Route path="/courses/:slug" element={<CoursePublicDetail />} />
                 <Route
-                  path="/"
                   element={
                     <ProtectedRoute>
                       <AppSidebarLayout />
                     </ProtectedRoute>
                   }
                 >
-                  <Route index element={<RoleBasedHome />} />
+                  <Route path="builder" element={<RoleBasedHome />} />
                   <Route path="suggestions" element={<Suggestions mode="admin" />} />
                   <Route path="my-suggestions" element={<MySuggestions />} />
+                  <Route path="my-courses" element={<MyCourses />} />
+                  <Route path="my-courses/:courseId" element={<MyCourseBrowse />} />
+                  <Route path="my-courses/:courseId/topics/:topicId" element={<MyCourseTopic />} />
                   <Route path="my-exams" element={<MyExams />} />
                   <Route path="my-exams/take/:examId" element={<TakeExam />} />
                   <Route path="my-exams/result/:attemptId" element={<ExamResult />} />
@@ -83,9 +97,41 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 >
-                  <Route index element={<AdminPlaceholder />} />
+                  <Route index element={<AdminDashboard />} />
                   <Route path="academic/classes" element={<AdminPlaceholder />} />
                   <Route path="academic/subjects" element={<AdminPlaceholder />} />
+                  <Route
+                    path="courses"
+                    element={
+                      <ProtectedRoute permission="courses.view">
+                        <AdminCourses />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="courses/:id/mapping"
+                    element={
+                      <ProtectedRoute permission="courses.mapping.edit">
+                        <AdminCourseMapping />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="courses/:id/routine"
+                    element={
+                      <ProtectedRoute permission="courses.routine.edit">
+                        <AdminCourseRoutine />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="courses/:id/enrollments"
+                    element={
+                      <ProtectedRoute permission="courses.enroll.manage">
+                        <AdminCourseEnrollments />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="question-bank/create-ai"
                     element={

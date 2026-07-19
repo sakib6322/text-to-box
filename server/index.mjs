@@ -91,6 +91,7 @@ import {
   getMigrationJob,
   runSchemaCheck,
 } from "./databaseOps.mjs";
+import { registerCourseRoutes } from "./courses.mjs";
 
 const app = express();
 app.use(cors());
@@ -4204,6 +4205,8 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
 });
+
+registerCourseRoutes(app, { requireSupabase, requireAuthUser, requirePerm });
 
 const port = Number(process.env.PORT || 8787);
 await initDbConnection();

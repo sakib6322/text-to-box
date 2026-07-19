@@ -7,14 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Loader2, LogIn, UserPlus } from "lucide-react";
-import { isAuthenticated, getDefaultLandingPath, login, register } from "@/lib/auth";
+import { isAuthenticated, getDefaultLandingPath, login, register, getAuthHeaders } from "@/lib/auth";
+import { apiUrl } from "@/lib/apiBase";
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get("mode") === "admin" ? "admin" : "user";
-  const from = (location.state as { from?: string } | null)?.from ?? "/";
+  const from = (location.state as { from?: string; enrollCourseId?: string } | null)?.from ?? "/";
+  const enrollCourseId = (location.state as { enrollCourseId?: string } | null)?.enrollCourseId;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,18 +28,34 @@ export default function Login() {
     return <Navigate to={getDefaultLandingPath()} replace />;
   }
 
+  const afterAuthNavigate = async (mode: "admin" | "user", role: string) => {
+    if (enrollCourseId && role === "user") {
+      try {
+        await fetch(apiUrl(`/api/courses/${enrollCourseId}/enroll`), {
+          method: "POST",
+          headers: getAuthHeaders(),
+        });
+        navigate(`/my-courses/${enrollCourseId}`, { replace: true });
+        return;
+      } catch {
+        /* fall through */
+      }
+    }
+    const dest =
+      from && from !== "/login"
+        ? from
+        : mode === "admin" || role === "admin" || role === "staff"
+          ? getDefaultLandingPath()
+          : "/my-courses";
+    navigate(dest, { replace: true });
+  };
+
   const handleLogin = async (mode: "admin" | "user") => {
     setSubmitting(true);
     try {
       const session = await login(email, password, mode);
       toast.success(`Welcome, ${session.email}!`);
-      const dest =
-        from && from !== "/login"
-          ? from
-          : mode === "admin" || session.role === "admin" || session.role === "staff"
-            ? getDefaultLandingPath()
-            : "/study/progress";
-      navigate(dest, { replace: true });
+      await afterAuthNavigate(mode, session.role);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Login failed");
     } finally {
@@ -51,7 +69,7 @@ export default function Login() {
     try {
       const session = await register(email, password);
       toast.success(`Account created — welcome, ${session.email}!`);
-      navigate(from === "/admin" ? "/" : from, { replace: true });
+      await afterAuthNavigate("user", session.role);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Registration failed");
     } finally {

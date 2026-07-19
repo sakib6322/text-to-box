@@ -7,7 +7,7 @@ const Index = lazy(() => import("@/pages/Index"));
 
 /** Home (Concept Builder) requires home.view permission. */
 export default function RoleBasedHome() {
-  if (!hasPermission("home.view")) return <Navigate to="/study/progress" replace />;
+  if (!hasPermission("home.view")) return <Navigate to="/my-courses" replace />;
   return (
     <Suspense
       fallback={

@@ -15,6 +15,7 @@ import {
   Users,
   FileCheck,
   BarChart3,
+  Library,
 } from "lucide-react";
 import { logout, canAccessAdmin, hasPermission, isAdmin } from "@/lib/auth";
 import { SETTINGS_TAB_ANY_VIEW } from "@/lib/permissions";
@@ -47,21 +48,24 @@ type NavItem = {
 };
 
 const userItems: NavItem[] = [
+  { label: "My courses", to: "/my-courses", icon: Library, permission: "user.courses.view" },
   { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
   { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
   { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
 ];
 
 const adminUserItems: NavItem[] = [
-  { label: "Home", labelKey: "home", to: "/", icon: School, permission: "home.view" },
+  { label: "Home", labelKey: "home", to: "/builder", icon: School, permission: "home.view" },
   { label: "Suggestions", labelKey: "suggestions", to: "/suggestions", icon: Target, permission: "suggestions.view" },
   { label: "My Suggestions", labelKey: "mySuggestions", to: "/my-suggestions", icon: Target, permission: "user.my_suggestions.view" },
+  { label: "My courses", to: "/my-courses", icon: Library, permission: "user.courses.view" },
   { label: "My progress", labelKey: "myProgress", to: "/study/progress", icon: BarChart3, permission: "user.my_progress.view" },
   { label: "My exams", labelKey: "myExams", to: "/my-exams", icon: FileCheck, permission: "user.my_exams.view" },
 ];
 
 const adminItems: NavItem[] = [
   { label: "Dashboard", labelKey: "dashboard", to: "/admin", icon: LayoutDashboard, permission: "dashboard.view" },
+  { label: "Courses", to: "/admin/courses", icon: Library, permission: "courses.view" },
   {
     label: "Question bank",
     labelKey: "questionBank",

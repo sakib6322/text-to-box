@@ -177,6 +177,19 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [chapters, setChapters] = useState<TaxonomyItem[]>([]);
   const [topics, setTopics] = useState<TaxonomyItem[]>([]);
   const [boardList, setBoardList] = useState<BoardOption[]>([]);
+
+  type EnrolledCourse = { id: string; name: string; slug: string };
+  type CourseTaxonomy = {
+    subjects: TaxonomyItem[];
+    systems: (TaxonomyItem & { subject_id?: string | null })[];
+    chapters: (TaxonomyItem & { system_id?: string | null })[];
+    topics: (TaxonomyItem & { chapter_id?: string | null })[];
+  };
+  const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>([]);
+  const [selectedCourseId, setSelectedCourseId] = useState("");
+  const [courseTaxonomy, setCourseTaxonomy] = useState<CourseTaxonomy | null>(null);
+  const [coursesLoading, setCoursesLoading] = useState(!adminView);
+  const [taxonomyLoading, setTaxonomyLoading] = useState(false);
   const [conceptOptions, setConceptOptions] = useState<ConceptOption[]>([]);
   const [loadingConcepts, setLoadingConcepts] = useState(false);
   const [browseLoading, setBrowseLoading] = useState(false);
@@ -258,17 +271,89 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   };
 
   useEffect(() => {
-    if (!adminView && browseStep !== "concepts") return;
-    void load();
-  }, [adminView, browseStep]);
+    if (adminView) return;
+    let cancelled = false;
+    setCoursesLoading(true);
+    void (async () => {
+      try {
+        const r = await fetch(apiUrl("/api/me/courses"), { headers: getAuthHeaders() });
+        const j = (await r.json().catch(() => ({}))) as {
+          courses?: EnrolledCourse[];
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!r.ok) throw new Error(j.error ?? "Failed to load courses");
+        const list = j.courses ?? [];
+        setEnrolledCourses(list);
+        setSelectedCourseId((prev) => {
+          if (prev && list.some((c) => c.id === prev)) return prev;
+          return list[0]?.id ?? "";
+        });
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load courses");
+      } finally {
+        if (!cancelled) setCoursesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminView]);
 
   useEffect(() => {
-    if (!adminView && browseStep !== "subjects") return;
-    setBrowseLoading(true);
-    fetchTaxonomy("subjects")
-      .then(setSubjects)
-      .catch((e) => toast.error(e instanceof Error ? e.message : "Failed to load subjects"))
-      .finally(() => setBrowseLoading(false));
+    if (adminView || !selectedCourseId) {
+      if (!adminView) {
+        setCourseTaxonomy(null);
+        setSubjects([]);
+        setSystems([]);
+        setChapters([]);
+        setTopics([]);
+      }
+      return;
+    }
+    let cancelled = false;
+    setTaxonomyLoading(true);
+    void (async () => {
+      try {
+        const r = await fetch(apiUrl(`/api/me/courses/${encodeURIComponent(selectedCourseId)}/taxonomy`), {
+          headers: getAuthHeaders(),
+        });
+        const j = (await r.json().catch(() => ({}))) as CourseTaxonomy & { error?: string };
+        if (cancelled) return;
+        if (!r.ok) throw new Error(j.error ?? "Failed to load course syllabus");
+        const tax: CourseTaxonomy = {
+          subjects: j.subjects ?? [],
+          systems: j.systems ?? [],
+          chapters: j.chapters ?? [],
+          topics: j.topics ?? [],
+        };
+        setCourseTaxonomy(tax);
+        setSubjects(tax.subjects);
+        setBrowseStep("subjects");
+        setSubjectId("all");
+        setSystemId("all");
+        setChapterId("all");
+        setTopicId("all");
+        setSystems([]);
+        setChapters([]);
+        setTopics([]);
+      } catch (e) {
+        if (!cancelled) {
+          setCourseTaxonomy(null);
+          toast.error(e instanceof Error ? e.message : "Failed to load syllabus");
+        }
+      } finally {
+        if (!cancelled) setTaxonomyLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminView, selectedCourseId]);
+
+  useEffect(() => {
+    if (!adminView && browseStep !== "concepts") return;
+    void load();
   }, [adminView, browseStep]);
 
   useEffect(() => {
@@ -280,43 +365,65 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   }, [adminView]);
 
   useEffect(() => {
+    if (adminView) return;
+    if (browseStep !== "subjects") return;
+    setBrowseLoading(taxonomyLoading);
+    setSubjects(courseTaxonomy?.subjects ?? []);
+  }, [adminView, browseStep, courseTaxonomy, taxonomyLoading]);
+
+  useEffect(() => {
     if (subjectId === "all") {
       setSystems([]);
       return;
     }
-    if (!adminView && browseStep !== "systems") return;
-    setBrowseLoading(true);
-    fetchTaxonomy("systems", subjectId)
-      .then(setSystems)
-      .catch(() => setSystems([]))
-      .finally(() => setBrowseLoading(false));
-  }, [subjectId, adminView, browseStep]);
+    if (adminView) {
+      setBrowseLoading(true);
+      fetchTaxonomy("systems", subjectId)
+        .then(setSystems)
+        .catch(() => setSystems([]))
+        .finally(() => setBrowseLoading(false));
+      return;
+    }
+    if (browseStep !== "systems") return;
+    setBrowseLoading(false);
+    setSystems((courseTaxonomy?.systems ?? []).filter((s) => s.subject_id === subjectId));
+  }, [subjectId, adminView, browseStep, courseTaxonomy]);
 
   useEffect(() => {
     if (systemId === "all") {
       setChapters([]);
       return;
     }
-    if (!adminView && browseStep !== "chapters") return;
-    setBrowseLoading(true);
-    fetchTaxonomy("chapters", systemId)
-      .then(setChapters)
-      .catch(() => setChapters([]))
-      .finally(() => setBrowseLoading(false));
-  }, [systemId, adminView, browseStep]);
+    if (adminView) {
+      setBrowseLoading(true);
+      fetchTaxonomy("chapters", systemId)
+        .then(setChapters)
+        .catch(() => setChapters([]))
+        .finally(() => setBrowseLoading(false));
+      return;
+    }
+    if (browseStep !== "chapters") return;
+    setBrowseLoading(false);
+    setChapters((courseTaxonomy?.chapters ?? []).filter((c) => c.system_id === systemId));
+  }, [systemId, adminView, browseStep, courseTaxonomy]);
 
   useEffect(() => {
     if (chapterId === "all") {
       setTopics([]);
       return;
     }
-    if (!adminView && browseStep !== "topics") return;
-    setBrowseLoading(true);
-    fetchTaxonomy("topics", chapterId)
-      .then(setTopics)
-      .catch(() => setTopics([]))
-      .finally(() => setBrowseLoading(false));
-  }, [chapterId, adminView, browseStep]);
+    if (adminView) {
+      setBrowseLoading(true);
+      fetchTaxonomy("topics", chapterId)
+        .then(setTopics)
+        .catch(() => setTopics([]))
+        .finally(() => setBrowseLoading(false));
+      return;
+    }
+    if (browseStep !== "topics") return;
+    setBrowseLoading(false);
+    setTopics((courseTaxonomy?.topics ?? []).filter((t) => t.chapter_id === chapterId));
+  }, [chapterId, adminView, browseStep, courseTaxonomy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1055,9 +1162,15 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const filteredRows = useMemo(() => {
     if (!adminView && browseStep !== "concepts") return [];
 
+    const allowedTopicNames =
+      !adminView && courseTaxonomy
+        ? new Set(courseTaxonomy.topics.map((t) => norm(t.name)))
+        : null;
+
     const q = search.toLowerCase().trim();
     const list = rows.filter((r) => {
       const c = r.concepts;
+      if (allowedTopicNames && !allowedTopicNames.has(norm(c?.topic))) return false;
       if (subjectName && norm(c?.subject) !== norm(subjectName)) return false;
       if (systemName && norm(c?.system) !== norm(systemName)) return false;
       if (chapterName && norm(c?.chapter) !== norm(chapterName)) return false;
@@ -1086,7 +1199,19 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       });
     }
     return [...list].sort((a, b) => (b.increment_count || 0) - (a.increment_count || 0));
-  }, [rows, subjectName, systemName, chapterName, topicName, boardFilter, conceptFilter, search, adminView, browseStep]);
+  }, [
+    rows,
+    subjectName,
+    systemName,
+    chapterName,
+    topicName,
+    boardFilter,
+    conceptFilter,
+    search,
+    adminView,
+    browseStep,
+    courseTaxonomy,
+  ]);
 
   type ConceptGroup = {
     conceptId: string;
@@ -1134,7 +1259,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     boardFilter !== "all" ||
     conceptFilter !== "all";
 
-  const homeLink = hasPermission("home.view") ? "/" : "/study/progress";
+  const homeLink = hasPermission("home.view") ? "/builder" : "/my-courses";
 
   const goBrowse = (step: BrowseStep) => {
     setSearch("");
@@ -1225,13 +1350,63 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             <p className="text-muted-foreground mt-1">
               {adminView
                 ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."
-                : "Pick a subject, then system, chapter, and topic to open concepts for study & practice."}
+                : "Browse only the syllabus mapped to your enrolled course — subject → system → chapter → topic."}
             </p>
           </div>
         </div>
       </header>
 
       <main className="app-mesh-content container mx-auto max-w-7xl px-4 py-6 sm:py-8">
+        {!adminView ? (
+          <div className="mb-4 space-y-3">
+            {coursesLoading ? (
+              <Card className="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading your courses…
+              </Card>
+            ) : enrolledCourses.length === 0 ? (
+              <Card className="space-y-3 p-8 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Enroll in a course first to browse its mapped subjects, systems, chapters, and topics.
+                </p>
+                <Button asChild>
+                  <Link to="/">Browse courses</Link>
+                </Button>
+              </Card>
+            ) : (
+              <Card className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1.5 sm:max-w-sm sm:flex-1">
+                  <Label className="text-xs text-muted-foreground">Your course</Label>
+                  {enrolledCourses.length === 1 ? (
+                    <p className="text-sm font-semibold">{enrolledCourses[0].name}</p>
+                  ) : (
+                    <Select
+                      value={selectedCourseId || undefined}
+                      onValueChange={(v) => {
+                        setSelectedCourseId(v);
+                        setBrowseStep("subjects");
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select enrolled course" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {enrolledCourses.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link to="/my-courses">My courses</Link>
+                </Button>
+              </Card>
+            )}
+          </div>
+        ) : null}
+
         {adminView ? (
           <Card
             className={`filter-card sticky-filter-card scroll-aware-panel mb-4 space-y-3 ${
@@ -1376,7 +1551,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               </div>
             </div>
           </Card>
-        ) : (
+        ) : !coursesLoading && enrolledCourses.length > 0 && selectedCourseId ? (
           <div className="mb-4 space-y-3">
             <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
               <button
@@ -1448,39 +1623,39 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               )}
             </div>
           </div>
-        )}
+        ) : null}
 
-        {!adminView && browseStep !== "concepts" ? (
+        {!adminView && (!selectedCourseId || enrolledCourses.length === 0 || coursesLoading) ? null : !adminView && browseStep !== "concepts" ? (
           browseStep === "subjects" ? (
             <TaxonomyBrowseList
               items={subjects}
-              loading={browseLoading}
-              emptyLabel="No subjects yet"
+              loading={browseLoading || taxonomyLoading}
+              emptyLabel="No mapped subjects in this course"
               onSelect={pickSubject}
             />
           ) : browseStep === "systems" ? (
             <TaxonomyBrowseList
               items={systems}
               loading={browseLoading}
-              emptyLabel="No systems in this subject"
+              emptyLabel="No mapped systems in this subject"
               onSelect={pickSystem}
             />
           ) : browseStep === "chapters" ? (
             <TaxonomyBrowseList
               items={chapters}
               loading={browseLoading}
-              emptyLabel="No chapters in this system"
+              emptyLabel="No mapped chapters in this system"
               onSelect={pickChapter}
             />
           ) : (
             <TaxonomyBrowseList
               items={topics}
               loading={browseLoading}
-              emptyLabel="No topics in this chapter"
+              emptyLabel="No mapped topics in this chapter"
               onSelect={pickTopic}
             />
           )
-        ) : loading ? (
+        ) : !adminView && (!selectedCourseId || enrolledCourses.length === 0) ? null : loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
           </div>

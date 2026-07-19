@@ -69,6 +69,19 @@ export const PERMISSION_GROUPS = [
     permissions: [{ key: "dashboard.view", label: "View dashboard" }],
   },
   {
+    id: "courses",
+    label: "Courses",
+    permissions: [
+      { key: "courses.view", label: "View courses" },
+      { key: "courses.add", label: "Add course" },
+      { key: "courses.edit", label: "Edit course" },
+      { key: "courses.delete", label: "Delete course" },
+      { key: "courses.mapping.edit", label: "Edit course mapping" },
+      { key: "courses.routine.edit", label: "Edit course routine" },
+      { key: "courses.enroll.manage", label: "Manage enrollments" },
+    ],
+  },
+  {
     id: "students",
     label: "Students",
     permissions: [
@@ -208,6 +221,8 @@ export const PERMISSION_GROUPS = [
       { key: "user.my_exams.view", label: "My exams" },
       { key: "user.study.view", label: "Study / concept learn" },
       { key: "user.practice.view", label: "Practice sessions" },
+      { key: "user.courses.view", label: "My courses" },
+      { key: "user.courses.enroll", label: "Self-enroll in courses" },
     ],
   },
 ];

@@ -68,6 +68,19 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [{ key: "dashboard.view", label: "View dashboard" }],
   },
   {
+    id: "courses",
+    label: "Courses",
+    permissions: [
+      { key: "courses.view", label: "View courses" },
+      { key: "courses.add", label: "Add course" },
+      { key: "courses.edit", label: "Edit course" },
+      { key: "courses.delete", label: "Delete course" },
+      { key: "courses.mapping.edit", label: "Edit course mapping" },
+      { key: "courses.routine.edit", label: "Edit course routine" },
+      { key: "courses.enroll.manage", label: "Manage enrollments" },
+    ],
+  },
+  {
     id: "students",
     label: "Students",
     permissions: [
@@ -207,6 +220,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "user.my_exams.view", label: "My exams" },
       { key: "user.study.view", label: "Study / concept learn" },
       { key: "user.practice.view", label: "Practice sessions" },
+      { key: "user.courses.view", label: "My courses" },
+      { key: "user.courses.enroll", label: "Self-enroll in courses" },
     ],
   },
 ];
@@ -215,9 +230,11 @@ export const ALL_PERMISSION_KEYS = PERMISSION_GROUPS.flatMap((g) => g.permission
 
 /** Route path → required .view permission (or any of listed) */
 export const ROUTE_VIEW_PERMISSION: Record<string, string> = {
-  "/": "home.view",
+  "/builder": "home.view",
   "/suggestions": "suggestions.view",
+  "/my-courses": "user.courses.view",
   "/admin": "dashboard.view",
+  "/admin/courses": "courses.view",
   "/admin/question-bank/create-ai": "question_bank.create_ai.view",
   "/admin/question-bank/questions": "question_bank.questions.view",
   "/admin/exam/create": "exam.create.view",

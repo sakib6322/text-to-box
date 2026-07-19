@@ -83,12 +83,12 @@ export function canAccessAdmin(): boolean {
 
 export function getDefaultLandingPath(): string {
   const s = getSession();
-  if (!s) return "/login";
+  if (!s) return "/";
   if (canAccessAdminArea(s.role, s.permissions)) {
-    if (hasPermission("home.view")) return "/";
+    if (hasPermission("home.view")) return "/builder";
     return firstAllowedAdminPath(s.role, s.permissions);
   }
-  return "/study/progress";
+  return "/my-courses";
 }
 
 function saveSession(session: AuthSession) {

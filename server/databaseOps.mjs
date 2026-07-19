@@ -33,6 +33,10 @@ export const BACKUP_TABLES = [
   "exam_answers",
   "user_study_progress",
   "user_practice_sessions",
+  "courses",
+  "course_topics",
+  "course_routines",
+  "course_enrollments",
 ];
 
 const VECTOR_COLUMNS = {

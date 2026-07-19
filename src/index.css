@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -381,7 +381,7 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   }
 }
 
-/* CKEditor 5 — match app theme */
+/* CKEditor 5 â€” match app theme */
 .ckeditor-field {
   width: 100%;
 }
@@ -771,3 +771,338 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   }
 }
 
+
+/* ——— PG Diary landing: fixed colored BG + transparent scroll (no lag) ——— */
+.pg-landing {
+  --pg-ink: #0b1f2a;
+  --pg-teal: #0e7490;
+  font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  position: relative;
+  min-height: 100vh;
+  color: var(--pg-ink);
+  background: transparent;
+}
+
+/* Distinct fixed background — visible through transparent panels */
+.pg-fixed-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.pg-fixed-scene-color {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      160deg,
+      #0a3d4d 0%,
+      #0e5c6b 28%,
+      #127a7a 55%,
+      #0f766e 78%,
+      #134e4a 100%
+    );
+}
+
+.pg-fixed-scene-glow {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 55% 45% at 18% 22%, rgba(34, 211, 238, 0.28), transparent 60%),
+    radial-gradient(ellipse 50% 40% at 82% 18%, rgba(52, 211, 153, 0.22), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 50% 90%, rgba(8, 47, 73, 0.35), transparent 60%);
+}
+
+.pg-fixed-scene-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: radial-gradient(ellipse 80% 65% at 50% 30%, #000 10%, transparent 70%);
+  opacity: 0.55;
+}
+
+.pg-landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgba(255, 255, 255, 0.42);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+  backdrop-filter: saturate(1.1);
+  -webkit-backdrop-filter: saturate(1.1);
+}
+
+.pg-brand-word {
+  font-family: Syne, "DM Sans", sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  letter-spacing: -0.03em;
+  color: #062a33;
+}
+
+.pg-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #22d3ee, #0e7490 55%, #059669);
+  box-shadow: 0 8px 20px rgba(6, 42, 51, 0.25);
+}
+
+.pg-brand-mark-inner {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.pg-nav-link {
+  color: rgba(6, 42, 51, 0.78);
+  transition: color 0.2s ease;
+}
+.pg-nav-link:hover { color: #083344; }
+
+.pg-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0e7490, #0f766e);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.65rem 1.25rem;
+  box-shadow: 0 10px 24px rgba(6, 42, 51, 0.22);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.pg-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(6, 42, 51, 0.28);
+}
+
+.pg-btn-accent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #e11d48, #be123c);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.65rem 1.2rem;
+  box-shadow: 0 10px 24px rgba(190, 18, 60, 0.25);
+  transition: transform 0.2s ease;
+}
+.pg-btn-accent:hover { transform: translateY(-1px); }
+
+.pg-play-dot {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.pg-eyebrow {
+  display: inline-flex;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #0f3d4c;
+  margin-bottom: 0.75rem;
+}
+
+.pg-hero-layer {
+  position: relative;
+  min-height: min(88vh, 720px);
+  padding-bottom: 2rem;
+}
+
+/* Hero floats away via CSS scroll timeline — GPU transform only, no JS/blur lag */
+.pg-hero-away {
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
+
+@supports (animation-timeline: scroll()) {
+  .pg-hero-away {
+    animation: pg-hero-float-away linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0px 70vh;
+  }
+}
+
+@keyframes pg-hero-float-away {
+  from {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(0, -18vh, 0) scale(0.96);
+    opacity: 0.15;
+  }
+}
+
+.pg-hero-title {
+  font-family: Syne, "DM Sans", sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.pg-hero-brand {
+  display: block;
+  font-size: clamp(2.6rem, 8vw, 4.25rem);
+  line-height: 0.95;
+  color: #042f3a;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.pg-hero-stage { perspective: 1000px; }
+
+.pg-hero-card {
+  position: relative;
+  min-height: 300px;
+  border-radius: 1.35rem;
+  background: linear-gradient(155deg, rgba(8, 47, 73, 0.92) 0%, #0b1f2a 55%, #083344 100%);
+  box-shadow: 0 28px 56px rgba(0, 0, 0, 0.28);
+  transform: rotateY(-6deg) rotateX(3deg);
+  overflow: hidden;
+  transition: transform 0.35s ease;
+}
+
+.pg-hero-stage:hover .pg-hero-card {
+  transform: rotateY(-1deg) rotateX(0deg) translateY(-3px);
+}
+
+.pg-hero-card-shine {
+  position: absolute;
+  inset: -30% -10%;
+  background: linear-gradient(115deg, transparent 42%, rgba(34, 211, 238, 0.1) 50%, transparent 58%);
+  animation: pg-shine 6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes pg-shine {
+  0%, 100% { transform: translateX(-20%); }
+  50% { transform: translateX(18%); }
+}
+
+.pg-hero-cta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #67e8f9;
+}
+
+/* Transparent glass panels — colored fixed BG shows through */
+.pg-glass-panel {
+  position: relative;
+  z-index: 20;
+  margin-top: -1.25rem;
+  border-radius: 1.75rem 1.75rem 0 0;
+  background: rgba(255, 255, 255, 0.52);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.08);
+}
+
+.pg-glass-panel-tint {
+  margin-top: 0;
+  border-radius: 0;
+  background: rgba(236, 253, 245, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow: none;
+}
+
+.pg-section-title {
+  font-family: Syne, "DM Sans", sans-serif;
+  font-weight: 800;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  letter-spacing: -0.02em;
+  color: #062a33;
+}
+
+.pg-course-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 1.35rem 1.1rem 1.15rem;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.06);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.pg-course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.1);
+}
+
+.pg-course-icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 0.85rem;
+  color: var(--pg-teal);
+  background: rgba(14, 116, 144, 0.12);
+}
+
+.pg-course-link {
+  margin-top: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--pg-teal);
+}
+
+.pg-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 1.25rem;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #0e7490, #0f766e);
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+}
+
+@media (max-width: 1023px) {
+  .pg-hero-card { transform: none; }
+  .pg-hero-stage:hover .pg-hero-card { transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pg-hero-away {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .pg-hero-card-shine { animation: none !important; }
+}
+
+.pg-eyebrow-on-dark {
+  color: #a5f3fc;
+}
+
+.pg-hero-brand {
+  color: #ffffff !important;
+  text-shadow: 0 2px 24px rgba(34, 211, 238, 0.35);
+}
