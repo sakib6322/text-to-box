@@ -31,11 +31,17 @@ export default function Login() {
   const afterAuthNavigate = async (mode: "admin" | "user", role: string) => {
     if (enrollCourseId && role === "user") {
       try {
-        await fetch(apiUrl(`/api/courses/${enrollCourseId}/enroll`), {
+        const r = await fetch(apiUrl(`/api/courses/${enrollCourseId}/enroll`), {
           method: "POST",
           headers: getAuthHeaders(),
         });
-        navigate(`/my-courses/${enrollCourseId}`, { replace: true });
+        const j = (await r.json().catch(() => ({}))) as { status?: string };
+        if (j.status === "pending") {
+          toast.message("Enrollment requested — waiting for admin approval");
+          navigate("/my-courses", { replace: true });
+        } else {
+          navigate(`/my-courses/${enrollCourseId}`, { replace: true });
+        }
         return;
       } catch {
         /* fall through */

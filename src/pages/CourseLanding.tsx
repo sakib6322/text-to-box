@@ -121,7 +121,7 @@ export default function CourseLanding() {
                 </span>
               </h1>
               <p className="mt-4 max-w-md text-base leading-relaxed text-cyan-50/90 sm:text-lg">
-                পোস্ট-গ্রাজুয়েশন জগতে সিলেবাস-ম্যাপড কোর্স, তারিখভিত্তিক আনলক আর হাই-ইল্ড টপিক — আপনার সফলতার সঙ্গী।
+                পোস্ট-গ্রাজুয়েশন জগতে সিলেবাস-ম্যাপড কোর্স, হাই-ইল্ড টপিক — আপনার সফলতার সঙ্গী।
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
                 <Link to={appLink} className="pg-btn-primary">

@@ -112,9 +112,10 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
   async function isEnrolled(db, courseId, userId) {
     const { data } = await db
       .from("course_enrollments")
-      .select("user_id")
+      .select("user_id, status")
       .eq("course_id", courseId)
       .eq("user_id", userId)
+      .eq("status", "approved")
       .maybeSingle();
     return !!data;
   }
@@ -190,12 +191,27 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       if (!course) return res.status(404).json({ error: "Course not found" });
       if (course.status !== "published") return res.status(400).json({ error: "Course is not published" });
 
-      const { error } = await db.from("course_enrollments").upsert(
-        { course_id: courseId, user_id: user.id, source: "self" },
-        { onConflict: "course_id,user_id", ignoreDuplicates: true },
-      );
+      const { data: existing } = await db
+        .from("course_enrollments")
+        .select("status")
+        .eq("course_id", courseId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+      if (existing?.status === "approved") {
+        return res.json({ ok: true, course_id: courseId, status: "approved" });
+      }
+      if (existing?.status === "pending") {
+        return res.json({ ok: true, course_id: courseId, status: "pending" });
+      }
+
+      const { error } = await db.from("course_enrollments").insert({
+        course_id: courseId,
+        user_id: user.id,
+        source: "self",
+        status: "pending",
+      });
       if (error) return res.status(500).json({ error: error.message });
-      return res.json({ ok: true, course_id: courseId });
+      return res.json({ ok: true, course_id: courseId, status: "pending" });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -230,8 +246,9 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       if (!user) return;
       const { data: enrollments, error } = await db
         .from("course_enrollments")
-        .select("course_id, source, enrolled_at")
-        .eq("user_id", user.id);
+        .select("course_id, source, enrolled_at, status")
+        .eq("user_id", user.id)
+        .eq("status", "approved");
       if (error) return res.status(500).json({ error: error.message });
       const ids = (enrollments ?? []).map((e) => e.course_id);
       if (!ids.length) return res.json({ courses: [] });
@@ -727,6 +744,45 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
     }
   });
 
+  app.patch("/api/admin/courses/:id/routines/:routineId", async (req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      if (!(await requirePerm(req, res, db, "courses.routine.edit"))) return;
+      const courseId = String(req.params.id ?? "").trim();
+      const routineId = String(req.params.routineId ?? "").trim();
+      if (!routineId) return res.status(400).json({ error: "routine id required" });
+
+      const patch = {};
+      if (typeof req.body?.publish_date === "string" && req.body.publish_date.trim()) {
+        patch.publish_date = req.body.publish_date.trim();
+      }
+      if (typeof req.body?.label === "string") {
+        patch.label = req.body.label.trim();
+      }
+      if (typeof req.body?.system_id === "string" && req.body.system_id.trim()) {
+        patch.system_id = req.body.system_id.trim();
+      }
+      if (!Object.keys(patch).length) {
+        return res.status(400).json({ error: "publish_date, label, or system_id required" });
+      }
+
+      const { data, error } = await db
+        .from("course_routines")
+        .update(patch)
+        .eq("id", routineId)
+        .eq("course_id", courseId)
+        .select("*")
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      if (!data) return res.status(404).json({ error: "Routine not found" });
+      return res.json({ ok: true, routine: data });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  });
+
   app.delete("/api/admin/courses/:id/routines/:routineId", async (req, res) => {
     try {
       const db = requireSupabase(res);
@@ -755,7 +811,7 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       const courseId = String(req.params.id ?? "").trim();
       const { data: rows, error } = await db
         .from("course_enrollments")
-        .select("course_id, user_id, source, enrolled_at")
+        .select("course_id, user_id, source, enrolled_at, status")
         .eq("course_id", courseId)
         .order("enrolled_at", { ascending: false });
       if (error) return res.status(500).json({ error: error.message });
@@ -767,6 +823,7 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       return res.json({
         enrollments: (rows ?? []).map((r) => ({
           ...r,
+          status: r.status === "pending" ? "pending" : "approved",
           user: uMap.get(r.user_id) ?? null,
         })),
       });
@@ -793,11 +850,11 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       if (!uid) return res.status(400).json({ error: "user_id or email required" });
 
       const { error } = await db.from("course_enrollments").upsert(
-        { course_id: courseId, user_id: uid, source: "admin" },
+        { course_id: courseId, user_id: uid, source: "admin", status: "approved" },
         { onConflict: "course_id,user_id" },
       );
       if (error) return res.status(500).json({ error: error.message });
-      return res.json({ ok: true, user_id: uid });
+      return res.json({ ok: true, user_id: uid, status: "approved" });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
@@ -818,6 +875,67 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
         .eq("user_id", userId);
       if (error) return res.status(500).json({ error: error.message });
       return res.json({ ok: true });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  });
+
+  app.patch("/api/admin/courses/:id/enrollments/:userId", async (req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      if (!(await requirePerm(req, res, db, "courses.enroll.manage"))) return;
+      const courseId = String(req.params.id ?? "").trim();
+      const userId = String(req.params.userId ?? "").trim();
+      const status = req.body?.status === "pending" ? "pending" : "approved";
+      const { data, error } = await db
+        .from("course_enrollments")
+        .update({ status })
+        .eq("course_id", courseId)
+        .eq("user_id", userId)
+        .select("course_id, user_id, source, enrolled_at, status")
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json({ ok: true, enrollment: data });
+    } catch (e) {
+      console.error(e);
+      return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+    }
+  });
+
+  app.get("/api/admin/dashboard/stats", async (req, res) => {
+    try {
+      const db = requireSupabase(res);
+      if (!db) return;
+      if (!(await requirePerm(req, res, db, "dashboard.view"))) return;
+
+      const { data: courses, error: cErr } = await db.from("courses").select("id, status");
+      if (cErr) return res.status(500).json({ error: cErr.message });
+      const courseRows = courses ?? [];
+      const published = courseRows.filter((c) => c.status === "published").length;
+      const unpublished = courseRows.filter((c) => c.status !== "published").length;
+
+      const { data: enrollments, error: eErr } = await db
+        .from("course_enrollments")
+        .select("status");
+      if (eErr) return res.status(500).json({ error: eErr.message });
+      const enRows = enrollments ?? [];
+      const pending = enRows.filter((e) => e.status === "pending").length;
+      const approved = enRows.filter((e) => e.status !== "pending").length;
+
+      return res.json({
+        courses: {
+          total: courseRows.length,
+          published,
+          unpublished,
+        },
+        enrollments: {
+          total: enRows.length,
+          pending,
+          approved,
+        },
+      });
     } catch (e) {
       console.error(e);
       return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });

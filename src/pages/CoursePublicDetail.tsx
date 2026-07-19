@@ -50,10 +50,15 @@ export default function CoursePublicDetail() {
         method: "POST",
         headers: getAuthHeaders(),
       });
-      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      const j = (await r.json().catch(() => ({}))) as { error?: string; status?: string };
       if (!r.ok) throw new Error(j.error ?? "Enroll failed");
-      toast.success("Enrolled");
-      navigate(`/my-courses/${course.id}`);
+      if (j.status === "pending") {
+        toast.success("Enrollment requested — waiting for admin approval");
+        navigate("/my-courses");
+      } else {
+        toast.success("Enrolled");
+        navigate(`/my-courses/${course.id}`);
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Enroll failed");
     } finally {

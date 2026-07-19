@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,7 @@ type Enrollment = {
   user_id: string;
   source: string;
   enrolled_at: string;
+  status?: "pending" | "approved";
   user?: { id: string; email: string; display_name?: string | null; role?: string } | null;
 };
 
@@ -104,6 +105,26 @@ export default function AdminCourseEnrollments() {
     }
   };
 
+  const approve = async (userId: string) => {
+    if (!hasPermission("courses.enroll.manage")) return toast.error("No permission");
+    try {
+      const r = await fetch(apiUrl(`/api/admin/courses/${courseId}/enrollments/${userId}`), {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ status: "approved" }),
+      });
+      const j = (await r.json().catch(() => ({}))) as { error?: string };
+      if (!r.ok) throw new Error(j.error ?? "Approve failed");
+      toast.success("Enrollment approved");
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Approve failed");
+    }
+  };
+
+  const pendingCount = rows.filter((r) => r.status === "pending").length;
+  const approvedCount = rows.filter((r) => r.status !== "pending").length;
+
   return (
     <div className="space-y-4">
       <Button asChild variant="ghost" size="sm">
@@ -113,7 +134,9 @@ export default function AdminCourseEnrollments() {
       </Button>
       <div>
         <h1 className="page-title">Enrollments</h1>
-        <p className="text-sm text-muted-foreground mt-1">{courseName} — admin assign (students can also self-enroll)</p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {courseName} — self-enroll is pending until approved; admin assign is approved immediately
+        </p>
       </div>
 
       <Card className="space-y-3 p-4 sm:p-5">
@@ -163,24 +186,57 @@ export default function AdminCourseEnrollments() {
       </Card>
 
       <Card className="p-4 sm:p-5">
-        <h2 className="text-sm font-semibold mb-3">Enrolled ({rows.length})</h2>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h2 className="text-sm font-semibold">Enrollments ({rows.length})</h2>
+          <Badge variant="secondary">{approvedCount} approved</Badge>
+          <Badge variant="outline" className="border-amber-300 text-amber-800">
+            {pendingCount} pending
+          </Badge>
+        </div>
         {rows.length === 0 ? (
           <p className="text-sm text-muted-foreground">No enrollments yet.</p>
         ) : (
           <ul className="divide-y rounded-lg border">
-            {rows.map((row) => (
-              <li key={row.user_id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
-                <div>
-                  <p className="font-medium">{row.user?.display_name || row.user?.email || row.user_id}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {row.user?.email} · {row.source} · {new Date(row.enrolled_at).toLocaleString()}
-                  </p>
-                </div>
-                <Button type="button" variant="ghost" size="sm" onClick={() => void remove(row.user_id)}>
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </li>
-            ))}
+            {rows.map((row) => {
+              const pending = row.status === "pending";
+              return (
+                <li key={row.user_id} className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm">
+                  <div className="min-w-0">
+                    <p className="font-medium flex flex-wrap items-center gap-2">
+                      <span className="truncate">{row.user?.display_name || row.user?.email || row.user_id}</span>
+                      {pending ? (
+                        <Badge variant="outline" className="border-amber-300 text-amber-800">
+                          Pending
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border-0">
+                          Approved
+                        </Badge>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {row.user?.email} · {row.source} · {new Date(row.enrolled_at).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {pending ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="gap-1"
+                        onClick={() => void approve(row.user_id)}
+                      >
+                        <Check className="h-3.5 w-3.5" /> Approve
+                      </Button>
+                    ) : null}
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void remove(row.user_id)}>
+                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Card>
