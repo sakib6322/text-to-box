@@ -240,6 +240,15 @@ export type LandingPageAppearance = {
   heroFeaturedLabel: string;
   heroFallbackTitle: string;
   heroFallbackDesc: string;
+  /** Fixed overlay in hero — stays put while section content scrolls over it */
+  heroFixedOverlayEnabled: boolean;
+  heroFixedOverlayColor: string;
+  /** Viewport % — default full width */
+  heroFixedOverlayWidthPercent: number;
+  /** Viewport height % — default 40 */
+  heroFixedOverlayHeightPercent: number;
+  /** Distance from top of viewport (vh %) — default 30 centers a 40% band */
+  heroFixedOverlayTopPercent: number;
   /** Featured track card — advanced animation options */
   featuredAutoplay: boolean;
   /** Seconds between slide changes */
@@ -835,6 +844,11 @@ export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {
     heroFeaturedLabel: "Featured track",
     heroFallbackTitle: "Your PG journey starts here",
     heroFallbackDesc: "Mapped syllabus · date unlocks · board-count importance stars",
+    heroFixedOverlayEnabled: true,
+    heroFixedOverlayColor: "#000000",
+    heroFixedOverlayWidthPercent: 100,
+    heroFixedOverlayHeightPercent: 40,
+    heroFixedOverlayTopPercent: 30,
     featuredAutoplay: true,
     featuredIntervalSec: 5,
     featuredTransitionSec: 0.3,
@@ -982,6 +996,11 @@ export function heroSectionBackground(lp: LandingPageAppearance): string {
 
 /** Inline CSS variables for `.pg-landing` root */
 export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, string> {
+  const overlayW = Math.min(100, Math.max(1, lp.heroFixedOverlayWidthPercent ?? 100));
+  const overlayH = Math.min(100, Math.max(1, lp.heroFixedOverlayHeightPercent ?? 40));
+  const overlayTop = Math.min(100 - overlayH, Math.max(0, lp.heroFixedOverlayTopPercent ?? 30));
+  const overlayLeft = (100 - overlayW) / 2;
+
   return {
     "--pg-bg-1": lp.bgColor1,
     "--pg-bg-2": lp.bgColor2,
@@ -996,6 +1015,12 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
     "--pg-featured-shine-sec": `${Math.max(1, lp.featuredShineSec || 6)}s`,
     "--pg-featured-transition-sec": `${Math.max(0.1, lp.featuredTransitionSec || 0.45)}s`,
     "--pg-why-transition-sec": `${Math.max(0.15, lp.whyTransitionSec || 0.55)}s`,
+    "--pg-fixed-overlay-display": lp.heroFixedOverlayEnabled ? "block" : "none",
+    "--pg-fixed-overlay-bg": lp.heroFixedOverlayColor || "#000000",
+    "--pg-fixed-overlay-width": `${overlayW}%`,
+    "--pg-fixed-overlay-height": `${overlayH}vh`,
+    "--pg-fixed-overlay-top": `${overlayTop}vh`,
+    "--pg-fixed-overlay-left": `${overlayLeft}%`,
   };
 }
 

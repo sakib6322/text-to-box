@@ -804,9 +804,25 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   background: var(--pg-bg-1, #0a3d4d);
 }
 
+/* Fixed center band — hero; content scrolls over it (Appearance-managed) */
+.pg-landing-fixed-center {
+  position: fixed;
+  top: var(--pg-fixed-overlay-top, 30vh);
+  left: var(--pg-fixed-overlay-left, 0%);
+  width: var(--pg-fixed-overlay-width, 100%);
+  height: var(--pg-fixed-overlay-height, 40vh);
+  background: var(--pg-fixed-overlay-bg, #000);
+  display: var(--pg-fixed-overlay-display, block);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.pg-landing-main {
+  position: relative;
+}
+
 .pg-section {
   position: relative;
-  isolation: isolate;
 }
 
 .pg-section-bg {
@@ -829,7 +845,7 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
 
 .pg-section-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
 .pg-landing-header {

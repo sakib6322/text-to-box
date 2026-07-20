@@ -157,6 +157,7 @@ export default function CourseLanding() {
 
   return (
     <div className="pg-landing" style={landingStyle}>
+      <div className="pg-landing-fixed-center" aria-hidden />
       <header className="pg-landing-header">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" className="pg-brand group flex items-center gap-2.5">
@@ -210,7 +211,7 @@ export default function CourseLanding() {
         ) : null}
       </header>
 
-      <main className="relative">
+      <main className="pg-landing-main relative">
         <LandingSection className="pg-hero-layer" background={heroSectionBackground(lp)}>
           <div className="pg-hero-away mx-auto grid max-w-6xl gap-10 px-4 pb-20 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-2 lg:items-center lg:gap-12">
             <div>

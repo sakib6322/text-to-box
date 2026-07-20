@@ -1460,42 +1460,91 @@ export default function AdminAppearance() {
             ) : null}
 
             {landingSection === "hero" ? (
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TextField label="Eyebrow" value={lp.heroEyebrow} onChange={(v) => updateLandingPage("heroEyebrow", v)} />
-                <TextField
-                  label="Headline"
-                  value={lp.heroHeadline}
-                  onChange={(v) => updateLandingPage("heroHeadline", v)}
-                />
-                <div className="sm:col-span-2">
-                  <Field label="Supporting text">
-                    <Textarea
-                      value={lp.heroSubtext}
-                      onChange={(e) => updateLandingPage("heroSubtext", e.target.value)}
-                      rows={3}
-                    />
-                  </Field>
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <TextField label="Eyebrow" value={lp.heroEyebrow} onChange={(v) => updateLandingPage("heroEyebrow", v)} />
+                  <TextField
+                    label="Headline"
+                    value={lp.heroHeadline}
+                    onChange={(v) => updateLandingPage("heroHeadline", v)}
+                  />
+                  <div className="sm:col-span-2">
+                    <Field label="Supporting text">
+                      <Textarea
+                        value={lp.heroSubtext}
+                        onChange={(e) => updateLandingPage("heroSubtext", e.target.value)}
+                        rows={3}
+                      />
+                    </Field>
+                  </div>
+                  <TextField
+                    label="Explore CTA"
+                    value={lp.heroCtaExplore}
+                    onChange={(v) => updateLandingPage("heroCtaExplore", v)}
+                  />
+                  <TextField
+                    label="Featured label"
+                    value={lp.heroFeaturedLabel}
+                    onChange={(v) => updateLandingPage("heroFeaturedLabel", v)}
+                  />
+                  <TextField
+                    label="Fallback course title"
+                    value={lp.heroFallbackTitle}
+                    onChange={(v) => updateLandingPage("heroFallbackTitle", v)}
+                  />
+                  <TextField
+                    label="Fallback course description"
+                    value={lp.heroFallbackDesc}
+                    onChange={(v) => updateLandingPage("heroFallbackDesc", v)}
+                  />
                 </div>
-                <TextField
-                  label="Explore CTA"
-                  value={lp.heroCtaExplore}
-                  onChange={(v) => updateLandingPage("heroCtaExplore", v)}
-                />
-                <TextField
-                  label="Featured label"
-                  value={lp.heroFeaturedLabel}
-                  onChange={(v) => updateLandingPage("heroFeaturedLabel", v)}
-                />
-                <TextField
-                  label="Fallback course title"
-                  value={lp.heroFallbackTitle}
-                  onChange={(v) => updateLandingPage("heroFallbackTitle", v)}
-                />
-                <TextField
-                  label="Fallback course description"
-                  value={lp.heroFallbackDesc}
-                  onChange={(v) => updateLandingPage("heroFallbackDesc", v)}
-                />
+
+                <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Fixed hero overlay</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Stays fixed while hero and later sections scroll over it. Default: full width, 40% viewport height,
+                    vertically centered (top 30%).
+                  </p>
+                  <BoolField
+                    label="Show fixed overlay"
+                    checked={lp.heroFixedOverlayEnabled}
+                    onChange={(v) => updateLandingPage("heroFixedOverlayEnabled", v)}
+                  />
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <ColorField
+                      label="Overlay color"
+                      value={lp.heroFixedOverlayColor}
+                      onChange={(v) => updateLandingPage("heroFixedOverlayColor", v)}
+                    />
+                    <NumberField
+                      label="Width (%)"
+                      value={lp.heroFixedOverlayWidthPercent}
+                      min={1}
+                      max={100}
+                      step={1}
+                      onChange={(n) => updateLandingPage("heroFixedOverlayWidthPercent", n)}
+                      hint="100 = full width"
+                    />
+                    <NumberField
+                      label="Height (vh %)"
+                      value={lp.heroFixedOverlayHeightPercent}
+                      min={1}
+                      max={100}
+                      step={1}
+                      onChange={(n) => updateLandingPage("heroFixedOverlayHeightPercent", n)}
+                      hint="Default 40"
+                    />
+                    <NumberField
+                      label="Top offset (vh %)"
+                      value={lp.heroFixedOverlayTopPercent}
+                      min={0}
+                      max={99}
+                      step={1}
+                      onChange={(n) => updateLandingPage("heroFixedOverlayTopPercent", n)}
+                      hint="30 centers 40% band"
+                    />
+                  </div>
+                </div>
               </div>
             ) : null}
 
