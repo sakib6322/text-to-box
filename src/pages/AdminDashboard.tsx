@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { COURSE_PLAN_META, COURSE_PLAN_SECTIONS } from "@/lib/courseMappingPlan";
+import { PROGRESS_PLAN_META, PROGRESS_PLAN_SECTIONS } from "@/lib/progressPlan";
 import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
 import { CountUp } from "@/components/CountUp";
@@ -39,7 +40,8 @@ const emptyStats: DashboardStats = {
 };
 
 export default function AdminDashboard() {
-  const [planOpen, setPlanOpen] = useState(false);
+  const [mappingPlanOpen, setMappingPlanOpen] = useState(false);
+  const [progressPlanOpen, setProgressPlanOpen] = useState(false);
   const [stats, setStats] = useState<DashboardStats>(emptyStats);
   const [statsLoading, setStatsLoading] = useState(true);
 
@@ -213,14 +215,75 @@ export default function AdminDashboard() {
           type="button"
           variant="outline"
           className="w-full justify-between gap-2 sm:w-auto"
-          onClick={() => setPlanOpen((o) => !o)}
-          aria-expanded={planOpen}
+          onClick={() => setProgressPlanOpen((o) => !o)}
+          aria-expanded={progressPlanOpen}
         >
-          <span className="font-medium">Course Mapping workflow</span>
-          <ChevronDown className={`h-4 w-4 transition-transform ${planOpen ? "rotate-180" : ""}`} />
+          <span className="font-medium">Progress Plan</span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${progressPlanOpen ? "rotate-180" : ""}`} />
         </Button>
 
-        {planOpen ? (
+        {progressPlanOpen ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border bg-gradient-to-br from-violet-50 to-cyan-50 p-4 dark:from-violet-950/30 dark:to-cyan-950/20">
+              <p className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-300">
+                {PROGRESS_PLAN_META.product} · v{PROGRESS_PLAN_META.version}
+              </p>
+              <h2 className="mt-1 text-lg font-semibold">{PROGRESS_PLAN_META.title}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{PROGRESS_PLAN_META.subtitle}</p>
+            </div>
+            {PROGRESS_PLAN_SECTIONS.map((section) => (
+              <Card key={section.title} className="overflow-hidden border-violet-200/60 dark:border-violet-900/40">
+                <div className="border-b bg-muted/30 px-4 py-3 sm:px-5">
+                  <h3 className="text-sm font-semibold text-foreground sm:text-base">{section.title}</h3>
+                </div>
+                <div className="space-y-3 px-4 py-4 sm:px-5">
+                  {section.body ? (
+                    <p className="text-sm leading-relaxed text-muted-foreground">{section.body}</p>
+                  ) : null}
+                  {section.bullets?.length ? (
+                    <ul className="space-y-1.5 text-sm">
+                      {section.bullets.map((b) => (
+                        <li key={b} className="flex gap-2">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+                          <span className="text-foreground/90 leading-relaxed">{b}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {section.subsections?.map((sub) => (
+                    <div key={sub.title} className="rounded-lg border bg-muted/20 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-700 dark:text-violet-400">
+                        {sub.title}
+                      </p>
+                      <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                        {sub.bullets.map((b) => (
+                          <li key={b} className="leading-relaxed">
+                            – {b}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="space-y-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between gap-2 sm:w-auto"
+          onClick={() => setMappingPlanOpen((o) => !o)}
+          aria-expanded={mappingPlanOpen}
+        >
+          <span className="font-medium">Course Mapping workflow</span>
+          <ChevronDown className={`h-4 w-4 transition-transform ${mappingPlanOpen ? "rotate-180" : ""}`} />
+        </Button>
+
+        {mappingPlanOpen ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Full Course Mapping Module specification — open sections below.

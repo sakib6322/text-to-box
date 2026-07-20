@@ -2124,6 +2124,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         onAddKeyPoint={addDetailsKeyPoint}
         onDeleteKeyPoint={deleteDetailsKeyPoint}
         savingKeyPoint={savingKeyPoint}
+        conceptId={detailsConceptId ?? undefined}
+        showSelfQaEditor={hasPermission("progress.self_qa.manage")}
       />
     </div>
   );

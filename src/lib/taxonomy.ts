@@ -1,6 +1,13 @@
 import { apiUrl } from "@/lib/apiBase";
 
-export type TaxonomyItem = { id: string; name: string; sort_order?: number; created_at?: string };
+export type TaxonomyItem = {
+  id: string;
+  name: string;
+  sort_order?: number;
+  created_at?: string;
+  /** Optional secondary line (e.g. progress %) */
+  subtitle?: string;
+};
 
 export type TaxonomySelection = {
   subjectId: string;

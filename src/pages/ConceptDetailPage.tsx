@@ -87,7 +87,7 @@ export default function ConceptDetailPage() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
-              <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+              <Link to={`/practice/${conceptId}/setup`}>
                 <Play className="h-3.5 w-3.5 shrink-0" />
                 <span>Practice</span>
               </Link>
@@ -116,7 +116,7 @@ export default function ConceptDetailPage() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                  <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+                  <Link to={`/practice/${conceptId}/setup`}>
                     <Play className="mr-1 h-3 w-3" />
                     Practice
                   </Link>

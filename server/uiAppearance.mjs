@@ -228,7 +228,97 @@ export function getDefaultUiAppearance() {
     performance: { smoothScroll: false, reduceMotion: false },
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
+    progressPlan: defaultProgressPlan(),
   };
+}
+
+function defaultProgressPlan(overrides = {}) {
+  return {
+    enabled: true,
+    stepBarTitle: "Progress Plan",
+    steps: [
+      { id: 1, label: "Concept Learning", labelBn: "কনসেপ্ট শেখা" },
+      { id: 2, label: "Key Points", labelBn: "Key Points" },
+      { id: 3, label: "Question Yourself", labelBn: "নিজেকে পরীক্ষা" },
+      { id: 4, label: "Practice Questions", labelBn: "Practice Questions" },
+    ],
+    defaultPassPercent: 70,
+    examNightHoursBefore: 24,
+    showProgressOnBrowse: true,
+    showExamNightCard: true,
+    showFinalMockCard: true,
+    showReviewMistakes: true,
+    showConceptStepBar: true,
+    preferBengaliStepLabels: true,
+    examNightTitle: "Exam Night — Previous Year Questions",
+    examNightSubtitle: "Light PYQ revision before your upcoming mock (15–20 min suggested).",
+    finalMockTitle: "Final Mock Exams",
+    finalMockSubtitle: "Required to complete the course",
+    finalMockProgressLabel: "passed",
+    reviewMistakesTitle: "Review Mistakes",
+    reviewMistakesSubtitle: "Re-test wrong questions. Answer correctly to remove from the bank.",
+    reviewMistakesButton: "Review Mistakes",
+    reviewMistakesEmpty: "No active mistakes — great work!",
+    reviewMistakesClearAll: "Clear all mistakes",
+    studyProgressTitle: "My progress",
+    studyProgressSubtitle: "Study & practice report",
+    conceptPracticeIntro: "Admin-assigned practice sets. Pass each set to complete this concept (100%).",
+    courseCompleteLabel: "Course complete",
+    progressPctSuffix: "complete",
+    step1CompleteButton: "Step complete — Key Points unlock",
+    step2CompleteButton: "Complete key points",
+    step3CompleteButton: "Complete step",
+    lockedPreviousSteps: "Complete previous steps first.",
+    noSelfQaSkip: "এই concept-এ Question Bank-এ এখনো প্রশ্ন নেই। Admin প্রশ্ন যোগ করলে নিজেকে পরীক্ষা স্বয়ংক্রিয়ভাবে তৈরি হবে।",
+    noPracticeSets: "No practice sets assigned yet.",
+    openFromMyCourses: "Open from My Courses to access admin practice sets.",
+    selfQaIntro: "প্রথমে প্রশ্ন পড়ুন → উত্তর দেখুন → পরের প্রশ্নে যান। সব শেষ হলে Progress ৭৫% হবে।",
+    selfQaShowAnswerLabel: "উত্তর দেখুন",
+    selfQaNextQuestionLabel: "পরের প্রশ্ন",
+    selfQaAnswerLabel: "উত্তর",
+    selfQaQuestionLabel: "প্রশ্ন",
+    selfQaTapHint: "নিজে উত্তর ভেবে দেখুন, তারপর «উত্তর দেখুন» চাপুন",
+    selfQaPrevLabel: "আগের",
+    selfQaProgressLabel: "Cards seen",
+    selfQaCompleteToast: "Question Yourself সম্পন্ন — Practice unlocked (৭৫%)",
+    progressBarColor: "192 85% 38%",
+    examNightCardBg: "rgba(139, 92, 246, 0.08)",
+    examNightBorder: "rgba(139, 92, 246, 0.35)",
+    examNightIconColor: "#7c3aed",
+    finalMockCardBg: "rgba(245, 158, 11, 0.08)",
+    finalMockBorder: "rgba(245, 158, 11, 0.35)",
+    finalMockIconColor: "#d97706",
+    completeBadgeBg: "192 85% 38%",
+    mistakeAccentColor: "#ef4444",
+    ...overrides,
+  };
+}
+
+function mergeProgressPlan(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch;
+  let steps = base.steps;
+  if (Array.isArray(p.steps) && p.steps.length) {
+    const byId = new Map(base.steps.map((s) => [s.id, s]));
+    for (const raw of p.steps) {
+      if (!raw || typeof raw !== "object") continue;
+      const id = raw.id;
+      if (id < 1 || id > 4) continue;
+      const prev = byId.get(id) ?? { id, label: "", labelBn: "" };
+      byId.set(id, {
+        id,
+        label: typeof raw.label === "string" ? raw.label : prev.label,
+        labelBn: typeof raw.labelBn === "string" ? raw.labelBn : prev.labelBn,
+      });
+    }
+    steps = [1, 2, 3, 4].map((id) => byId.get(id));
+  }
+  const out = { ...base, steps };
+  for (const key of Object.keys(base)) {
+    if (key === "steps") continue;
+    if (p[key] !== undefined) out[key] = p[key];
+  }
+  return out;
 }
 
 function defaultLandingFaqItems() {
@@ -567,6 +657,7 @@ function fromV1(raw) {
     performance: { ...base.performance, ...performance },
     landingFaq: mergeLandingFaq(base.landingFaq, raw?.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw?.landingPage),
+    progressPlan: mergeProgressPlan(base.progressPlan, raw?.progressPlan),
   };
 }
 
@@ -585,6 +676,7 @@ export function parseUiAppearance(raw) {
       performance: { ...defaults.performance, ...(parsed.performance ?? {}) },
       landingFaq: mergeLandingFaq(defaults.landingFaq, parsed.landingFaq),
       landingPage: mergeLandingPage(defaults.landingPage, parsed.landingPage),
+      progressPlan: mergeProgressPlan(defaults.progressPlan, parsed.progressPlan),
     };
   } catch {
     return defaults;
@@ -595,6 +687,18 @@ function isMissingTableError(error) {
   const msg = String(error?.message ?? error ?? "").toLowerCase();
   const code = String(error?.code ?? "");
   return code === "42P01" || code === "PGRST205" || msg.includes("does not exist") || msg.includes("could not find the table");
+}
+
+export async function loadProgressPlanSettings(db) {
+  try {
+    const row = await readFromUiTable(db);
+    if (row?.config) return parseUiAppearance(row.config).progressPlan;
+    const fallback = await getAppSetting(db, UI_APPEARANCE_KEY);
+    if (fallback) return parseUiAppearance(fallback).progressPlan;
+  } catch {
+    /* use defaults */
+  }
+  return getDefaultUiAppearance().progressPlan;
 }
 
 async function readFromUiTable(db) {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Shield, User } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Loader2, Shield, User, XCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,8 @@ import {
   type AuthSession,
 } from "@/lib/auth";
 import { PERMISSION_GROUPS } from "@/lib/permissions";
+import { fetchMistakes } from "@/lib/progressApi";
+import { useProgressAppearance } from "@/hooks/useProgressAppearance";
 
 function roleLabel(role: AuthSession["role"]) {
   if (role === "admin") return "Administrator";
@@ -31,6 +34,8 @@ export default function MyProfile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+  const [mistakeCount, setMistakeCount] = useState(0);
+  const pp = useProgressAppearance();
 
   useEffect(() => {
     void (async () => {
@@ -40,6 +45,12 @@ export default function MyProfile() {
         if (user) {
           setSession(user);
           setDisplayName(user.displayName ?? "");
+        }
+        try {
+          const m = await fetchMistakes();
+          setMistakeCount(m.count ?? m.mistakes?.length ?? 0);
+        } catch {
+          setMistakeCount(0);
         }
       } finally {
         setLoading(false);
@@ -114,6 +125,31 @@ export default function MyProfile() {
         <h1 className="text-2xl font-bold tracking-tight page-title">My profile</h1>
         <p className="text-sm text-muted-foreground mt-1">Account details, display name, and password.</p>
       </div>
+
+      {pp.enabled && pp.showReviewMistakes ? (
+      <Card className="p-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold flex items-center gap-2">
+            <XCircle className="h-4 w-4" style={{ color: "var(--pg-mistake-accent)" }} /> {pp.reviewMistakesTitle}
+          </p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {mistakeCount > 0
+              ? `${mistakeCount} wrong question${mistakeCount === 1 ? "" : "s"} to re-test`
+              : pp.reviewMistakesEmpty}
+          </p>
+        </div>
+        <Button asChild variant={mistakeCount > 0 ? "default" : "outline"} size="sm" className="gap-2">
+          <Link to="/study/mistakes">
+            {pp.reviewMistakesButton}
+            {mistakeCount > 0 ? (
+              <Badge variant="secondary" className="tabular-nums ml-1">
+                {mistakeCount}
+              </Badge>
+            ) : null}
+          </Link>
+        </Button>
+      </Card>
+      ) : null}
 
       <Card className="p-6 space-y-4">
         <div className="flex items-start gap-4">

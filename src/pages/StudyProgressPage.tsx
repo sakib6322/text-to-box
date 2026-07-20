@@ -6,10 +6,13 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { getPracticeSessions, getStudyProgressMap, hydrateProgressFromServer, studyCompletionPct } from "@/lib/userProgress";
+import { useProgressAppearance } from "@/hooks/useProgressAppearance";
+import { progressStepLabel } from "@/lib/uiAppearance";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function StudyProgressPage() {
   const isMobile = useIsMobile();
+  const pp = useProgressAppearance();
   const [, setTick] = useState(0);
 
   useEffect(() => {
@@ -20,6 +23,11 @@ export default function StudyProgressPage() {
     (a, b) => new Date(b.lastStudiedAt).getTime() - new Date(a.lastStudiedAt).getTime(),
   );
   const practiceList = getPracticeSessions();
+  const avgConceptPct =
+    studyList.length > 0
+      ? Math.round(studyList.reduce((n, s) => n + studyCompletionPct(s), 0) / studyList.length)
+      : 0;
+  const step4Complete = studyList.filter((s) => !!s.step4CompletedAt).length;
 
   const shellClass = isMobile ? "mx-auto max-w-lg pb-8 space-y-4" : "mx-auto max-w-5xl pb-10 space-y-6 px-2";
 
@@ -28,8 +36,8 @@ export default function StudyProgressPage() {
       <div className={`sticky top-0 z-20 bg-background/95 border-b ${isMobile ? "px-4 py-3" : "px-2 py-4 rounded-lg"}`}>
         <div className="flex items-center gap-2">
           <div className="flex-1">
-            <h1 className={`font-semibold ${isMobile ? "text-sm" : "text-xl"}`}>My progress</h1>
-            <p className="text-[10px] text-muted-foreground sm:text-xs">Study & practice report</p>
+            <h1 className={`font-semibold ${isMobile ? "text-sm" : "text-xl"}`}>{pp.studyProgressTitle}</h1>
+            <p className="text-[10px] text-muted-foreground sm:text-xs">{pp.studyProgressSubtitle}</p>
           </div>
           <Button asChild variant="outline" size="sm" className="text-xs h-8 shrink-0">
             <Link to="/my-suggestions">My Suggestions</Link>
@@ -48,22 +56,18 @@ export default function StudyProgressPage() {
             <p className="text-muted-foreground mt-1 leading-tight">Concepts studied</p>
           </div>
           <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">{avgConceptPct}%</p>
+            <p className="text-muted-foreground mt-1 leading-tight">Avg concept progress</p>
+          </div>
+          <div className="rounded-lg border p-2 sm:p-3">
+            <p className="text-lg sm:text-2xl font-bold tabular-nums">{step4Complete}</p>
+            <p className="text-muted-foreground mt-1 leading-tight">Concepts 100% done</p>
+          </div>
+          <div className="rounded-lg border p-2 sm:p-3">
             <p className="text-lg sm:text-2xl font-bold tabular-nums">
               {practiceList.filter((p) => p.completedAt).length}
             </p>
-            <p className="text-muted-foreground mt-1 leading-tight">Practice exams done</p>
-          </div>
-          <div className="rounded-lg border p-2 sm:p-3">
-            <p className="text-lg sm:text-2xl font-bold tabular-nums">
-              {studyList.reduce((n, s) => n + s.studiedKeyPointIds.length, 0)}
-            </p>
-            <p className="text-muted-foreground mt-1 leading-tight">Key points studied</p>
-          </div>
-          <div className="rounded-lg border p-2 sm:p-3">
-            <p className="text-lg sm:text-2xl font-bold tabular-nums">
-              {practiceList.filter((p) => !p.completedAt).length}
-            </p>
-            <p className="text-muted-foreground mt-1 leading-tight">In progress</p>
+            <p className="text-muted-foreground mt-1 leading-tight">Legacy practice done</p>
           </div>
         </div>
       </Card>
@@ -78,6 +82,16 @@ export default function StudyProgressPage() {
           <div className={isMobile ? "space-y-2" : "grid sm:grid-cols-2 gap-3"}>
             {studyList.map((s) => {
               const pct = studyCompletionPct(s);
+              const currentStep = s.step4CompletedAt
+                ? 4
+                : s.step3CompletedAt
+                  ? 4
+                  : s.step2CompletedAt
+                    ? 3
+                    : s.step1CompletedAt
+                      ? 2
+                      : 1;
+              const stepLabel = progressStepLabel(pp.steps, currentStep, pp.preferBengaliStepLabels);
               return (
                 <Card key={s.conceptId} className="p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -86,7 +100,7 @@ export default function StudyProgressPage() {
                   </div>
                   <Progress value={pct} className="h-1.5" />
                   <p className="text-[10px] text-muted-foreground">
-                    {s.studiedKeyPointIds.length} / {s.totalKeyPoints} key points ·{" "}
+                    {stepLabel} · {s.studiedKeyPointIds.length} / {s.totalKeyPoints} key points ·{" "}
                     {new Date(s.lastStudiedAt).toLocaleDateString()}
                   </p>
                   <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>

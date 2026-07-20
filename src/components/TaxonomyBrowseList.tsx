@@ -69,7 +69,12 @@ export function TaxonomyBrowseList({
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
             {String(item.name).trim().charAt(0).toUpperCase() || "?"}
           </span>
-          <span className="min-w-0 flex-1 text-sm font-medium leading-snug break-words">{item.name}</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium leading-snug break-words">{item.name}</span>
+            {item.subtitle ? (
+              <span className="mt-0.5 block text-xs text-muted-foreground">{item.subtitle}</span>
+            ) : null}
+          </span>
           <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       ))}

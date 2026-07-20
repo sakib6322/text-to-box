@@ -92,6 +92,7 @@ import {
   runSchemaCheck,
 } from "./databaseOps.mjs";
 import { registerCourseRoutes } from "./courses.mjs";
+import { registerProgressRoutes } from "./progress.mjs";
 
 const app = express();
 app.use(cors());
@@ -1907,7 +1908,9 @@ app.get("/api/user/progress/study", async (req, res) => {
     if (!user) return;
     const { data, error } = await db
       .from("user_study_progress")
-      .select("concept_id, concept_name, studied_key_point_ids, total_key_points, last_studied_at")
+      .select(
+        "concept_id, concept_name, studied_key_point_ids, total_key_points, last_studied_at, step1_completed_at, step2_completed_at, step3_completed_at, step4_completed_at, self_qa_seen_ids",
+      )
       .eq("user_id", user.id);
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });
     return res.json({ rows: data ?? [] });
@@ -1926,13 +1929,28 @@ app.put("/api/user/progress/study", async (req, res) => {
     const body = req.body ?? {};
     const conceptId = String(body.concept_id ?? "").trim();
     if (!conceptId) return res.status(400).json({ error: "concept_id required" });
+    const { data: existing } = await db
+      .from("user_study_progress")
+      .select("*")
+      .eq("user_id", user.id)
+      .eq("concept_id", conceptId)
+      .maybeSingle();
     const row = {
       user_id: user.id,
       concept_id: conceptId,
-      concept_name: String(body.concept_name ?? ""),
-      studied_key_point_ids: Array.isArray(body.studied_key_point_ids) ? body.studied_key_point_ids : [],
-      total_key_points: Number(body.total_key_points ?? 0),
+      concept_name: String(body.concept_name ?? existing?.concept_name ?? ""),
+      studied_key_point_ids: Array.isArray(body.studied_key_point_ids)
+        ? body.studied_key_point_ids
+        : (existing?.studied_key_point_ids ?? []),
+      total_key_points: Number(body.total_key_points ?? existing?.total_key_points ?? 0),
       last_studied_at: body.last_studied_at ?? new Date().toISOString(),
+      step1_completed_at: body.step1_completed_at !== undefined ? body.step1_completed_at : (existing?.step1_completed_at ?? null),
+      step2_completed_at: body.step2_completed_at !== undefined ? body.step2_completed_at : (existing?.step2_completed_at ?? null),
+      step3_completed_at: body.step3_completed_at !== undefined ? body.step3_completed_at : (existing?.step3_completed_at ?? null),
+      step4_completed_at: body.step4_completed_at !== undefined ? body.step4_completed_at : (existing?.step4_completed_at ?? null),
+      self_qa_seen_ids: Array.isArray(body.self_qa_seen_ids)
+        ? body.self_qa_seen_ids
+        : (existing?.self_qa_seen_ids ?? []),
     };
     const { error } = await db.from("user_study_progress").upsert(row, { onConflict: "user_id,concept_id" });
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });
@@ -3274,6 +3292,33 @@ app.get("/api/questions", async (req, res) => {
     const topic = String(req.query.topic ?? "").trim();
     const concept = String(req.query.concept ?? "").trim();
     const boardId = String(req.query.board_id ?? "").trim();
+    const idsParam = String(req.query.ids ?? "").trim();
+
+    if (idsParam) {
+      const ids = idsParam.split(",").map((s) => s.trim()).filter(Boolean);
+      if (!ids.length) return res.json({ rows: [] });
+      const { data, error } = await db
+        .from("questions")
+        .select("id, created_at, source_point_id, question_mode, stem, payload, status, difficulty, marks, subject, system, chapter, topic, concept")
+        .in("id", ids);
+      if (error) return res.status(500).json({ error: error.message });
+      const rows = (data ?? []).map((q) => ({
+        id: q.id,
+        createdAt: q.created_at,
+        sourcePointId: q.source_point_id ?? null,
+        questionMode: q.question_mode,
+        subject: q.subject ?? "",
+        system: q.system ?? "",
+        chapter: q.chapter ?? "",
+        topic: q.topic ?? "",
+        concept: q.concept ?? "",
+        marks: q.marks ?? 1,
+        metadata: { status: q.status ?? "", difficulty: q.difficulty ?? "" },
+        mcq: q.question_mode === "mcq" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+        sba: q.question_mode === "sba" ? (q.payload && typeof q.payload === "object" ? q.payload : { stem: q.stem }) : null,
+      }));
+      return res.json({ rows });
+    }
 
     let sourcePointIdsForBoard = null;
     if (boardId) {
@@ -4207,6 +4252,7 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
 });
 
 registerCourseRoutes(app, { requireSupabase, requireAuthUser, requirePerm });
+registerProgressRoutes(app, { requireSupabase, requireAuthUser, requirePerm });
 
 const port = Number(process.env.PORT || 8787);
 await initDbConnection();

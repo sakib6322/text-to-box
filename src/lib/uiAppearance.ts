@@ -3,6 +3,8 @@
  * Stored in public.ui_appearance.config (jsonb), fallback app_settings.ui_appearance
  */
 
+import { CONCEPT_STEPS } from "@/lib/progressPlan";
+
 export type DeviceKey = "mobile" | "tablet" | "desktop";
 
 export type StoryDialogWidth = "md" | "lg" | "xl" | "2xl" | "full";
@@ -270,6 +272,69 @@ export type LandingPageAppearance = {
   footerNote: string;
 };
 
+/** Effective Study & Practice Progress Plan — shared UI copy, steps, toggles, colors. */
+export type ProgressStepConfig = {
+  id: 1 | 2 | 3 | 4;
+  label: string;
+  labelBn: string;
+};
+
+export type ProgressPlanAppearance = {
+  /** Master switch — hides progress chrome when false (API progress still works). */
+  enabled: boolean;
+  stepBarTitle: string;
+  steps: ProgressStepConfig[];
+  defaultPassPercent: number;
+  /** Hours before final mock when Exam Night PYQ unlocks. */
+  examNightHoursBefore: number;
+  showProgressOnBrowse: boolean;
+  showExamNightCard: boolean;
+  showFinalMockCard: boolean;
+  showReviewMistakes: boolean;
+  showConceptStepBar: boolean;
+  preferBengaliStepLabels: boolean;
+  examNightTitle: string;
+  examNightSubtitle: string;
+  finalMockTitle: string;
+  finalMockSubtitle: string;
+  finalMockProgressLabel: string;
+  reviewMistakesTitle: string;
+  reviewMistakesSubtitle: string;
+  reviewMistakesButton: string;
+  reviewMistakesEmpty: string;
+  reviewMistakesClearAll: string;
+  studyProgressTitle: string;
+  studyProgressSubtitle: string;
+  conceptPracticeIntro: string;
+  courseCompleteLabel: string;
+  progressPctSuffix: string;
+  step1CompleteButton: string;
+  step2CompleteButton: string;
+  step3CompleteButton: string;
+  lockedPreviousSteps: string;
+  noSelfQaSkip: string;
+  noPracticeSets: string;
+  openFromMyCourses: string;
+  selfQaIntro: string;
+  selfQaShowAnswerLabel: string;
+  selfQaNextQuestionLabel: string;
+  selfQaAnswerLabel: string;
+  selfQaQuestionLabel: string;
+  selfQaTapHint: string;
+  selfQaPrevLabel: string;
+  selfQaProgressLabel: string;
+  selfQaCompleteToast: string;
+  progressBarColor: string;
+  examNightCardBg: string;
+  examNightBorder: string;
+  examNightIconColor: string;
+  finalMockCardBg: string;
+  finalMockBorder: string;
+  finalMockIconColor: string;
+  completeBadgeBg: string;
+  mistakeAccentColor: string;
+};
+
 export type UiAppearance = {
   version: 2;
   mobile: DeviceAppearance;
@@ -283,6 +348,8 @@ export type UiAppearance = {
   landingFaq: LandingFaqAppearance;
   /** Public course landing design + copy */
   landingPage: LandingPageAppearance;
+  /** Progress Plan student UI + behavior knobs */
+  progressPlan: ProgressPlanAppearance;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -591,6 +658,154 @@ export function defaultLandingFaq(overrides: Partial<LandingFaqAppearance> = {})
   };
 }
 
+export function defaultProgressPlan(overrides: Partial<ProgressPlanAppearance> = {}): ProgressPlanAppearance {
+  return {
+    enabled: true,
+    stepBarTitle: "Progress Plan",
+    steps: CONCEPT_STEPS.map((s) => ({ id: s.id, label: s.label, labelBn: s.labelBn })),
+    defaultPassPercent: 70,
+    examNightHoursBefore: 24,
+    showProgressOnBrowse: true,
+    showExamNightCard: true,
+    showFinalMockCard: true,
+    showReviewMistakes: true,
+    showConceptStepBar: true,
+    preferBengaliStepLabels: true,
+    examNightTitle: "Exam Night — Previous Year Questions",
+    examNightSubtitle: "Light PYQ revision before your upcoming mock (15–20 min suggested).",
+    finalMockTitle: "Final Mock Exams",
+    finalMockSubtitle: "Required to complete the course",
+    finalMockProgressLabel: "passed",
+    reviewMistakesTitle: "Review Mistakes",
+    reviewMistakesSubtitle: "Re-test wrong questions. Answer correctly to remove from the bank.",
+    reviewMistakesButton: "Review Mistakes",
+    reviewMistakesEmpty: "No active mistakes — great work!",
+    reviewMistakesClearAll: "Clear all mistakes",
+    studyProgressTitle: "My progress",
+    studyProgressSubtitle: "Study & practice report",
+    conceptPracticeIntro: "Admin-assigned practice sets. Pass each set to complete this concept (100%).",
+    courseCompleteLabel: "Course complete",
+    progressPctSuffix: "complete",
+    step1CompleteButton: "Step complete — Key Points unlock",
+    step2CompleteButton: "Complete key points",
+    step3CompleteButton: "Complete step",
+    lockedPreviousSteps: "Complete previous steps first.",
+    noSelfQaSkip: "এই concept-এ Question Bank-এ এখনো প্রশ্ন নেই। Admin প্রশ্ন যোগ করলে নিজেকে পরীক্ষা স্বয়ংক্রিয়ভাবে তৈরি হবে।",
+    noPracticeSets: "No practice sets assigned yet.",
+    openFromMyCourses: "Open from My Courses to access admin practice sets.",
+    selfQaIntro: "প্রথমে প্রশ্ন পড়ুন → উত্তর দেখুন → পরের প্রশ্নে যান। সব শেষ হলে Progress ৭৫% হবে।",
+    selfQaShowAnswerLabel: "উত্তর দেখুন",
+    selfQaNextQuestionLabel: "পরের প্রশ্ন",
+    selfQaAnswerLabel: "উত্তর",
+    selfQaQuestionLabel: "প্রশ্ন",
+    selfQaTapHint: "নিজে উত্তর ভেবে দেখুন, তারপর «উত্তর দেখুন» চাপুন",
+    selfQaPrevLabel: "আগের",
+    selfQaProgressLabel: "Cards seen",
+    selfQaCompleteToast: "Question Yourself সম্পন্ন — Practice unlocked (৭৫%)",
+    progressBarColor: "192 85% 38%",
+    examNightCardBg: "rgba(139, 92, 246, 0.08)",
+    examNightBorder: "rgba(139, 92, 246, 0.35)",
+    examNightIconColor: "#7c3aed",
+    finalMockCardBg: "rgba(245, 158, 11, 0.08)",
+    finalMockBorder: "rgba(245, 158, 11, 0.35)",
+    finalMockIconColor: "#d97706",
+    completeBadgeBg: "192 85% 38%",
+    mistakeAccentColor: "#ef4444",
+    ...overrides,
+  };
+}
+
+export function mergeProgressPlan(base: ProgressPlanAppearance, patch: unknown): ProgressPlanAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<ProgressPlanAppearance>;
+  let steps = base.steps;
+  if (Array.isArray(p.steps) && p.steps.length) {
+    const byId = new Map(base.steps.map((s) => [s.id, s]));
+    for (const raw of p.steps) {
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as Partial<ProgressStepConfig>;
+      const id = s.id as 1 | 2 | 3 | 4;
+      if (id < 1 || id > 4) continue;
+      const prev = byId.get(id) ?? { id, label: "", labelBn: "" };
+      byId.set(id, {
+        id,
+        label: typeof s.label === "string" ? s.label : prev.label,
+        labelBn: typeof s.labelBn === "string" ? s.labelBn : prev.labelBn,
+      });
+    }
+    steps = [1, 2, 3, 4].map((id) => byId.get(id as 1 | 2 | 3 | 4)!);
+  }
+  const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    enabled: bool(p.enabled, base.enabled),
+    stepBarTitle: str(p.stepBarTitle, base.stepBarTitle),
+    steps,
+    defaultPassPercent: num(p.defaultPassPercent, base.defaultPassPercent),
+    examNightHoursBefore: num(p.examNightHoursBefore, base.examNightHoursBefore),
+    showProgressOnBrowse: bool(p.showProgressOnBrowse, base.showProgressOnBrowse),
+    showExamNightCard: bool(p.showExamNightCard, base.showExamNightCard),
+    showFinalMockCard: bool(p.showFinalMockCard, base.showFinalMockCard),
+    showReviewMistakes: bool(p.showReviewMistakes, base.showReviewMistakes),
+    showConceptStepBar: bool(p.showConceptStepBar, base.showConceptStepBar),
+    preferBengaliStepLabels: bool(p.preferBengaliStepLabels, base.preferBengaliStepLabels),
+    examNightTitle: str(p.examNightTitle, base.examNightTitle),
+    examNightSubtitle: str(p.examNightSubtitle, base.examNightSubtitle),
+    finalMockTitle: str(p.finalMockTitle, base.finalMockTitle),
+    finalMockSubtitle: str(p.finalMockSubtitle, base.finalMockSubtitle),
+    finalMockProgressLabel: str(p.finalMockProgressLabel, base.finalMockProgressLabel),
+    reviewMistakesTitle: str(p.reviewMistakesTitle, base.reviewMistakesTitle),
+    reviewMistakesSubtitle: str(p.reviewMistakesSubtitle, base.reviewMistakesSubtitle),
+    reviewMistakesButton: str(p.reviewMistakesButton, base.reviewMistakesButton),
+    reviewMistakesEmpty: str(p.reviewMistakesEmpty, base.reviewMistakesEmpty),
+    reviewMistakesClearAll: str(p.reviewMistakesClearAll, base.reviewMistakesClearAll),
+    studyProgressTitle: str(p.studyProgressTitle, base.studyProgressTitle),
+    studyProgressSubtitle: str(p.studyProgressSubtitle, base.studyProgressSubtitle),
+    conceptPracticeIntro: str(p.conceptPracticeIntro, base.conceptPracticeIntro),
+    courseCompleteLabel: str(p.courseCompleteLabel, base.courseCompleteLabel),
+    progressPctSuffix: str(p.progressPctSuffix, base.progressPctSuffix),
+    step1CompleteButton: str(p.step1CompleteButton, base.step1CompleteButton),
+    step2CompleteButton: str(p.step2CompleteButton, base.step2CompleteButton),
+    step3CompleteButton: str(p.step3CompleteButton, base.step3CompleteButton),
+    lockedPreviousSteps: str(p.lockedPreviousSteps, base.lockedPreviousSteps),
+    noSelfQaSkip: str(p.noSelfQaSkip, base.noSelfQaSkip),
+    noPracticeSets: str(p.noPracticeSets, base.noPracticeSets),
+    openFromMyCourses: str(p.openFromMyCourses, base.openFromMyCourses),
+    selfQaIntro: str(p.selfQaIntro, base.selfQaIntro),
+    selfQaShowAnswerLabel: str(p.selfQaShowAnswerLabel, base.selfQaShowAnswerLabel),
+    selfQaNextQuestionLabel: str(p.selfQaNextQuestionLabel, base.selfQaNextQuestionLabel),
+    selfQaAnswerLabel: str(p.selfQaAnswerLabel, base.selfQaAnswerLabel),
+    selfQaQuestionLabel: str(p.selfQaQuestionLabel, base.selfQaQuestionLabel),
+    selfQaTapHint: str(p.selfQaTapHint, base.selfQaTapHint),
+    selfQaPrevLabel: str(p.selfQaPrevLabel, base.selfQaPrevLabel),
+    selfQaProgressLabel: str(p.selfQaProgressLabel, base.selfQaProgressLabel),
+    selfQaCompleteToast: str(p.selfQaCompleteToast, base.selfQaCompleteToast),
+    progressBarColor: str(p.progressBarColor, base.progressBarColor),
+    examNightCardBg: str(p.examNightCardBg, base.examNightCardBg),
+    examNightBorder: str(p.examNightBorder, base.examNightBorder),
+    examNightIconColor: str(p.examNightIconColor, base.examNightIconColor),
+    finalMockCardBg: str(p.finalMockCardBg, base.finalMockCardBg),
+    finalMockBorder: str(p.finalMockBorder, base.finalMockBorder),
+    finalMockIconColor: str(p.finalMockIconColor, base.finalMockIconColor),
+    completeBadgeBg: str(p.completeBadgeBg, base.completeBadgeBg),
+    mistakeAccentColor: str(p.mistakeAccentColor, base.mistakeAccentColor),
+  };
+}
+
+export function progressStepLabel(
+  steps: ProgressStepConfig[],
+  stepId: 1 | 2 | 3 | 4,
+  preferBn: boolean,
+): string {
+  const step = steps.find((s) => s.id === stepId);
+  if (!step) return `Step ${stepId}`;
+  const bn = step.labelBn.trim();
+  const en = step.label.trim();
+  if (preferBn && bn) return bn;
+  return en || bn || `Step ${stepId}`;
+}
+
 export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {}): LandingPageAppearance {
   return {
     bgColor1: "#0a3d4d",
@@ -796,6 +1011,7 @@ export function defaultUiAppearance(): UiAppearance {
     },
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
+    progressPlan: defaultProgressPlan(),
   };
 }
 
@@ -923,6 +1139,7 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     performance: { ...base.performance, ...performance },
     landingFaq: mergeLandingFaq(base.landingFaq, raw.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw.landingPage),
+    progressPlan: mergeProgressPlan(base.progressPlan, raw.progressPlan),
   };
 }
 
@@ -943,6 +1160,7 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
     },
     landingFaq: mergeLandingFaq(base.landingFaq, p.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, p.landingPage),
+    progressPlan: mergeProgressPlan(base.progressPlan, p.progressPlan),
   };
 }
 
@@ -1085,6 +1303,19 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.dataset.uiDevice = device;
   root.dataset.smoothScroll = p.smoothScroll ? "1" : "0";
   root.dataset.reduceMotion = p.reduceMotion ? "1" : "0";
+
+  const pp = theme.progressPlan;
+
+  root.style.setProperty("--pg-progress-bar", pp.progressBarColor.startsWith("#") ? pp.progressBarColor : `hsl(${pp.progressBarColor})`);
+  root.style.setProperty("--pg-exam-night-bg", pp.examNightCardBg);
+  root.style.setProperty("--pg-exam-night-border", pp.examNightBorder);
+  root.style.setProperty("--pg-exam-night-icon", pp.examNightIconColor);
+  root.style.setProperty("--pg-final-mock-bg", pp.finalMockCardBg);
+  root.style.setProperty("--pg-final-mock-border", pp.finalMockBorder);
+  root.style.setProperty("--pg-final-mock-icon", pp.finalMockIconColor);
+  root.style.setProperty("--pg-complete-badge", pp.completeBadgeBg.startsWith("#") ? pp.completeBadgeBg : `hsl(${pp.completeBadgeBg})`);
+  root.style.setProperty("--pg-mistake-accent", pp.mistakeAccentColor);
+  root.dataset.progressPlanEnabled = pp.enabled ? "1" : "0";
 
   root.style.fontFamily = g.fontFamily;
   root.style.fontSize = `${g.baseFontSizePx}px`;

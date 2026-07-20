@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ChevronRight, Lock, Star } from "lucide-react";
+import { ArrowLeft, ChevronRight, Lock, Moon, Play, Star, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { ProgressPctBadge } from "@/components/ProgressPctBadge";
 import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
 import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
 import type { TaxonomyItem } from "@/lib/taxonomy";
+import { fetchCourseProgress, fetchProgressSets, type CourseProgressRollup, type ProgressPracticeSet } from "@/lib/progressApi";
+import { formatProgressPct, useProgressAppearance } from "@/hooks/useProgressAppearance";
 
 type TopicRow = {
   topic_id: string;
@@ -46,10 +49,14 @@ function Stars({ n }: { n: number }) {
 export default function MyCourseBrowse() {
   const { courseId = "" } = useParams();
   const navigate = useNavigate();
+  const pp = useProgressAppearance();
   const [name, setName] = useState("Course");
   const [today, setToday] = useState("");
   const [systems, setSystems] = useState<SystemBlock[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rollup, setRollup] = useState<CourseProgressRollup | null>(null);
+  const [examNightSets, setExamNightSets] = useState<ProgressPracticeSet[]>([]);
+  const [finalMockSets, setFinalMockSets] = useState<ProgressPracticeSet[]>([]);
 
   const [step, setStep] = useState<BrowseStep>("subjects");
   const [subjectId, setSubjectId] = useState<string | null>(null);
@@ -75,6 +82,24 @@ export default function MyCourseBrowse() {
         setSubjectId(null);
         setSystemId(null);
         setChapterId(null);
+        try {
+          const progress = await fetchCourseProgress(courseId);
+          setRollup(progress);
+          if (progress.exam_night_visible) {
+            setExamNightSets(await fetchProgressSets(courseId, { set_kind: "exam_night_pyq" }));
+          } else {
+            setExamNightSets([]);
+          }
+          if (progress.final_mocks.total > 0 && progress.final_mocks.passed < progress.final_mocks.total) {
+            setFinalMockSets(await fetchProgressSets(courseId, { set_kind: "final_mock" }));
+          } else {
+            setFinalMockSets([]);
+          }
+        } catch {
+          setRollup(null);
+          setExamNightSets([]);
+          setFinalMockSets([]);
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Load failed");
       } finally {
@@ -98,34 +123,77 @@ export default function MyCourseBrowse() {
     return selectedSystem.topics.find((t) => t.chapter_id === chapterId)?.chapter_name ?? "";
   }, [selectedSystem, chapterId]);
 
+  const pctBySubject = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of rollup?.subjects ?? []) map.set(s.subject_id, s.pct);
+    return map;
+  }, [rollup]);
+
+  const pctBySystem = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of rollup?.systems ?? []) map.set(s.system_id, s.pct);
+    return map;
+  }, [rollup]);
+
+  const pctByChapter = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of rollup?.chapters ?? []) map.set(c.chapter_id, c.pct);
+    return map;
+  }, [rollup]);
+
+  const pctByTopic = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of rollup?.topics ?? []) map.set(t.topic_id, t.pct);
+    return map;
+  }, [rollup]);
+
   const subjectItems: TaxonomyItem[] = useMemo(() => {
     const map = new Map<string, TaxonomyItem>();
     for (const s of systems) {
       if (!s.subject_id || !s.subject_name) continue;
-      if (!map.has(s.subject_id)) map.set(s.subject_id, { id: s.subject_id, name: s.subject_name });
+      if (!map.has(s.subject_id)) {
+        const pct = pctBySubject.get(s.subject_id);
+        map.set(s.subject_id, {
+          id: s.subject_id,
+          name: s.subject_name,
+          subtitle: pct != null && pp.showProgressOnBrowse ? formatProgressPct(pct) : undefined,
+        });
+      }
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [systems]);
+  }, [systems, pctBySubject]);
 
   const systemItems: TaxonomyItem[] = useMemo(() => {
     if (!subjectId) return [];
     return systems
       .filter((s) => s.subject_id === subjectId)
-      .map((s) => ({
-        id: s.system_id,
-        name: s.unlocked
-          ? s.system_name ?? "System"
-          : `${s.system_name ?? "System"} (locked${s.publish_date ? ` · ${s.publish_date}` : ""})`,
-      }))
+      .map((s) => {
+        const pct = pctBySystem.get(s.system_id);
+        const lockedSuffix = s.unlocked
+          ? ""
+          : ` (locked${s.publish_date ? ` · ${s.publish_date}` : ""})`;
+        return {
+          id: s.system_id,
+          name: `${s.system_name ?? "System"}${lockedSuffix}`,
+          subtitle: pct != null && pp.showProgressOnBrowse ? formatProgressPct(pct) : undefined,
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [systems, subjectId]);
+  }, [systems, subjectId, pctBySystem]);
 
   const chapterItems: TaxonomyItem[] = useMemo(() => {
     if (!selectedSystem?.unlocked) return [];
     const map = new Map<string, TaxonomyItem>();
     for (const t of selectedSystem.topics) {
       if (!t.chapter_id || !t.chapter_name) continue;
-      if (!map.has(t.chapter_id)) map.set(t.chapter_id, { id: t.chapter_id, name: t.chapter_name });
+      if (!map.has(t.chapter_id)) {
+        const pct = pctByChapter.get(t.chapter_id);
+        map.set(t.chapter_id, {
+          id: t.chapter_id,
+          name: t.chapter_name,
+          subtitle: pct != null && pp.showProgressOnBrowse ? formatProgressPct(pct) : undefined,
+        });
+      }
     }
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [selectedSystem]);
@@ -172,11 +240,91 @@ export default function MyCourseBrowse() {
       </Button>
 
       <div>
-        <h1 className="page-title">{name}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="page-title">{name}</h1>
+          {rollup && pp.showProgressOnBrowse ? <ProgressPctBadge pct={rollup.course_pct} size="md" /> : null}
+          {rollup?.course_complete ? <Badge variant="default">{pp.courseCompleteLabel}</Badge> : null}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">
           Subject → System → Chapter → Topic · today (Dhaka): {today || "—"}
         </p>
+        {rollup?.final_mocks && rollup.final_mocks.total > 0 ? (
+          <p className="mt-1 text-xs text-muted-foreground">
+            Final mocks: {rollup.final_mocks.passed} / {rollup.final_mocks.total} passed
+          </p>
+        ) : null}
       </div>
+
+      {pp.enabled && pp.showExamNightCard && rollup?.exam_night_visible && examNightSets.length > 0 ? (
+        <Card
+          className="p-4"
+          style={{
+            background: pp.examNightCardBg,
+            borderColor: pp.examNightBorder,
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <Moon className="mt-0.5 h-5 w-5 shrink-0" style={{ color: pp.examNightIconColor }} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="text-sm font-semibold">{pp.examNightTitle}</p>
+                <p className="text-xs text-muted-foreground">{pp.examNightSubtitle}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {examNightSets.map((set) => (
+                  <Button
+                    key={set.id}
+                    size="sm"
+                    variant="secondary"
+                    className="gap-1"
+                    onClick={() => navigate(`/progress/set/${set.id}?courseId=${courseId}`)}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {set.title}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
+
+      {pp.enabled && pp.showFinalMockCard && finalMockSets.length > 0 ? (
+        <Card
+          className="p-4"
+          style={{
+            background: pp.finalMockCardBg,
+            borderColor: pp.finalMockBorder,
+          }}
+        >
+          <div className="flex items-start gap-3">
+            <Trophy className="mt-0.5 h-5 w-5 shrink-0" style={{ color: pp.finalMockIconColor }} />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div>
+                <p className="text-sm font-semibold">{pp.finalMockTitle}</p>
+                <p className="text-xs text-muted-foreground">
+                  {pp.finalMockSubtitle} · {rollup?.final_mocks.passed ?? 0} / {rollup?.final_mocks.total ?? 0} {pp.finalMockProgressLabel}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {finalMockSets.map((set) => (
+                  <Button
+                    key={set.id}
+                    size="sm"
+                    variant={set.attempt?.passed ? "outline" : "default"}
+                    className="gap-1"
+                    onClick={() => navigate(`/progress/set/${set.id}?courseId=${courseId}`)}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    {set.title}
+                    {set.attempt?.passed ? " · Passed" : ""}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      ) : null}
 
       {!loading && systems.length > 0 ? (
         <div className="space-y-3">
@@ -316,7 +464,9 @@ export default function MyCourseBrowse() {
               No topics in this chapter
             </Card>
           ) : (
-            topicRows.map((t) => (
+            topicRows.map((t) => {
+              const topicPct = pctByTopic.get(t.topic_id);
+              return (
               <button
                 key={t.topic_id}
                 type="button"
@@ -330,14 +480,17 @@ export default function MyCourseBrowse() {
                   <span className="block text-sm font-medium leading-snug">{t.topic_name}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     {t.concept_count} concepts
+                    {topicPct != null && pp.showProgressOnBrowse ? ` · ${formatProgressPct(topicPct)}` : ""}
                   </span>
                 </span>
                 <span className="mt-1 flex shrink-0 items-center gap-2">
+                  {topicPct != null && pp.showProgressOnBrowse ? <ProgressPctBadge pct={topicPct} /> : null}
                   <Stars n={t.stars} />
                   <ChevronRight className="h-4 w-4 text-muted-foreground" />
                 </span>
               </button>
-            ))
+            );
+            })
           )}
         </div>
       )}

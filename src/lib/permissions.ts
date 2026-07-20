@@ -81,6 +81,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    id: "progress",
+    label: "Progress Plan",
+    permissions: [
+      { key: "progress.sets.manage", label: "Manage progress practice sets" },
+      { key: "progress.self_qa.manage", label: "Manage concept self-QA" },
+    ],
+  },
+  {
     id: "students",
     label: "Students",
     permissions: [

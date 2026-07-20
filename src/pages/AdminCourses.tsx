@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, Map, Plus, Trash2, Users, Pencil } from "lucide-react";
+import { CalendarDays, Map, Plus, Trash2, Users, Pencil, Target } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -183,6 +183,13 @@ export default function AdminCourses() {
                       <Users className="h-3.5 w-3.5" /> Enroll
                     </Link>
                   </Button>
+                  {hasPermission("progress.sets.manage") ? (
+                    <Button asChild variant="outline" size="sm" className="gap-1">
+                      <Link to={`/admin/courses/${c.id}/progress-sets`}>
+                        <Target className="h-3.5 w-3.5" /> Progress sets
+                      </Link>
+                    </Button>
+                  ) : null}
                   {hasPermission("courses.edit") ? (
                     <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(c)}>
                       <Pencil className="h-3.5 w-3.5" />

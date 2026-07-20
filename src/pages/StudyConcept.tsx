@@ -97,7 +97,7 @@ export default function StudyConcept() {
           </div>
           <div className={userStickyHeaderActions}>
             <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
-              <Link to={`/concept/${conceptId}/learn?tab=practice`}>
+              <Link to={`/practice/${conceptId}/setup`}>
                 <Target className="h-3.5 w-3.5 sm:mr-1" />
                 <span className={userHeaderActionLabel}>Practice</span>
               </Link>

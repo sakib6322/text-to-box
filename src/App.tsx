@@ -34,6 +34,7 @@ const ExamResult = lazy(() => import("./pages/ExamResult.tsx"));
 const ConceptLearn = lazy(() => import("./pages/ConceptLearn.tsx"));
 const ConceptDetailPage = lazy(() => import("./pages/ConceptDetailPage.tsx"));
 const PracticeTake = lazy(() => import("./pages/PracticeTake.tsx"));
+const PracticeSetup = lazy(() => import("./pages/PracticeSetup.tsx"));
 const StudyProgressPage = lazy(() => import("./pages/StudyProgressPage.tsx"));
 const MyProfile = lazy(() => import("./pages/MyProfile.tsx"));
 const CourseLanding = lazy(() => import("./pages/CourseLanding.tsx"));
@@ -41,6 +42,9 @@ const CoursePublicDetail = lazy(() => import("./pages/CoursePublicDetail.tsx"));
 const MyCourses = lazy(() => import("./pages/MyCourses.tsx"));
 const MyCourseBrowse = lazy(() => import("./pages/MyCourseBrowse.tsx"));
 const MyCourseTopic = lazy(() => import("./pages/MyCourseTopic.tsx"));
+const ProgressSetTake = lazy(() => import("./pages/ProgressSetTake.tsx"));
+const StudyMistakesPage = lazy(() => import("./pages/StudyMistakesPage.tsx"));
+const AdminProgressSets = lazy(() => import("./pages/AdminProgressSets.tsx"));
 
 const queryClient = new QueryClient();
 
@@ -84,9 +88,11 @@ const App = () => (
                   <Route path="concept/:conceptId/learn" element={<ConceptLearn />} />
                   <Route path="concept/:conceptId/details" element={<ConceptDetailPage />} />
                   <Route path="study/:conceptId" element={<ConceptLearn />} />
-                  <Route path="practice/:conceptId/setup" element={<ConceptLearn />} />
+                  <Route path="practice/:conceptId/setup" element={<PracticeSetup />} />
                   <Route path="practice/session/:sessionId" element={<PracticeTake />} />
                   <Route path="study/progress" element={<StudyProgressPage />} />
+                  <Route path="study/mistakes" element={<StudyMistakesPage />} />
+                  <Route path="progress/set/:setId" element={<ProgressSetTake />} />
                   <Route path="profile" element={<MyProfile />} />
                 </Route>
                 <Route
@@ -129,6 +135,14 @@ const App = () => (
                     element={
                       <ProtectedRoute permission="courses.enroll.manage">
                         <AdminCourseEnrollments />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="courses/:id/progress-sets"
+                    element={
+                      <ProtectedRoute permission="progress.sets.manage">
+                        <AdminProgressSets />
                       </ProtectedRoute>
                     }
                   />

@@ -22,6 +22,7 @@ import {
   type KeyPointSavePayload,
 } from "@/components/EditableKeyPointSection";
 import type { BoardOption } from "@/components/BoardCheckboxGroup";
+import { ConceptSelfQaEditor } from "@/components/ConceptSelfQaEditor";
 
 type Props = {
   open: boolean;
@@ -44,6 +45,9 @@ type Props = {
   onAddKeyPoint?: (payload: { content: string; boardIds: string[] }) => Promise<void>;
   onDeleteKeyPoint?: (id: string) => Promise<void>;
   savingKeyPoint?: boolean;
+  /** When set with showSelfQaEditor, renders admin self-QA CRUD (Step 3 content). */
+  conceptId?: string;
+  showSelfQaEditor?: boolean;
 };
 
 function normalizeKeyPoints(kps: KeyPointWithBoards[] | string[]): KeyPointWithBoards[] {
@@ -73,6 +77,8 @@ export function ConceptDetailsDialog({
   onAddKeyPoint,
   onDeleteKeyPoint,
   savingKeyPoint = false,
+  conceptId,
+  showSelfQaEditor = false,
 }: Props) {
   const [draft, setDraft] = useState<ConceptDetail>(detail);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
@@ -203,6 +209,9 @@ export function ConceptDetailsDialog({
                 {/* Do not pass keyPoints here — shown once below to avoid duplicates */}
                 <ConceptDetailPreview conceptName={conceptName} detail={draft} />
                 {keyPointsSection}
+                {showSelfQaEditor && conceptId ? (
+                  <ConceptSelfQaEditor conceptId={conceptId} conceptName={conceptName} />
+                ) : null}
               </div>
             </div>
           </div>
@@ -210,6 +219,9 @@ export function ConceptDetailsDialog({
           <>
             <ConceptDetailBody detail={detail} showVerbatim />
             {keyPointsSection}
+            {showSelfQaEditor && conceptId ? (
+              <ConceptSelfQaEditor conceptId={conceptId} conceptName={conceptName} />
+            ) : null}
           </>
         )}
 

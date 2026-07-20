@@ -21,6 +21,8 @@ import {
   type LandingFaqItem,
   type LandingPageAppearance,
   type LandingWhyItem,
+  type ProgressPlanAppearance,
+  type ProgressStepConfig,
   type SidebarLabels,
   type StoryDialogWidth,
   type UiAppearance,
@@ -162,6 +164,7 @@ export default function AdminAppearance() {
   const [landingSection, setLandingSection] = useState<
     "colors" | "nav" | "hero" | "featured" | "courses" | "about" | "faq" | "footer"
   >("colors");
+  const [progressSection, setProgressSection] = useState<"steps" | "copy" | "features" | "colors">("steps");
   const savedRef = useRef(appearance);
   savedRef.current = appearance;
 
@@ -262,6 +265,21 @@ export default function AdminAppearance() {
 
   const faq = theme.landingFaq;
   const lp = theme.landingPage;
+  const prog = theme.progressPlan;
+
+  const updateProgressPlan = <K extends keyof ProgressPlanAppearance>(key: K, value: ProgressPlanAppearance[K]) => {
+    commit({ ...theme, progressPlan: { ...theme.progressPlan, [key]: value } });
+  };
+
+  const updateProgressStep = (id: 1 | 2 | 3 | 4, patch: Partial<ProgressStepConfig>) => {
+    commit({
+      ...theme,
+      progressPlan: {
+        ...theme.progressPlan,
+        steps: theme.progressPlan.steps.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+      },
+    });
+  };
 
   const updateLandingFaq = (patch: Partial<LandingFaqAppearance>) => {
     commit({ ...theme, landingFaq: { ...theme.landingFaq, ...patch } });
@@ -666,6 +684,7 @@ export default function AdminAppearance() {
             <TabsTrigger value="story">{deviceMeta[editDevice].label} · Story learning</TabsTrigger>
             <TabsTrigger value="questions">{deviceMeta[editDevice].label} · All questions</TabsTrigger>
             <TabsTrigger value="landing">Landing page</TabsTrigger>
+            <TabsTrigger value="progress">Progress plan</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
@@ -1836,6 +1855,102 @@ export default function AdminAppearance() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <TextField label="Footer note" value={lp.footerNote} onChange={(v) => updateLandingPage("footerNote", v)} />
                 <TextField label="FAB label" value={lp.fabLabel} onChange={(v) => updateLandingPage("fabLabel", v)} />
+              </div>
+            ) : null}
+          </TabsContent>
+
+          <TabsContent value="progress" className="mt-4 space-y-4">
+            <p className="text-xs text-muted-foreground">
+              Effective Study &amp; Practice Progress Plan — shared copy, step labels, feature toggles, and card colors.
+              Save to database to publish for all students.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["steps", "4-step labels"],
+                  ["copy", "Messages & cards"],
+                  ["features", "Toggles & defaults"],
+                  ["colors", "Colors"],
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="sm"
+                  variant={progressSection === id ? "default" : "outline"}
+                  onClick={() => setProgressSection(id)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+
+            {progressSection === "steps" ? (
+              <div className="space-y-3">
+                <TextField label="Step bar title" value={prog.stepBarTitle} onChange={(v) => updateProgressPlan("stepBarTitle", v)} />
+                <BoolField
+                  label="Prefer Bengali step labels"
+                  checked={prog.preferBengaliStepLabels}
+                  onChange={(v) => updateProgressPlan("preferBengaliStepLabels", v)}
+                />
+                {prog.steps.map((step) => (
+                  <Card key={step.id} className="space-y-2 p-4">
+                    <p className="text-xs font-semibold uppercase text-muted-foreground">Step {step.id}</p>
+                    <TextField label="English label" value={step.label} onChange={(v) => updateProgressStep(step.id, { label: v })} />
+                    <TextField label="Bengali label" value={step.labelBn} onChange={(v) => updateProgressStep(step.id, { labelBn: v })} />
+                  </Card>
+                ))}
+              </div>
+            ) : null}
+
+            {progressSection === "copy" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField label="Study progress page title" value={prog.studyProgressTitle} onChange={(v) => updateProgressPlan("studyProgressTitle", v)} />
+                <TextField label="Study progress subtitle" value={prog.studyProgressSubtitle} onChange={(v) => updateProgressPlan("studyProgressSubtitle", v)} />
+                <TextField label="Course complete badge" value={prog.courseCompleteLabel} onChange={(v) => updateProgressPlan("courseCompleteLabel", v)} />
+                <TextField label="Progress % suffix" value={prog.progressPctSuffix} onChange={(v) => updateProgressPlan("progressPctSuffix", v)} hint='e.g. "complete" → "42% complete"' />
+                <TextField label="Exam Night title" value={prog.examNightTitle} onChange={(v) => updateProgressPlan("examNightTitle", v)} />
+                <TextField label="Exam Night subtitle" value={prog.examNightSubtitle} onChange={(v) => updateProgressPlan("examNightSubtitle", v)} />
+                <TextField label="Final mock title" value={prog.finalMockTitle} onChange={(v) => updateProgressPlan("finalMockTitle", v)} />
+                <TextField label="Final mock subtitle" value={prog.finalMockSubtitle} onChange={(v) => updateProgressPlan("finalMockSubtitle", v)} />
+                <TextField label="Review mistakes title" value={prog.reviewMistakesTitle} onChange={(v) => updateProgressPlan("reviewMistakesTitle", v)} />
+                <TextField label="Review mistakes button" value={prog.reviewMistakesButton} onChange={(v) => updateProgressPlan("reviewMistakesButton", v)} />
+                <TextField label="Review mistakes empty" value={prog.reviewMistakesEmpty} onChange={(v) => updateProgressPlan("reviewMistakesEmpty", v)} />
+                <TextField label="Concept practice intro" value={prog.conceptPracticeIntro} onChange={(v) => updateProgressPlan("conceptPracticeIntro", v)} />
+                <TextField label="Step 1 complete button" value={prog.step1CompleteButton} onChange={(v) => updateProgressPlan("step1CompleteButton", v)} />
+                <TextField label="Step 2 complete button" value={prog.step2CompleteButton} onChange={(v) => updateProgressPlan("step2CompleteButton", v)} />
+                <TextField label="Locked steps message" value={prog.lockedPreviousSteps} onChange={(v) => updateProgressPlan("lockedPreviousSteps", v)} />
+              </div>
+            ) : null}
+
+            {progressSection === "features" ? (
+              <div className="space-y-3">
+                <BoolField label="Progress Plan enabled" checked={prog.enabled} onChange={(v) => updateProgressPlan("enabled", v)} />
+                <BoolField label="Show concept step bar" checked={prog.showConceptStepBar} onChange={(v) => updateProgressPlan("showConceptStepBar", v)} />
+                <BoolField label="Show % on course browse" checked={prog.showProgressOnBrowse} onChange={(v) => updateProgressPlan("showProgressOnBrowse", v)} />
+                <BoolField label="Show Exam Night card" checked={prog.showExamNightCard} onChange={(v) => updateProgressPlan("showExamNightCard", v)} />
+                <BoolField label="Show Final Mock card" checked={prog.showFinalMockCard} onChange={(v) => updateProgressPlan("showFinalMockCard", v)} />
+                <BoolField label="Show Review Mistakes on profile" checked={prog.showReviewMistakes} onChange={(v) => updateProgressPlan("showReviewMistakes", v)} />
+                <Field label="Default pass %" hint="Used when admin set has no pass_percent">
+                  <Input type="number" min={1} max={100} value={prog.defaultPassPercent} onChange={(e) => updateProgressPlan("defaultPassPercent", Number(e.target.value) || 70)} />
+                </Field>
+                <Field label="Exam Night unlock (hours before mock)">
+                  <Input type="number" min={1} max={168} value={prog.examNightHoursBefore} onChange={(e) => updateProgressPlan("examNightHoursBefore", Number(e.target.value) || 24)} />
+                </Field>
+              </div>
+            ) : null}
+
+            {progressSection === "colors" ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <TextField label="Progress bar (HSL or hex)" value={prog.progressBarColor} onChange={(v) => updateProgressPlan("progressBarColor", v)} />
+                <TextField label="Complete badge (HSL or hex)" value={prog.completeBadgeBg} onChange={(v) => updateProgressPlan("completeBadgeBg", v)} />
+                <TextField label="Exam Night card bg" value={prog.examNightCardBg} onChange={(v) => updateProgressPlan("examNightCardBg", v)} />
+                <TextField label="Exam Night border" value={prog.examNightBorder} onChange={(v) => updateProgressPlan("examNightBorder", v)} />
+                <TextField label="Exam Night icon" value={prog.examNightIconColor} onChange={(v) => updateProgressPlan("examNightIconColor", v)} />
+                <TextField label="Final mock card bg" value={prog.finalMockCardBg} onChange={(v) => updateProgressPlan("finalMockCardBg", v)} />
+                <TextField label="Final mock border" value={prog.finalMockBorder} onChange={(v) => updateProgressPlan("finalMockBorder", v)} />
+                <TextField label="Final mock icon" value={prog.finalMockIconColor} onChange={(v) => updateProgressPlan("finalMockIconColor", v)} />
+                <TextField label="Mistake accent" value={prog.mistakeAccentColor} onChange={(v) => updateProgressPlan("mistakeAccentColor", v)} />
               </div>
             ) : null}
           </TabsContent>
