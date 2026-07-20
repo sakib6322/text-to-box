@@ -1,5 +1,7 @@
 import { CKEditorField } from "@/components/CKEditorField";
+import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
+import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import {
   Table,
   TableBody,
@@ -89,6 +91,9 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
 }
 
 export function ConceptDetailBody({ detail, editable = false, onChange, showVerbatim = true }: Props) {
+  const { appearance } = useUiAppearance();
+  const hs = appearance.headingSlides;
+
   if (editable) {
     return (
       <div className="space-y-2 text-sm leading-relaxed">
@@ -113,8 +118,14 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
   const unifiedBody = resolveBodyHtml(detail).trim();
   if (unifiedBody && !hasLegacyStructuredContent(detail)) {
     return (
-      <div className="concept-detail-rich space-y-4 text-sm leading-relaxed">
-        <RichHtmlContent content={unifiedBody} />
+      <div className="space-y-4 text-sm leading-relaxed">
+        {hs.conceptDetailsEnabled ? (
+          <HeadingSlideReader html={unifiedBody} config={hs} richClassName="concept-detail-rich" />
+        ) : (
+          <div className="concept-detail-rich">
+            <RichHtmlContent content={unifiedBody} />
+          </div>
+        )}
         {showVerbatim && detail.verbatimText ? (
           <div className="space-y-2 border-t pt-2">
             <p className="font-semibold text-muted-foreground">Verbatim source</p>

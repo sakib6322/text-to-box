@@ -3,6 +3,7 @@ import { BookMarked, ChevronDown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CKEditorField } from "@/components/CKEditorField";
+import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { isHtmlEmpty } from "@/lib/htmlContent";
@@ -37,6 +38,7 @@ export function StoryBasedLearningButton({
 }: StoryBasedLearningButtonProps) {
   const { appearance, activeDevice } = useUiAppearance();
   const sbl = resolveDeviceTheme(appearance, activeDevice).storyBasedLearning;
+  const hs = appearance.headingSlides;
   const [open, setOpen] = useState(false);
   const [draftStory, setDraftStory] = useState(detail.storyHtml);
 
@@ -120,9 +122,16 @@ export function StoryBasedLearningButton({
                 <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
                 </div>
-                <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto">
+                <div className={cn("flex-1", hs.storyEnabled ? "min-h-0 p-3" : "max-h-[min(58vh,28rem)] overflow-y-auto")}>
                   {isHtmlEmpty(draftStory) ? (
                     <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
+                  ) : hs.storyEnabled ? (
+                    <HeadingSlideReader
+                      html={draftStory}
+                      config={hs}
+                      richClassName="story-based-learning-rich"
+                      className="story-based-learning"
+                    />
                   ) : (
                     <div className="story-based-learning m-3">
                       <RichHtmlContent content={draftStory} className="story-based-learning-rich" />
@@ -150,9 +159,20 @@ export function StoryBasedLearningButton({
           ) : empty ? (
             <p className="story-based-learning-empty text-sm">{sbl.emptyMessage}</p>
           ) : (
-            <div className="story-based-learning max-h-[min(70vh,32rem)] overflow-y-auto p-3 sm:p-4">
-              <RichHtmlContent content={detail.storyHtml} className="story-based-learning-rich" />
-            </div>
+            hs.storyEnabled ? (
+              <div className="p-3 sm:p-4">
+                <HeadingSlideReader
+                  html={detail.storyHtml}
+                  config={hs}
+                  richClassName="story-based-learning-rich"
+                  className="story-based-learning"
+                />
+              </div>
+            ) : (
+              <div className="story-based-learning max-h-[min(70vh,32rem)] overflow-y-auto p-3 sm:p-4">
+                <RichHtmlContent content={detail.storyHtml} className="story-based-learning-rich" />
+              </div>
+            )
           )}
         </div>
       </CollapsibleContent>

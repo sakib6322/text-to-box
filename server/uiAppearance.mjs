@@ -229,6 +229,65 @@ export function getDefaultUiAppearance() {
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
     progressPlan: defaultProgressPlan(),
+    headingSlides: defaultHeadingSlides(),
+  };
+}
+
+function defaultHeadingSlides(overrides = {}) {
+  return {
+    conceptDetailsEnabled: true,
+    storyEnabled: true,
+    splitH1: true,
+    splitH2: false,
+    splitH3: false,
+    preHeadingMode: "intro",
+    requireScrollToEnd: true,
+    scrollShowNextAtPercent: 85,
+    showNextHeadingPreview: true,
+    nextLabel: "Next",
+    nextTemplate: "{heading}",
+    showPrev: true,
+    prevLabel: "Previous",
+    showCounter: true,
+    counterTemplate: "{current} / {total}",
+    lastSlideLabel: "",
+    stickyNextBar: true,
+    nextBarBg: "hsl(var(--primary))",
+    nextBarFg: "hsl(var(--primary-foreground))",
+    minCharsPerSlide: 0,
+    ...overrides,
+  };
+}
+
+function mergeHeadingSlides(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  const str = (v, fallback) => (typeof v === "string" ? v : fallback);
+  const num = (v, fallback) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+  const mode = patch.preHeadingMode === "mergeFirst" || patch.preHeadingMode === "intro" ? patch.preHeadingMode : base.preHeadingMode;
+  let nextTemplate = str(patch.nextTemplate, base.nextTemplate);
+  if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
+  return {
+    conceptDetailsEnabled: bool(patch.conceptDetailsEnabled, base.conceptDetailsEnabled),
+    storyEnabled: bool(patch.storyEnabled, base.storyEnabled),
+    splitH1: bool(patch.splitH1, base.splitH1),
+    splitH2: bool(patch.splitH2, base.splitH2),
+    splitH3: bool(patch.splitH3, base.splitH3),
+    preHeadingMode: mode,
+    requireScrollToEnd: bool(patch.requireScrollToEnd, base.requireScrollToEnd),
+    scrollShowNextAtPercent: num(patch.scrollShowNextAtPercent, base.scrollShowNextAtPercent),
+    showNextHeadingPreview: bool(patch.showNextHeadingPreview, base.showNextHeadingPreview),
+    nextLabel: str(patch.nextLabel, base.nextLabel),
+    nextTemplate,
+    showPrev: bool(patch.showPrev, base.showPrev),
+    prevLabel: str(patch.prevLabel, base.prevLabel),
+    showCounter: bool(patch.showCounter, base.showCounter),
+    counterTemplate: str(patch.counterTemplate, base.counterTemplate),
+    lastSlideLabel: str(patch.lastSlideLabel, base.lastSlideLabel),
+    stickyNextBar: bool(patch.stickyNextBar, base.stickyNextBar),
+    nextBarBg: str(patch.nextBarBg, base.nextBarBg),
+    nextBarFg: str(patch.nextBarFg, base.nextBarFg),
+    minCharsPerSlide: num(patch.minCharsPerSlide, base.minCharsPerSlide),
   };
 }
 
@@ -663,6 +722,7 @@ function fromV1(raw) {
     landingFaq: mergeLandingFaq(base.landingFaq, raw?.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw?.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw?.progressPlan),
+    headingSlides: mergeHeadingSlides(base.headingSlides, raw?.headingSlides),
   };
 }
 
@@ -682,6 +742,7 @@ export function parseUiAppearance(raw) {
       landingFaq: mergeLandingFaq(defaults.landingFaq, parsed.landingFaq),
       landingPage: mergeLandingPage(defaults.landingPage, parsed.landingPage),
       progressPlan: mergeProgressPlan(defaults.progressPlan, parsed.progressPlan),
+      headingSlides: mergeHeadingSlides(defaults.headingSlides, parsed.headingSlides),
     };
   } catch {
     return defaults;

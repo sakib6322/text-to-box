@@ -25,9 +25,33 @@ import {
   type ProgressStepConfig,
   type SidebarLabels,
   type StoryDialogWidth,
+  type HeadingSlidesAppearance,
   type UiAppearance,
 } from "@/lib/uiAppearance";
 import { Textarea } from "@/components/ui/textarea";
+import { HeadingSlideReader } from "@/components/HeadingSlideReader";
+import { AppearanceOptionGuide } from "@/components/AppearanceOptionGuide";
+import {
+  GUIDE_CONCEPT,
+  GUIDE_HEADING_SLIDES,
+  GUIDE_LANDING_ABOUT,
+  GUIDE_LANDING_COLORS,
+  GUIDE_LANDING_COURSES,
+  GUIDE_LANDING_FAQ,
+  GUIDE_LANDING_FEATURED,
+  GUIDE_LANDING_FOOTER,
+  GUIDE_LANDING_HERO,
+  GUIDE_LANDING_NAV,
+  GUIDE_PERFORMANCE,
+  GUIDE_PREVIEW,
+  GUIDE_PROGRESS_COLORS,
+  GUIDE_PROGRESS_COPY,
+  GUIDE_PROGRESS_FEATURES,
+  GUIDE_PROGRESS_STEPS,
+  GUIDE_QUESTIONS,
+  GUIDE_STORY,
+  GUIDE_WEBSITE_UI,
+} from "@/lib/appearanceOptionGuides";
 
 function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
@@ -266,9 +290,14 @@ export default function AdminAppearance() {
   const faq = theme.landingFaq;
   const lp = theme.landingPage;
   const prog = theme.progressPlan;
+  const hs = theme.headingSlides;
 
   const updateProgressPlan = <K extends keyof ProgressPlanAppearance>(key: K, value: ProgressPlanAppearance[K]) => {
     commit({ ...theme, progressPlan: { ...theme.progressPlan, [key]: value } });
+  };
+
+  const updateHeadingSlides = <K extends keyof HeadingSlidesAppearance>(key: K, value: HeadingSlidesAppearance[K]) => {
+    commit({ ...theme, headingSlides: { ...theme.headingSlides, [key]: value } });
   };
 
   const updateProgressStep = (id: 1 | 2 | 3 | 4, patch: Partial<ProgressStepConfig>) => {
@@ -685,11 +714,22 @@ export default function AdminAppearance() {
             <TabsTrigger value="questions">{deviceMeta[editDevice].label} · All questions</TabsTrigger>
             <TabsTrigger value="landing">Landing page</TabsTrigger>
             <TabsTrigger value="progress">Progress plan</TabsTrigger>
+            <TabsTrigger value="headingSlides">Heading slides</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
 
           <TabsContent value="global" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Website shell · editing <strong>{deviceMeta[editDevice].label}</strong>
+              </p>
+              <AppearanceOptionGuide
+                title="Website UI — অপশন গাইড"
+                description="প্রতিটি ইনপুট কী করে এবং কোথায় দেখা যায়।"
+                items={GUIDE_WEBSITE_UI}
+              />
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <TextField label="Font family" value={g.fontFamily} onChange={(v) => updateGlobal("fontFamily", v)} />
               <NumberField label="Base font size (px)" value={g.baseFontSizePx} min={12} max={22} onChange={(n) => updateGlobal("baseFontSizePx", n)} />
@@ -739,6 +779,7 @@ export default function AdminAppearance() {
                   min={0}
                   max={4}
                   step={0.5}
+                  hint="0 = no border (useful on mobile). Switch device above to set per layout."
                   onChange={(n) => updateGlobal("cardBorderWidthPx", n)}
                 />
                 <NumberField
@@ -877,6 +918,16 @@ export default function AdminAppearance() {
           </TabsContent>
 
           <TabsContent value="concept" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Concept details typography &amp; colors · {deviceMeta[editDevice].label}
+              </p>
+              <AppearanceOptionGuide
+                title="Concept details — অপশন গাইড"
+                description="শিক্ষার্থী Concept detail পড়ার ভিউয়ের স্টাইল।"
+                items={GUIDE_CONCEPT}
+              />
+            </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <TextField label="Font family" value={c.fontFamily} onChange={(v) => updateCd("fontFamily", v)} />
               <NumberField label="Body font size (px)" value={c.fontSizePx} min={11} max={22} onChange={(n) => updateCd("fontSizePx", n)} />
@@ -913,6 +964,11 @@ export default function AdminAppearance() {
                 Story-based learning · {deviceMeta[editDevice].label}
               </p>
               <div className="flex flex-wrap gap-2">
+                <AppearanceOptionGuide
+                  title="Story learning — অপশন গাইড"
+                  description="Story বাটন, প্যানেল ও কন্টেন্ট স্টাইল।"
+                  items={GUIDE_STORY}
+                />
                 <Button type="button" variant="outline" size="sm" onClick={() => applyStoryTo(["mobile"])}>
                   Set to Phone
                 </Button>
@@ -1027,6 +1083,11 @@ export default function AdminAppearance() {
                 All questions · {deviceMeta[editDevice].label}
               </p>
               <div className="flex flex-wrap gap-2">
+                <AppearanceOptionGuide
+                  title="All questions — অপশন গাইড"
+                  description="পেজ ক্রোম, পেপার শেল, স্টেম, অপশন ও explanation।"
+                  items={GUIDE_QUESTIONS}
+                />
                 <Button type="button" variant="outline" size="sm" onClick={() => applyAllQuestionsTo(["mobile"])}>
                   Set to Phone
                 </Button>
@@ -1330,9 +1391,48 @@ export default function AdminAppearance() {
           </TabsContent>
 
           <TabsContent value="landing" className="mt-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Public landing page (shared). Edit colors, section copy, and FAQ. Save to database to publish.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">
+                Public landing page (shared). Edit colors, section copy, and FAQ. Save to database to publish.
+              </p>
+              <AppearanceOptionGuide
+                title={
+                  landingSection === "colors"
+                    ? "Landing · Colors"
+                    : landingSection === "nav"
+                      ? "Landing · Header & nav"
+                      : landingSection === "hero"
+                        ? "Landing · Hero"
+                        : landingSection === "featured"
+                          ? "Landing · Featured"
+                          : landingSection === "courses"
+                            ? "Landing · Courses"
+                            : landingSection === "about"
+                              ? "Landing · About"
+                              : landingSection === "faq"
+                                ? "Landing · FAQ"
+                                : "Landing · Footer"
+                }
+                description="বর্তমান সাব-সেকশনের অপশনগুলোর ব্যাখ্যা।"
+                items={
+                  landingSection === "colors"
+                    ? GUIDE_LANDING_COLORS
+                    : landingSection === "nav"
+                      ? GUIDE_LANDING_NAV
+                      : landingSection === "hero"
+                        ? GUIDE_LANDING_HERO
+                        : landingSection === "featured"
+                          ? GUIDE_LANDING_FEATURED
+                          : landingSection === "courses"
+                            ? GUIDE_LANDING_COURSES
+                            : landingSection === "about"
+                              ? GUIDE_LANDING_ABOUT
+                              : landingSection === "faq"
+                                ? GUIDE_LANDING_FAQ
+                                : GUIDE_LANDING_FOOTER
+                }
+              />
+            </div>
 
             <div className="flex flex-wrap gap-1.5">
               {(
@@ -1909,10 +2009,33 @@ export default function AdminAppearance() {
           </TabsContent>
 
           <TabsContent value="progress" className="mt-4 space-y-4">
-            <p className="text-xs text-muted-foreground">
-              Effective Study &amp; Practice Progress Plan — shared copy, step labels, feature toggles, and card colors.
-              Save to database to publish for all students.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Effective Study &amp; Practice Progress Plan — shared copy, step labels, feature toggles, and card colors.
+                Save to database to publish for all students.
+              </p>
+              <AppearanceOptionGuide
+                title={
+                  progressSection === "steps"
+                    ? "Progress · 4-step labels"
+                    : progressSection === "copy"
+                      ? "Progress · Messages & cards"
+                      : progressSection === "features"
+                        ? "Progress · Toggles & defaults"
+                        : "Progress · Colors"
+                }
+                description="বর্তমান সাব-সেকশনের অপশনগুলোর ব্যাখ্যা।"
+                items={
+                  progressSection === "steps"
+                    ? GUIDE_PROGRESS_STEPS
+                    : progressSection === "copy"
+                      ? GUIDE_PROGRESS_COPY
+                      : progressSection === "features"
+                        ? GUIDE_PROGRESS_FEATURES
+                        : GUIDE_PROGRESS_COLORS
+                }
+              />
+            </div>
             <div className="flex flex-wrap gap-2">
               {(
                 [
@@ -2004,16 +2127,128 @@ export default function AdminAppearance() {
             ) : null}
           </TabsContent>
 
+          <TabsContent value="headingSlides" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Word থেকে পেস্ট করা HTML-কে heading অনুযায়ী অটো স্লাইডে ভাগ করে। Concept details ও Story learning — দুটোতেই কাজ করে। Shared (সব device)।
+              </p>
+              <AppearanceOptionGuide
+                title="Heading slides — অপশন গাইড"
+                description="স্প্লিট রুল, Next বার, লেবেল ও প্রিভিউ — কোনটা কী করে।"
+                items={GUIDE_HEADING_SLIDES}
+              />
+            </div>
+            <div className="space-y-3">
+              <BoolField
+                label="Enable on Concept details"
+                checked={hs.conceptDetailsEnabled}
+                onChange={(v) => updateHeadingSlides("conceptDetailsEnabled", v)}
+                hint="Student read views (Learn Step 1, details page, dialog)"
+              />
+              <BoolField
+                label="Enable on Story-based learning"
+                checked={hs.storyEnabled}
+                onChange={(v) => updateHeadingSlides("storyEnabled", v)}
+              />
+            </div>
+            <div>
+              <p className="mb-2 text-xs font-medium">Split on these headings</p>
+              <div className="grid gap-2 sm:grid-cols-3">
+                <BoolField label="H1" checked={hs.splitH1} onChange={(v) => updateHeadingSlides("splitH1", v)} />
+                <BoolField label="H2" checked={hs.splitH2} onChange={(v) => updateHeadingSlides("splitH2", v)} />
+                <BoolField label="H3" checked={hs.splitH3} onChange={(v) => updateHeadingSlides("splitH3", v)} />
+              </div>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Content before first heading">
+                <Select
+                  value={hs.preHeadingMode}
+                  onValueChange={(v) => updateHeadingSlides("preHeadingMode", v as "intro" | "mergeFirst")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="intro">Separate Intro slide</SelectItem>
+                    <SelectItem value="mergeFirst">Merge into first slide</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <NumberField
+                label="Show Next after scroll %"
+                value={hs.scrollShowNextAtPercent}
+                min={50}
+                max={100}
+                onChange={(n) => updateHeadingSlides("scrollShowNextAtPercent", n)}
+                hint="Require scrolling this far before Next appears"
+              />
+              <NumberField
+                label="Min chars per slide (0 = off)"
+                value={hs.minCharsPerSlide}
+                min={0}
+                max={500}
+                onChange={(n) => updateHeadingSlides("minCharsPerSlide", n)}
+              />
+            </div>
+            <div className="space-y-3">
+              <BoolField label="Require scroll to end before Next" checked={hs.requireScrollToEnd} onChange={(v) => updateHeadingSlides("requireScrollToEnd", v)} />
+              <BoolField label="Show next heading below button (card)" checked={hs.showNextHeadingPreview} onChange={(v) => updateHeadingSlides("showNextHeadingPreview", v)} />
+              <BoolField label="Show Previous button" checked={hs.showPrev} onChange={(v) => updateHeadingSlides("showPrev", v)} />
+              <BoolField label="Show slide counter" checked={hs.showCounter} onChange={(v) => updateHeadingSlides("showCounter", v)} />
+              <BoolField label="Sticky Next bar" checked={hs.stickyNextBar} onChange={(v) => updateHeadingSlides("stickyNextBar", v)} />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <TextField label="Next label" value={hs.nextLabel} onChange={(v) => updateHeadingSlides("nextLabel", v)} />
+              <TextField label="Heading card template" value={hs.nextTemplate} onChange={(v) => updateHeadingSlides("nextTemplate", v)} hint="{heading} — shown under the Next button" />
+              <TextField label="Previous label" value={hs.prevLabel} onChange={(v) => updateHeadingSlides("prevLabel", v)} />
+              <TextField label="Counter template" value={hs.counterTemplate} onChange={(v) => updateHeadingSlides("counterTemplate", v)} hint="{current} / {total}" />
+              <TextField label="Last slide label" value={hs.lastSlideLabel} onChange={(v) => updateHeadingSlides("lastSlideLabel", v)} hint="Optional text on last slide" />
+              <TextField label="Next bar background" value={hs.nextBarBg} onChange={(v) => updateHeadingSlides("nextBarBg", v)} />
+              <TextField label="Next bar text color" value={hs.nextBarFg} onChange={(v) => updateHeadingSlides("nextBarFg", v)} />
+            </div>
+            <div className="space-y-2 rounded-md border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium">Live preview</p>
+                <AppearanceOptionGuide
+                  title="Heading slides — অপশন গাইড"
+                  description="Live preview-এর আগে সব অপশনের সম্পূর্ণ ব্যাখ্যা।"
+                  items={GUIDE_HEADING_SLIDES}
+                />
+              </div>
+              <HeadingSlideReader
+                config={hs}
+                richClassName="concept-detail-rich"
+                className="max-h-[22rem]"
+                html={`<h1>Nerve supply of Eye</h1><p>The eye is innervated by several cranial nerves. Scroll down to continue reading this sample slide.</p><p>More detail about sensory and motor supply appears here so you can scroll.</p><p>Keep scrolling until the Next button appears at the bottom.</p><h1>Blood supply of eye</h1><p>Arterial supply comes primarily from the ophthalmic artery and its branches.</p><p>Venous drainage includes the superior and inferior ophthalmic veins.</p>`}
+              />
+            </div>
+          </TabsContent>
+
           <TabsContent value="performance" className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">Shared across all devices</p>
+              <AppearanceOptionGuide
+                title="Performance — অপশন গাইড"
+                description="স্ক্রল ও মোশন সম্পর্কিত সেটিংস।"
+                items={GUIDE_PERFORMANCE}
+              />
+            </div>
             <BoolField label="Smooth scroll" checked={p.smoothScroll} onChange={(v) => updatePerf("smoothScroll", v)} hint="Shared across all devices — often laggy" />
             <BoolField label="Reduce motion" checked={p.reduceMotion} onChange={(v) => updatePerf("reduceMotion", v)} />
           </TabsContent>
 
           <TabsContent value="preview" className="mt-4 space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Preview uses the live viewport device ({deviceMeta[activeDevice].label}). Editing {deviceMeta[editDevice].label}.
-              Still unsaved until you click Save to database.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Preview uses the live viewport device ({deviceMeta[activeDevice].label}). Editing {deviceMeta[editDevice].label}.
+                Still unsaved until you click Save to database.
+              </p>
+              <AppearanceOptionGuide
+                title="Live preview — অপশন গাইড"
+                description="এই ট্যাব কী দেখায় এবং ডিফল্ট লোড কী করে।"
+                items={GUIDE_PREVIEW}
+              />
+            </div>
             {preview}
             <Button
               type="button"

@@ -344,6 +344,31 @@ export type ProgressPlanAppearance = {
   mistakeAccentColor: string;
 };
 
+export type HeadingSlidesAppearance = {
+  /** Enable heading slides on Concept Details (read-only views) */
+  conceptDetailsEnabled: boolean;
+  /** Enable heading slides on Story-based learning (read/preview) */
+  storyEnabled: boolean;
+  splitH1: boolean;
+  splitH2: boolean;
+  splitH3: boolean;
+  preHeadingMode: "intro" | "mergeFirst";
+  requireScrollToEnd: boolean;
+  scrollShowNextAtPercent: number;
+  showNextHeadingPreview: boolean;
+  nextLabel: string;
+  nextTemplate: string;
+  showPrev: boolean;
+  prevLabel: string;
+  showCounter: boolean;
+  counterTemplate: string;
+  lastSlideLabel: string;
+  stickyNextBar: boolean;
+  nextBarBg: string;
+  nextBarFg: string;
+  minCharsPerSlide: number;
+};
+
 export type UiAppearance = {
   version: 2;
   mobile: DeviceAppearance;
@@ -359,6 +384,8 @@ export type UiAppearance = {
   landingPage: LandingPageAppearance;
   /** Progress Plan student UI + behavior knobs */
   progressPlan: ProgressPlanAppearance;
+  /** Heading-based auto slides (Concept details + Story learning) */
+  headingSlides: HeadingSlidesAppearance;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -1024,6 +1051,66 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
   };
 }
 
+export function defaultHeadingSlides(overrides: Partial<HeadingSlidesAppearance> = {}): HeadingSlidesAppearance {
+  return {
+    conceptDetailsEnabled: true,
+    storyEnabled: true,
+    splitH1: true,
+    splitH2: false,
+    splitH3: false,
+    preHeadingMode: "intro",
+    requireScrollToEnd: true,
+    scrollShowNextAtPercent: 85,
+    showNextHeadingPreview: true,
+    nextLabel: "Next",
+    nextTemplate: "{heading}",
+    showPrev: true,
+    prevLabel: "Previous",
+    showCounter: true,
+    counterTemplate: "{current} / {total}",
+    lastSlideLabel: "",
+    stickyNextBar: true,
+    nextBarBg: "hsl(var(--primary))",
+    nextBarFg: "hsl(var(--primary-foreground))",
+    minCharsPerSlide: 0,
+    ...overrides,
+  };
+}
+
+export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown): HeadingSlidesAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<HeadingSlidesAppearance>;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+  const mode = p.preHeadingMode === "mergeFirst" || p.preHeadingMode === "intro" ? p.preHeadingMode : base.preHeadingMode;
+  let nextTemplate = str(p.nextTemplate, base.nextTemplate);
+  // Migrate old in-button label template → heading card template
+  if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
+  return {
+    conceptDetailsEnabled: bool(p.conceptDetailsEnabled, base.conceptDetailsEnabled),
+    storyEnabled: bool(p.storyEnabled, base.storyEnabled),
+    splitH1: bool(p.splitH1, base.splitH1),
+    splitH2: bool(p.splitH2, base.splitH2),
+    splitH3: bool(p.splitH3, base.splitH3),
+    preHeadingMode: mode,
+    requireScrollToEnd: bool(p.requireScrollToEnd, base.requireScrollToEnd),
+    scrollShowNextAtPercent: num(p.scrollShowNextAtPercent, base.scrollShowNextAtPercent),
+    showNextHeadingPreview: bool(p.showNextHeadingPreview, base.showNextHeadingPreview),
+    nextLabel: str(p.nextLabel, base.nextLabel),
+    nextTemplate,
+    showPrev: bool(p.showPrev, base.showPrev),
+    prevLabel: str(p.prevLabel, base.prevLabel),
+    showCounter: bool(p.showCounter, base.showCounter),
+    counterTemplate: str(p.counterTemplate, base.counterTemplate),
+    lastSlideLabel: str(p.lastSlideLabel, base.lastSlideLabel),
+    stickyNextBar: bool(p.stickyNextBar, base.stickyNextBar),
+    nextBarBg: str(p.nextBarBg, base.nextBarBg),
+    nextBarFg: str(p.nextBarFg, base.nextBarFg),
+    minCharsPerSlide: num(p.minCharsPerSlide, base.minCharsPerSlide),
+  };
+}
+
 export function defaultUiAppearance(): UiAppearance {
   return {
     version: 2,
@@ -1037,6 +1124,7 @@ export function defaultUiAppearance(): UiAppearance {
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
     progressPlan: defaultProgressPlan(),
+    headingSlides: defaultHeadingSlides(),
   };
 }
 
@@ -1165,6 +1253,7 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     landingFaq: mergeLandingFaq(base.landingFaq, raw.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw.progressPlan),
+    headingSlides: mergeHeadingSlides(base.headingSlides, raw.headingSlides),
   };
 }
 
@@ -1186,6 +1275,7 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
     landingFaq: mergeLandingFaq(base.landingFaq, p.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, p.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, p.progressPlan),
+    headingSlides: mergeHeadingSlides(base.headingSlides, p.headingSlides),
   };
 }
 
@@ -1341,6 +1431,12 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--pg-complete-badge", pp.completeBadgeBg.startsWith("#") ? pp.completeBadgeBg : `hsl(${pp.completeBadgeBg})`);
   root.style.setProperty("--pg-mistake-accent", pp.mistakeAccentColor);
   root.dataset.progressPlanEnabled = pp.enabled ? "1" : "0";
+
+  const hs = theme.headingSlides;
+  root.style.setProperty("--hs-next-bar-bg", hs.nextBarBg);
+  root.style.setProperty("--hs-next-bar-fg", hs.nextBarFg);
+  root.dataset.headingSlidesConcept = hs.conceptDetailsEnabled ? "1" : "0";
+  root.dataset.headingSlidesStory = hs.storyEnabled ? "1" : "0";
 
   root.style.fontFamily = g.fontFamily;
   root.style.fontSize = `${g.baseFontSizePx}px`;

@@ -190,7 +190,8 @@
   }
 
   .glass-card {
-    @apply border shadow-sm transition-colors duration-200;
+    @apply shadow-sm transition-colors duration-200;
+    border-style: solid;
     border-radius: var(--radius, 0.625rem);
     border-width: var(--ui-card-border-width, 1px);
     background: hsl(var(--card));
@@ -1463,4 +1464,163 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   }
   .pg-hero-card-shine,
   .pg-hero-slide { animation: none !important; }
+}
+
+/* Heading-based auto slides */
+.heading-slide-reader {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: min(70vh, 36rem);
+  border-radius: var(--radius, 0.625rem);
+  /* No own border — parent Card / panel already frames content (avoids double border on mobile) */
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+.heading-slide-chrome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.35rem 0.15rem 0.5rem;
+  border-bottom: 1px solid hsl(var(--border) / 0.55);
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.heading-slide-counter {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.heading-slide-scroll {
+  flex: 1 1 auto;
+  min-height: 8rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem 0.15rem 1rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Reserve space so Next overlay never covers the last lines / causes jump */
+.heading-slide-reader[data-sticky-next="1"] .heading-slide-scroll[data-pad-footer="1"] {
+  padding-bottom: 4.75rem;
+}
+
+.heading-slide-reader[data-sticky-next="1"][data-has-heading-card="1"] .heading-slide-scroll[data-pad-footer="1"] {
+  padding-bottom: 7.25rem;
+}
+
+.heading-slide-body {
+  min-width: 0;
+}
+
+.heading-slide-next-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.4rem;
+  padding: 0.65rem 0.75rem;
+  border-top: 1px solid hsl(var(--border) / 0.55);
+  background: var(--hs-next-bar-bg, hsl(var(--primary)));
+  color: var(--hs-next-bar-fg, hsl(var(--primary-foreground)));
+  flex-shrink: 0;
+}
+
+.heading-slide-next-actions {
+  display: flex;
+  justify-content: center;
+}
+
+/* Overlay footer — does not shrink the scroll box (fixes overlap / jump on mobile) */
+.heading-slide-reader[data-sticky-next="1"] .heading-slide-next-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  box-shadow: 0 -6px 16px -8px hsl(var(--foreground) / 0.18);
+}
+
+.heading-slide-next-bar--end {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+
+.heading-slide-next-btn {
+  background: transparent !important;
+  color: inherit !important;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+.heading-slide-next-btn:hover {
+  background: color-mix(in srgb, currentColor 12%, transparent) !important;
+}
+
+.heading-slide-next-heading-card {
+  border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: calc(var(--radius, 0.625rem) - 2px);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  padding: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.heading-slide-next-heading-text {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Mobile: flush heading card — no border / side padding / inset (no overlap) */
+@media (max-width: 640px) {
+  .heading-slide-next-bar {
+    padding-left: 0;
+    padding-right: 0;
+    gap: 0.35rem;
+  }
+
+  .heading-slide-next-actions {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  .heading-slide-next-btn {
+    width: auto !important;
+    min-height: 2rem;
+    height: 2rem;
+    padding: 0 0.75rem !important;
+    font-size: 0.75rem;
+    line-height: 1;
+    border-radius: 0.4rem;
+  }
+
+  .heading-slide-next-btn svg {
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  .heading-slide-next-heading-card {
+    border: 0;
+    border-radius: 0;
+    padding: 0.45rem 0;
+    margin-left: 0;
+    margin-right: 0;
+    background: color-mix(in srgb, currentColor 10%, transparent);
+  }
+
+  .heading-slide-reader[data-sticky-next="1"][data-has-heading-card="1"] .heading-slide-scroll[data-pad-footer="1"] {
+    padding-bottom: 6.75rem;
+  }
 }
