@@ -25,30 +25,28 @@ export function ConceptDetailCard({
   if (!hasConceptDetailContent(detail)) return null;
 
   return (
-    <Card className="p-4 space-y-4">
-      <div className="space-y-3">
+    <div className="space-y-3">
+      <StoryBasedLearningButton
+        detail={detail}
+        conceptName={conceptName}
+        editable={editable}
+        onDetailChange={onDetailChange}
+      />
+      <Card className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Concept detail</p>
-            <h2 className="text-lg font-bold text-primary mt-1">{conceptName || "Untitled concept"}</h2>
-            <p className="text-[11px] text-muted-foreground mt-1">
-              Source textbox-এর exact format preview
-            </p>
+            <h2 className="mt-1 text-lg font-bold text-primary">{conceptName || "Untitled concept"}</h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">Source textbox-এর exact format preview</p>
           </div>
           <Button variant="outline" size="sm" className="shrink-0" onClick={onOpenDetails}>
             <BookOpen className="mr-2 h-4 w-4" />
             Concept details
           </Button>
         </div>
-        <StoryBasedLearningButton
-          detail={detail}
-          conceptName={conceptName}
-          editable={editable}
-          onDetailChange={onDetailChange}
-        />
-      </div>
 
-      <ConceptDetailBody detail={detail} showVerbatim={false} />
-    </Card>
+        <ConceptDetailBody detail={detail} showVerbatim={false} />
+      </Card>
+    </div>
   );
 }

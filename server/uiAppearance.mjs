@@ -255,6 +255,8 @@ function defaultHeadingSlides(overrides = {}) {
     nextBarBg: "hsl(var(--primary))",
     nextBarFg: "hsl(var(--primary-foreground))",
     minCharsPerSlide: 0,
+    scrollMode: "page",
+    trapNestedScroll: false,
     ...overrides,
   };
 }
@@ -267,6 +269,7 @@ function mergeHeadingSlides(base, patch) {
   const mode = patch.preHeadingMode === "mergeFirst" || patch.preHeadingMode === "intro" ? patch.preHeadingMode : base.preHeadingMode;
   let nextTemplate = str(patch.nextTemplate, base.nextTemplate);
   if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
+  const scrollMode = patch.scrollMode === "nested" || patch.scrollMode === "page" ? patch.scrollMode : base.scrollMode;
   return {
     conceptDetailsEnabled: bool(patch.conceptDetailsEnabled, base.conceptDetailsEnabled),
     storyEnabled: bool(patch.storyEnabled, base.storyEnabled),
@@ -288,6 +291,8 @@ function mergeHeadingSlides(base, patch) {
     nextBarBg: str(patch.nextBarBg, base.nextBarBg),
     nextBarFg: str(patch.nextBarFg, base.nextBarFg),
     minCharsPerSlide: num(patch.minCharsPerSlide, base.minCharsPerSlide),
+    scrollMode,
+    trapNestedScroll: bool(patch.trapNestedScroll, base.trapNestedScroll),
   };
 }
 

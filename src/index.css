@@ -1480,6 +1480,12 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   overflow: hidden;
 }
 
+/* Page mode: no nested scroll trap — content grows; page can scroll past to Complete, etc. */
+.heading-slide-reader[data-scroll-mode="page"] {
+  max-height: none;
+  overflow: visible;
+}
+
 .heading-slide-chrome {
   display: flex;
   flex-wrap: wrap;
@@ -1504,9 +1510,28 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   flex: 1 1 auto;
   min-height: 8rem;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   padding: 0.75rem 0.15rem 1rem;
   -webkit-overflow-scrolling: touch;
+}
+
+.heading-slide-reader[data-trap-scroll="1"] .heading-slide-scroll {
+  overscroll-behavior: contain;
+}
+
+.heading-slide-reader[data-scroll-mode="page"] .heading-slide-scroll {
+  flex: none;
+  min-height: 0;
+  overflow: visible;
+  overscroll-behavior: auto;
+  padding-bottom: 0.5rem;
+}
+
+.heading-slide-end-sentinel {
+  height: 1px;
+  width: 100%;
+  pointer-events: none;
+  visibility: hidden;
 }
 
 /* Reserve space so Next overlay never covers the last lines / causes jump */

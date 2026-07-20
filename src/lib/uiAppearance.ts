@@ -367,6 +367,13 @@ export type HeadingSlidesAppearance = {
   nextBarBg: string;
   nextBarFg: string;
   minCharsPerSlide: number;
+  /**
+   * nested = own scroll box (can trap page scroll).
+   * page = grows with content; page scroll continues past slides (recommended for Concept Learn).
+   */
+  scrollMode: "nested" | "page";
+  /** Only for nested mode: when true, scroll does not chain to the page at the edges */
+  trapNestedScroll: boolean;
 };
 
 export type UiAppearance = {
@@ -1073,6 +1080,8 @@ export function defaultHeadingSlides(overrides: Partial<HeadingSlidesAppearance>
     nextBarBg: "hsl(var(--primary))",
     nextBarFg: "hsl(var(--primary-foreground))",
     minCharsPerSlide: 0,
+    scrollMode: "page",
+    trapNestedScroll: false,
     ...overrides,
   };
 }
@@ -1087,6 +1096,7 @@ export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown
   let nextTemplate = str(p.nextTemplate, base.nextTemplate);
   // Migrate old in-button label template → heading card template
   if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
+  const scrollMode = p.scrollMode === "nested" || p.scrollMode === "page" ? p.scrollMode : base.scrollMode;
   return {
     conceptDetailsEnabled: bool(p.conceptDetailsEnabled, base.conceptDetailsEnabled),
     storyEnabled: bool(p.storyEnabled, base.storyEnabled),
@@ -1108,6 +1118,8 @@ export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown
     nextBarBg: str(p.nextBarBg, base.nextBarBg),
     nextBarFg: str(p.nextBarFg, base.nextBarFg),
     minCharsPerSlide: num(p.minCharsPerSlide, base.minCharsPerSlide),
+    scrollMode,
+    trapNestedScroll: bool(p.trapNestedScroll, base.trapNestedScroll),
   };
 }
 

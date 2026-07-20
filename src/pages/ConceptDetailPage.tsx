@@ -96,33 +96,34 @@ export default function ConceptDetailPage() {
         </div>
       </div>
 
-      <Card className={userContentCard}>
-        <div className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
-          </div>
-          <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
-          <ConceptDetailBody detail={detail} showVerbatim />
-        </div>
-        {keyPoints.length ? (
-          <div className="space-y-2 border-t pt-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
-              <div className="flex flex-wrap gap-2">
-                <Button asChild size="sm" className="h-8 text-xs">
-                  <Link to={`/concept/${conceptId}/learn`}>
-                    <Target className="mr-1 h-3 w-3" />
-                    Key Point Study
-                  </Link>
-                </Button>
-                <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                  <Link to={`/practice/${conceptId}/setup`}>
-                    <Play className="mr-1 h-3 w-3" />
-                    Practice
-                  </Link>
-                </Button>
-              </div>
+      <div className="space-y-3">
+        <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+        <Card className={userContentCard}>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
             </div>
+            <ConceptDetailBody detail={detail} showVerbatim />
+          </div>
+          {keyPoints.length ? (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" className="h-8 text-xs">
+                    <Link to={`/concept/${conceptId}/learn`}>
+                      <Target className="mr-1 h-3 w-3" />
+                      Key Point Study
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+                    <Link to={`/practice/${conceptId}/setup`}>
+                      <Play className="mr-1 h-3 w-3" />
+                      Practice
+                    </Link>
+                  </Button>
+                </div>
+              </div>
             <KeyPointList
               keyPoints={keyPoints}
               onBoardClick={(board) => {
@@ -133,6 +134,7 @@ export default function ConceptDetailPage() {
           </div>
         ) : null}
       </Card>
+      </div>
 
       <ConceptQuestionsPanel
         open={questionsOpen}

@@ -37,9 +37,11 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
     [html, levels, config.preHeadingMode, config.minCharsPerSlide],
   );
 
+  const scrollMode = config.scrollMode === "nested" ? "nested" : "page";
   const [index, setIndex] = useState(0);
   const [nearEnd, setNearEnd] = useState(!config.requireScrollToEnd);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const endSentinelRef = useRef<HTMLDivElement>(null);
 
   const safeIndex = Math.min(index, Math.max(0, slides.length - 1));
   const slide: HeadingSlide | undefined = slides[safeIndex];
@@ -50,27 +52,62 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
     setIndex(0);
   }, [html, levels.join(",")]);
 
+  // Nested mode: measure scroll inside the box
   useEffect(() => {
+    if (scrollMode !== "nested") return;
     const el = scrollRef.current;
     if (el) el.scrollTop = 0;
     if (!config.requireScrollToEnd) {
       setNearEnd(true);
       return;
     }
-    // Short content: treat as already at end
     requestAnimationFrame(() => {
       const box = scrollRef.current;
       if (!box) return;
       if (box.scrollHeight <= box.clientHeight + 8) setNearEnd(true);
       else setNearEnd(false);
     });
-  }, [safeIndex, slide?.id, config.requireScrollToEnd]);
+  }, [safeIndex, slide?.id, config.requireScrollToEnd, scrollMode]);
+
+  // Page mode: sentinel enters viewport → near end (page scroll continues past slides)
+  useEffect(() => {
+    if (scrollMode !== "page") return;
+    if (!config.requireScrollToEnd) {
+      setNearEnd(true);
+      return;
+    }
+    const sentinel = endSentinelRef.current;
+    if (!sentinel) return;
+
+    const threshold = Math.min(1, Math.max(0, (100 - (config.scrollShowNextAtPercent ?? 85)) / 100));
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) setNearEnd(true);
+        else if (entry && entry.boundingClientRect.top > (typeof window !== "undefined" ? window.innerHeight : 0)) {
+          setNearEnd(false);
+        }
+      },
+      {
+        root: null,
+        rootMargin: `0px 0px -${Math.round(threshold * 35)}% 0px`,
+        threshold: 0,
+      },
+    );
+    io.observe(sentinel);
+    // Short content: if already visible on mount
+    requestAnimationFrame(() => {
+      const rect = sentinel.getBoundingClientRect();
+      if (rect.top < window.innerHeight * 0.92) setNearEnd(true);
+      else setNearEnd(false);
+    });
+    return () => io.disconnect();
+  }, [safeIndex, slide?.id, config.requireScrollToEnd, config.scrollShowNextAtPercent, scrollMode]);
 
   useEffect(() => {
     if (isLast && slides.length > 0) onReachLastSlide?.();
   }, [isLast, slides.length, onReachLastSlide]);
 
-  const onScroll = useCallback(() => {
+  const onNestedScroll = useCallback(() => {
     const box = scrollRef.current;
     if (!box || !config.requireScrollToEnd) {
       setNearEnd(true);
@@ -118,11 +155,14 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
 
   const showEndLabel = isLast && Boolean(config.lastSlideLabel);
   const footerVisible = showNext || showEndLabel;
+  const useStickyOverlay = scrollMode === "nested" && config.stickyNextBar;
 
   return (
     <div
       className={cn("heading-slide-reader", className)}
-      data-sticky-next={config.stickyNextBar ? "1" : "0"}
+      data-scroll-mode={scrollMode}
+      data-trap-scroll={scrollMode === "nested" && config.trapNestedScroll ? "1" : "0"}
+      data-sticky-next={useStickyOverlay ? "1" : "0"}
       data-footer={footerVisible ? "1" : "0"}
       data-has-heading-card={headingCardText ? "1" : "0"}
     >
@@ -146,11 +186,14 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
       <div
         ref={scrollRef}
         className="heading-slide-scroll"
-        data-pad-footer={!isLast || showEndLabel ? "1" : "0"}
-        onScroll={onScroll}
+        data-pad-footer={useStickyOverlay && (!isLast || showEndLabel) ? "1" : "0"}
+        onScroll={scrollMode === "nested" ? onNestedScroll : undefined}
       >
         <div className={cn("heading-slide-body", richClassName)}>
           <RichHtmlContent content={slide.html} />
+          {scrollMode === "page" && config.requireScrollToEnd ? (
+            <div ref={endSentinelRef} className="heading-slide-end-sentinel" aria-hidden />
+          ) : null}
         </div>
       </div>
 

@@ -2174,6 +2174,23 @@ export default function AdminAppearance() {
                   </SelectContent>
                 </Select>
               </Field>
+              <Field
+                label="Scroll mode"
+                hint="Page = পেজের সাথে স্ক্রল (Concept Learn-এ নিচে Complete এ যাওয়া যায়). Nested = ভিতরে আলাদা স্ক্রল বক্স।"
+              >
+                <Select
+                  value={hs.scrollMode ?? "page"}
+                  onValueChange={(v) => updateHeadingSlides("scrollMode", v as "nested" | "page")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="page">Page scroll (recommended)</SelectItem>
+                    <SelectItem value="nested">Nested box (can trap scroll)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
               <NumberField
                 label="Show Next after scroll %"
                 value={hs.scrollShowNextAtPercent}
@@ -2192,10 +2209,16 @@ export default function AdminAppearance() {
             </div>
             <div className="space-y-3">
               <BoolField label="Require scroll to end before Next" checked={hs.requireScrollToEnd} onChange={(v) => updateHeadingSlides("requireScrollToEnd", v)} />
+              <BoolField
+                label="Trap scroll inside nested box"
+                checked={hs.trapNestedScroll}
+                onChange={(v) => updateHeadingSlides("trapNestedScroll", v)}
+                hint="Only for Nested mode. On = নিচে গেলে পেজে স্ক্রল যাবে না (আটকে থাকে)."
+              />
               <BoolField label="Show next heading below button (card)" checked={hs.showNextHeadingPreview} onChange={(v) => updateHeadingSlides("showNextHeadingPreview", v)} />
               <BoolField label="Show Previous button" checked={hs.showPrev} onChange={(v) => updateHeadingSlides("showPrev", v)} />
               <BoolField label="Show slide counter" checked={hs.showCounter} onChange={(v) => updateHeadingSlides("showCounter", v)} />
-              <BoolField label="Sticky Next bar" checked={hs.stickyNextBar} onChange={(v) => updateHeadingSlides("stickyNextBar", v)} />
+              <BoolField label="Sticky Next bar" checked={hs.stickyNextBar} onChange={(v) => updateHeadingSlides("stickyNextBar", v)} hint="Nested mode only — overlays the scroll box footer" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <TextField label="Next label" value={hs.nextLabel} onChange={(v) => updateHeadingSlides("nextLabel", v)} />
