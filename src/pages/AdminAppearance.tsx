@@ -1342,10 +1342,52 @@ export default function AdminAppearance() {
             </div>
 
             {landingSection === "colors" ? (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <ColorField label="Background color 1" value={lp.bgColor1} onChange={(v) => updateLandingPage("bgColor1", v)} />
-                <ColorField label="Background color 2" value={lp.bgColor2} onChange={(v) => updateLandingPage("bgColor2", v)} />
-                <ColorField label="Background color 3" value={lp.bgColor3} onChange={(v) => updateLandingPage("bgColor3", v)} />
+              <div className="space-y-4">
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Hero section background</p>
+                  <p className="mb-3 text-[11px] text-muted-foreground">
+                    Hero uses a gradient from the three colors below. Background stays fixed while hero content scrolls.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <ColorField label="Background color 1" value={lp.bgColor1} onChange={(v) => updateLandingPage("bgColor1", v)} />
+                    <ColorField label="Background color 2" value={lp.bgColor2} onChange={(v) => updateLandingPage("bgColor2", v)} />
+                    <ColorField label="Background color 3" value={lp.bgColor3} onChange={(v) => updateLandingPage("bgColor3", v)} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Other section backgrounds</p>
+                  <p className="mb-3 text-[11px] text-muted-foreground">
+                    Each section has its own sticky background. Hex, rgb, or CSS gradient — e.g.{" "}
+                    <code className="text-[10px]">linear-gradient(165deg, #0e6678, #0f766e)</code>
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <TextField
+                      label="Courses section"
+                      value={lp.coursesSectionBg}
+                      onChange={(v) => updateLandingPage("coursesSectionBg", v)}
+                    />
+                    <TextField
+                      label="Why / About section"
+                      value={lp.aboutSectionBg}
+                      onChange={(v) => updateLandingPage("aboutSectionBg", v)}
+                    />
+                    <TextField
+                      label="FAQ section"
+                      value={lp.faqSectionBg}
+                      onChange={(v) => updateLandingPage("faqSectionBg", v)}
+                    />
+                    <TextField
+                      label="Footer section"
+                      value={lp.footerSectionBg}
+                      onChange={(v) => updateLandingPage("footerSectionBg", v)}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Global text & cards</p>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <ColorField label="Text color" value={lp.textColor} onChange={(v) => updateLandingPage("textColor", v)} />
                 <TextField
                   label="Muted text (color / rgba)"
@@ -1374,6 +1416,8 @@ export default function AdminAppearance() {
                   value={lp.faqCardBg}
                   onChange={(v) => updateLandingPage("faqCardBg", v)}
                 />
+                  </div>
+                </div>
               </div>
             ) : null}
 

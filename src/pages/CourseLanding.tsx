@@ -4,8 +4,9 @@ import { ArrowRight, BookOpen, CalendarDays, ChevronRight, Headphones, Menu, Pla
 import { apiUrl } from "@/lib/apiBase";
 import { getSession, isAuthenticated } from "@/lib/auth";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { LandingSection } from "@/components/LandingSection";
 import { WhyCarousel } from "@/components/WhyCarousel";
-import { landingPageStyleVars, type LandingFaqItem } from "@/lib/uiAppearance";
+import { heroSectionBackground, landingPageStyleVars, type LandingFaqItem } from "@/lib/uiAppearance";
 
 type CourseRoutine = {
   id: string;
@@ -156,12 +157,6 @@ export default function CourseLanding() {
 
   return (
     <div className="pg-landing" style={landingStyle}>
-      <div className="pg-fixed-scene" aria-hidden>
-        <div className="pg-fixed-scene-color" />
-        <div className="pg-fixed-scene-glow" />
-        <div className="pg-fixed-scene-grid" />
-      </div>
-
       <header className="pg-landing-header">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <Link to="/" className="pg-brand group flex items-center gap-2.5">
@@ -215,8 +210,8 @@ export default function CourseLanding() {
         ) : null}
       </header>
 
-      <main className="relative z-10">
-        <section className="pg-hero-layer">
+      <main className="relative">
+        <LandingSection className="pg-hero-layer" background={heroSectionBackground(lp)}>
           <div className="pg-hero-away mx-auto grid max-w-6xl gap-10 px-4 pb-20 pt-12 sm:px-6 sm:pt-16 lg:grid-cols-2 lg:items-center lg:gap-12">
             <div>
               <p className="pg-eyebrow pg-eyebrow-on-dark">{lp.heroEyebrow}</p>
@@ -306,9 +301,9 @@ export default function CourseLanding() {
               </div>
             </div>
           </div>
-        </section>
+        </LandingSection>
 
-        <section id="courses" className="pg-glass-panel">
+        <LandingSection id="courses" className="pg-glass-panel" background={lp.coursesSectionBg}>
           <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="pg-section-title">{lp.coursesTitle}</h2>
@@ -371,9 +366,9 @@ export default function CourseLanding() {
               </div>
             )}
           </div>
-        </section>
+        </LandingSection>
 
-        <section id="about" className="pg-glass-panel pg-why-section">
+        <LandingSection id="about" className="pg-glass-panel pg-why-section" background={lp.aboutSectionBg}>
           <div className="mx-auto max-w-6xl px-4 py-14 text-center sm:px-6 sm:py-16">
             <p className="pg-eyebrow mx-auto justify-center">{lp.aboutEyebrow}</p>
             {lp.aboutTitle.trim() ? <h2 className="pg-section-title mt-3">{lp.aboutTitle}</h2> : null}
@@ -393,9 +388,9 @@ export default function CourseLanding() {
               </div>
             ) : null}
           </div>
-        </section>
+        </LandingSection>
 
-        <section id="faq" className="pg-faq-section">
+        <LandingSection id="faq" className="pg-faq-section" background={lp.faqSectionBg}>
           <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6 sm:py-20">
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="pg-faq-title">{faq.title}</h2>
@@ -418,12 +413,14 @@ export default function CourseLanding() {
               </div>
             )}
           </div>
-        </section>
+        </LandingSection>
       </main>
 
-      <footer className="pg-landing-footer">
-        © {new Date().getFullYear()} {lp.footerNote}
-      </footer>
+      <LandingSection className="pg-landing-footer-wrap" background={lp.footerSectionBg} fill>
+        <footer className="pg-landing-footer">
+          © {new Date().getFullYear()} {lp.footerNote}
+        </footer>
+      </LandingSection>
 
       <a href="#courses" className="pg-fab" aria-label={lp.fabLabel}>
         <Headphones className="h-4 w-4" />

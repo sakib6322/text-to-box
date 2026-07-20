@@ -209,10 +209,15 @@ export type LandingWhyItem = {
 
 /** Public course landing — colors + copy (shared, not per-device). */
 export type LandingPageAppearance = {
-  /** Page background gradient stops */
+  /** Page background gradient stops (hero section) */
   bgColor1: string;
   bgColor2: string;
   bgColor3: string;
+  /** Per-section sticky backgrounds (CSS color / gradient) */
+  coursesSectionBg: string;
+  aboutSectionBg: string;
+  faqSectionBg: string;
+  footerSectionBg: string;
   textColor: string;
   mutedTextColor: string;
   accentColor: string;
@@ -591,6 +596,10 @@ export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {
     bgColor1: "#0a3d4d",
     bgColor2: "#127a7a",
     bgColor3: "#134e4a",
+    coursesSectionBg: "linear-gradient(165deg, #0e6678 0%, #0f766e 100%)",
+    aboutSectionBg: "linear-gradient(165deg, #127a7a 0%, #115e59 100%)",
+    faqSectionBg: "linear-gradient(165deg, #134e4a 0%, #0f5c52 100%)",
+    footerSectionBg: "#0a3d4d",
     textColor: "#ecfeff",
     mutedTextColor: "rgba(236, 254, 255, 0.82)",
     accentColor: "#67e8f9",
@@ -749,6 +758,11 @@ export function mergeLandingPage(base: LandingPageAppearance, patch: unknown): L
       .filter((it): it is LandingWhyItem => it != null);
   }
   return next;
+}
+
+/** Hero sticky background from gradient stops */
+export function heroSectionBackground(lp: LandingPageAppearance): string {
+  return `linear-gradient(160deg, ${lp.bgColor1} 0%, ${lp.bgColor2} 50%, ${lp.bgColor3} 100%)`;
 }
 
 /** Inline CSS variables for `.pg-landing` root */

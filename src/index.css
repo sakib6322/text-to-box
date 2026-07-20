@@ -777,7 +777,7 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
 }
 
 
-/* ——— PG Diary landing: fixed colored BG + transparent scroll (no lag) ——— */
+/* ——— PG Diary landing: per-section sticky backgrounds ——— */
 .pg-landing {
   --pg-ink: #0b1f2a;
   --pg-teal: #0e7490;
@@ -785,48 +785,35 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   position: relative;
   min-height: 100vh;
   color: var(--pg-ink);
-  background: transparent;
+  background: var(--pg-bg-1, #0a3d4d);
 }
 
-/* Distinct fixed background — visible through transparent panels */
-.pg-fixed-scene {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
+.pg-section {
+  position: relative;
+  isolation: isolate;
+}
+
+.pg-section-bg {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  margin-bottom: -100vh;
   pointer-events: none;
-  overflow: hidden;
+  z-index: 0;
 }
 
-.pg-fixed-scene-color {
+.pg-section-fill .pg-section-bg {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(
-      160deg,
-      var(--pg-bg-1, #0a3d4d) 0%,
-      var(--pg-bg-2, #127a7a) 50%,
-      var(--pg-bg-3, #134e4a) 100%
-    );
+  height: auto;
+  margin-bottom: 0;
 }
 
-.pg-fixed-scene-glow {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 55% 45% at 18% 22%, rgba(34, 211, 238, 0.28), transparent 60%),
-    radial-gradient(ellipse 50% 40% at 82% 18%, rgba(52, 211, 153, 0.22), transparent 55%),
-    radial-gradient(ellipse 60% 50% at 50% 90%, rgba(8, 47, 73, 0.35), transparent 60%);
-}
-
-.pg-fixed-scene-grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 52px 52px;
-  mask-image: radial-gradient(ellipse 80% 65% at 50% 30%, #000 10%, transparent 70%);
-  opacity: 0.55;
+.pg-section-content {
+  position: relative;
+  z-index: 1;
 }
 
 .pg-landing-header {
@@ -925,12 +912,9 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   color: rgba(165, 243, 252, 0.9);
 }
 
-.pg-hero-layer {
-  position: relative;
-  z-index: 10;
+.pg-hero-layer > .pg-section-content {
   min-height: min(88vh, 720px);
   padding-bottom: 2rem;
-  background: transparent;
 }
 
 /* Hero floats away — transform only (no opacity / no will-change lag) */
@@ -1067,12 +1051,10 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   color: #67e8f9;
 }
 
-/* All sections share the same transparent layer over fixed BG — no blur */
+/* Section panels — content scrolls over sticky section background */
 .pg-glass-panel,
 .pg-glass-panel-tint,
 .pg-faq-section {
-  position: relative;
-  z-index: 20;
   margin-top: 0;
   border-radius: 0;
   background: transparent;
@@ -1412,8 +1394,6 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
 }
 
 .pg-landing-footer {
-  position: relative;
-  z-index: 20;
   background: transparent;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   padding: 1.5rem 1rem;
