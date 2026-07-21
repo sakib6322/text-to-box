@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { BookOpen, ChevronDown, ChevronRight, GraduationCap, Plus } from "lucide-react";
 import { SuggestionKeyPointCard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
+import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
+import { sortKeyPointsByImportance } from "@/lib/progressEngine";
 import { cn } from "@/lib/utils";
 
 export type ConceptSuggestionRow = {
@@ -60,6 +62,8 @@ export function ConceptSuggestionGroupCard({
   onBoardClick,
 }: Props) {
   const pct = studyPct ?? 0;
+  const csu = useConceptStudentUi();
+  const sortedRows = sortKeyPointsByImportance(group.rows);
 
   return (
     <Card className="overflow-hidden shadow-sm transition-shadow hover:shadow-md">
@@ -119,18 +123,22 @@ export function ConceptSuggestionGroupCard({
             </>
           ) : (
             <>
-              <Button asChild size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
-                <Link to={`/concept/${group.conceptId}/details`}>
-                  <GraduationCap className="mr-1.5 h-4 w-4" />
-                  Study & Practice
-                </Link>
-              </Button>
-              <Button asChild variant="outline" size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
-                <Link to={`/concept/${group.conceptId}/details`}>
-                  <BookOpen className="mr-1.5 h-4 w-4" />
-                  Details
-                </Link>
-              </Button>
+              {csu.showStudyAndPracticeButton ? (
+                <Button asChild size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
+                  <Link to={`/concept/${group.conceptId}/details`}>
+                    <GraduationCap className="mr-1.5 h-4 w-4" />
+                    Study & Practice
+                  </Link>
+                </Button>
+              ) : null}
+              {csu.showDetailsButton ? (
+                <Button asChild variant="outline" size="sm" className="h-9 flex-1 min-w-[8.5rem] sm:flex-none">
+                  <Link to={`/concept/${group.conceptId}/details`}>
+                    <BookOpen className="mr-1.5 h-4 w-4" />
+                    Details
+                  </Link>
+                </Button>
+              ) : null}
             </>
           )}
         </div>
@@ -140,7 +148,7 @@ export function ConceptSuggestionGroupCard({
         <div className="border-t bg-muted/20 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
           <p className="mb-3 text-xs font-medium text-muted-foreground sm:text-sm">Key points</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {group.rows.map((r) => (
+            {sortedRows.map((r) => (
               <SuggestionKeyPointCard
                 key={r.id}
                 content={r.content}

@@ -93,6 +93,8 @@ import {
 } from "./databaseOps.mjs";
 import { registerCourseRoutes } from "./courses.mjs";
 import { registerProgressRoutes } from "./progress.mjs";
+import { transformRichHtmlImages } from "./richHtmlImages.mjs";
+import { registerGdriveImageRoutes } from "./gdriveImage.mjs";
 
 const app = express();
 app.use(cors());
@@ -451,11 +453,17 @@ function sanitizeRichHtml(value) {
 
   html = html.replace(/\ssrc\s*=\s*(['"])(.*?)\1/gi, (match, quote, src) => {
     const trimmed = src.trim();
-    if (/^data:image\//i.test(trimmed) || /^https?:\/\//i.test(trimmed)) return match;
+    if (
+      /^data:image\//i.test(trimmed) ||
+      /^https?:\/\//i.test(trimmed) ||
+      /^\/api\/gdrive-image\/[a-zA-Z0-9_-]+$/i.test(trimmed)
+    ) {
+      return match;
+    }
     return "";
   });
 
-  return html.trim();
+  return transformRichHtmlImages(html.trim());
 }
 
 function isRichHtmlEmpty(value) {
@@ -1309,6 +1317,8 @@ ${questionsBlock}`;
 });
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+registerGdriveImageRoutes(app);
 
 // Debug only (masked): confirm server env is updated.
 app.get("/api/debug/env", async (_req, res) => {

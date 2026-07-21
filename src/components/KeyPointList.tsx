@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import type { BoardLinkDisplay, KeyPointWithBoards } from "@/lib/conceptDetail";
+import { sortKeyPointsByImportance } from "@/lib/progressEngine";
 import { TrendingUp } from "lucide-react";
 
 export type BoardClickTarget = {
@@ -35,7 +36,7 @@ function boardBadges(kp: KeyPointWithBoards): Array<BoardLinkDisplay & { key: st
 }
 
 export function KeyPointList({ keyPoints, compact, studiedIds, currentId, onBoardClick }: Props) {
-  const list = normalize(keyPoints);
+  const list = sortKeyPointsByImportance(normalize(keyPoints));
   if (!list.length) return null;
 
   return (

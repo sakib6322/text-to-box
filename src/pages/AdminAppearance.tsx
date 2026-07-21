@@ -26,11 +26,25 @@ import {
   type SidebarLabels,
   type StoryDialogWidth,
   type HeadingSlidesAppearance,
+  type ConceptStudentUiAppearance,
+  type RichEditorAppearance,
   type UiAppearance,
 } from "@/lib/uiAppearance";
 import { Textarea } from "@/components/ui/textarea";
-import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { AppearanceOptionGuide } from "@/components/AppearanceOptionGuide";
+import {
+  AllQuestionsLivePreview,
+  AppearancePreviewPanel,
+  CombinedAppearancePreview,
+  ConceptDetailsLivePreview,
+  GlobalWebsiteLivePreview,
+  HeadingSlidesLivePreview,
+  LandingLivePreview,
+  PerformanceLivePreview,
+  ProgressLivePreview,
+  RichEditorLivePreview,
+  StoryLivePreview,
+} from "@/components/AppearanceLivePreviews";
 import {
   GUIDE_CONCEPT,
   GUIDE_HEADING_SLIDES,
@@ -49,6 +63,7 @@ import {
   GUIDE_PROGRESS_FEATURES,
   GUIDE_PROGRESS_STEPS,
   GUIDE_QUESTIONS,
+  GUIDE_RICH_EDITOR,
   GUIDE_STORY,
   GUIDE_WEBSITE_UI,
 } from "@/lib/appearanceOptionGuides";
@@ -287,10 +302,16 @@ export default function AdminAppearance() {
     commit({ ...theme, performance: { ...theme.performance, [key]: value } });
   };
 
+  const updateRichEditor = <K extends keyof RichEditorAppearance>(key: K, value: RichEditorAppearance[K]) => {
+    commit({ ...theme, richEditor: { ...theme.richEditor, [key]: value } });
+  };
+
   const faq = theme.landingFaq;
   const lp = theme.landingPage;
   const prog = theme.progressPlan;
   const hs = theme.headingSlides;
+  const re = theme.richEditor;
+  const csu = theme.conceptStudentUi;
 
   const updateProgressPlan = <K extends keyof ProgressPlanAppearance>(key: K, value: ProgressPlanAppearance[K]) => {
     commit({ ...theme, progressPlan: { ...theme.progressPlan, [key]: value } });
@@ -298,6 +319,13 @@ export default function AdminAppearance() {
 
   const updateHeadingSlides = <K extends keyof HeadingSlidesAppearance>(key: K, value: HeadingSlidesAppearance[K]) => {
     commit({ ...theme, headingSlides: { ...theme.headingSlides, [key]: value } });
+  };
+
+  const updateConceptStudentUi = <K extends keyof ConceptStudentUiAppearance>(
+    key: K,
+    value: ConceptStudentUiAppearance[K],
+  ) => {
+    commit({ ...theme, conceptStudentUi: { ...theme.conceptStudentUi, [key]: value } });
   };
 
   const updateProgressStep = (id: 1 | 2 | 3 | 4, patch: Partial<ProgressStepConfig>) => {
@@ -530,83 +558,15 @@ export default function AdminAppearance() {
     }
   };
 
+  const g = deviceTheme.global;
+  const c = deviceTheme.conceptDetails;
+  const s = deviceTheme.storyBasedLearning;
+  const aq = deviceTheme.allQuestions;
+  const p = theme.performance;
+
   const preview = useMemo(
-    () => (
-      <div className="space-y-4">
-        <div className="concept-detail-rich space-y-3 rounded-lg border p-4" style={{ background: "hsl(var(--card))" }}>
-          <p className="text-xs font-semibold uppercase text-muted-foreground">Concept details</p>
-          <h1>Heading 1 sample</h1>
-          <h2>Heading 2 sample</h2>
-          <h3>Heading 3 sample</h3>
-          <p>
-            Paragraph with <strong>bold</strong>, <em>italic</em>, and a <a href="#preview">link</a>.
-          </p>
-          <ul>
-            <li>Bullet one</li>
-            <li>Bullet two</li>
-          </ul>
-          <table>
-            <thead>
-              <tr>
-                <th>Column A</th>
-                <th>Column B</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Cell 1</td>
-                <td>Cell 2</td>
-              </tr>
-              <tr>
-                <td>Cell 3</td>
-                <td>Cell 4</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="story-based-learning space-y-2">
-          <p className="text-xs font-semibold uppercase opacity-70">Story-based learning</p>
-          <h2>Once upon a concept…</h2>
-          <p>
-            A short story paragraph with <strong>emphasis</strong> and a{" "}
-            <a href="#story-preview">story link</a>.
-          </p>
-        </div>
-        <div className="all-questions-list max-w-md">
-          <p className="text-xs font-semibold uppercase text-muted-foreground print:hidden">All questions paper</p>
-          <article className="question-paper">
-            <header className="question-paper-header flex justify-between gap-2">
-              <div className="space-y-0.5">
-                <p className="question-paper-meta uppercase tracking-widest font-medium">Question 1</p>
-                <p className="question-paper-taxonomy">Anatomy · CVS · Heart · Valves</p>
-                <p className="question-paper-concept font-semibold">Mitral valve</p>
-              </div>
-              <span className="question-paper-badge uppercase border px-1.5 rounded-sm">mcq</span>
-            </header>
-            <p className="question-paper-stem">Which statement about the mitral valve is correct?</p>
-            <ol className="question-paper-options">
-              <li className="question-paper-option flex gap-2">
-                <span className="question-paper-option-num w-4">1.</span>
-                <span className="flex-1">Has three cusps</span>
-                <span className="question-paper-badge border px-1 rounded-sm">F</span>
-              </li>
-              <li className="question-paper-option flex gap-2">
-                <span className="question-paper-option-num w-4">2.</span>
-                <span className="flex-1">Guards the left AV orifice</span>
-                <span className="question-paper-correct border px-1 rounded-sm">T</span>
-              </li>
-            </ol>
-            <div className="question-paper-expl">
-              <p className="question-paper-expl-title">Explanations</p>
-              <div className="question-paper-expl-item">
-                <span className="question-paper-expl-label">2. (T):</span> It guards the left atrioventricular orifice.
-              </div>
-            </div>
-          </article>
-        </div>
-      </div>
-    ),
-    [],
+    () => <CombinedAppearancePreview g={g} s={s} explanationTitle={aq.explanationTitle} />,
+    [g, s, aq.explanationTitle],
   );
 
   if (loading) {
@@ -616,12 +576,6 @@ export default function AdminAppearance() {
       </div>
     );
   }
-
-  const g = deviceTheme.global;
-  const c = deviceTheme.conceptDetails;
-  const s = deviceTheme.storyBasedLearning;
-  const aq = deviceTheme.allQuestions;
-  const p = theme.performance;
 
   return (
     <div className="space-y-4">
@@ -715,6 +669,7 @@ export default function AdminAppearance() {
             <TabsTrigger value="landing">Landing page</TabsTrigger>
             <TabsTrigger value="progress">Progress plan</TabsTrigger>
             <TabsTrigger value="headingSlides">Heading slides</TabsTrigger>
+            <TabsTrigger value="richEditor">Rich editor · Images</TabsTrigger>
             <TabsTrigger value="performance">Performance (shared)</TabsTrigger>
             <TabsTrigger value="preview">Live preview</TabsTrigger>
           </TabsList>
@@ -915,6 +870,10 @@ export default function AdminAppearance() {
                 ))}
               </div>
             </div>
+
+            <AppearancePreviewPanel title="Live preview · Website UI" hint="Colors, typography, cards, and sidebar labels from current draft.">
+              <GlobalWebsiteLivePreview g={g} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="concept" className="mt-4 space-y-4">
@@ -956,6 +915,55 @@ export default function AdminAppearance() {
               <NumberField label="Table font size (px)" value={c.tableFontSizePx} min={10} max={16} onChange={(n) => updateCd("tableFontSizePx", n)} />
               <NumberField label="Table cell padding (px)" value={c.tableCellPaddingPx} min={4} max={16} onChange={(n) => updateCd("tableCellPaddingPx", n)} />
             </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Student concept UI</p>
+              <p className="text-[11px] text-muted-foreground">
+                Key points order is automatic: higher suggestion count first, then total board mentions.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <BoolField
+                  label="Show key points on concept details"
+                  checked={csu.showKeyPointsOnDetails}
+                  onChange={(v) => updateConceptStudentUi("showKeyPointsOnDetails", v)}
+                  hint="Details page-এ concept body-র নিচে key points list"
+                />
+                <BoolField
+                  label="Show Details button"
+                  checked={csu.showDetailsButton}
+                  onChange={(v) => updateConceptStudentUi("showDetailsButton", v)}
+                  hint="Learn header + My Suggestions card"
+                />
+                <BoolField
+                  label="Show Questions button"
+                  checked={csu.showQuestionsButton}
+                  onChange={(v) => updateConceptStudentUi("showQuestionsButton", v)}
+                  hint="Details + Learn header"
+                />
+                <BoolField
+                  label="Show Study button"
+                  checked={csu.showStudyButton}
+                  onChange={(v) => updateConceptStudentUi("showStudyButton", v)}
+                  hint="Details header + key points section + Practice setup"
+                />
+                <BoolField
+                  label="Show Practice button"
+                  checked={csu.showPracticeButton}
+                  onChange={(v) => updateConceptStudentUi("showPracticeButton", v)}
+                  hint="Details header + key points section"
+                />
+                <BoolField
+                  label="Show Study & Practice button"
+                  checked={csu.showStudyAndPracticeButton}
+                  onChange={(v) => updateConceptStudentUi("showStudyAndPracticeButton", v)}
+                  hint="My Suggestions concept card"
+                />
+              </div>
+            </div>
+
+            <AppearancePreviewPanel title="Live preview · Concept details">
+              <ConceptDetailsLivePreview studentUi={csu} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="story" className="mt-4 space-y-4">
@@ -1068,13 +1076,9 @@ export default function AdminAppearance() {
               <ColorField label="Accent" value={s.accentColor} onChange={(v) => updateSbl("accentColor", v)} />
               <ColorField label="Border" value={s.borderColor} onChange={(v) => updateSbl("borderColor", v)} />
             </div>
-            <div className="story-based-learning space-y-2">
-              <p className="text-xs font-semibold uppercase opacity-70">Live story preview</p>
-              <h2 style={{ color: "var(--sbl-heading-color)", fontSize: "1.15em" }}>Story heading sample</h2>
-              <p>
-                Body text with <strong>bold</strong> and a <a href="#sbl">link</a> — uses current device draft.
-              </p>
-            </div>
+            <AppearancePreviewPanel title="Live preview · Story learning">
+              <StoryLivePreview s={s} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="questions" className="mt-4 space-y-4">
@@ -1349,45 +1353,9 @@ export default function AdminAppearance() {
               />
             </div>
 
-            <div className="all-questions-list max-w-lg">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Live paper preview</p>
-              <article className="question-paper">
-                <header className="question-paper-header flex justify-between gap-2">
-                  <div className="space-y-0.5">
-                    <p className="question-paper-meta uppercase tracking-widest font-medium">Question 1</p>
-                    <p className="question-paper-taxonomy">Anatomy · CVS · Heart · Valves</p>
-                    <p className="question-paper-concept font-semibold">Mitral valve</p>
-                    <span className="question-paper-board-badge inline-block border px-1.5 rounded-sm">BMDC</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="question-paper-badge uppercase border px-1.5 rounded-sm">mcq</span>
-                    <span className="question-paper-marks tabular-nums">1 mark(s)</span>
-                  </div>
-                </header>
-                <p className="question-paper-stem">Which statement about the mitral valve is correct?</p>
-                <ol className="question-paper-options">
-                  <li className="question-paper-option flex gap-2">
-                    <span className="question-paper-option-num w-4">1.</span>
-                    <span className="flex-1">Has three cusps</span>
-                    <span className="question-paper-badge border px-1 rounded-sm">F</span>
-                  </li>
-                  <li className="question-paper-option flex gap-2">
-                    <span className="question-paper-option-num w-4">2.</span>
-                    <span className="flex-1">Guards the left AV orifice</span>
-                    <span className="question-paper-correct border px-1 rounded-sm">T</span>
-                  </li>
-                </ol>
-                <div className="question-paper-expl">
-                  <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
-                  <div className="question-paper-expl-item">
-                    <span className="question-paper-expl-label">1. (F):</span> Mitral valve has two cusps, not three.
-                  </div>
-                  <div className="question-paper-expl-item">
-                    <span className="question-paper-expl-label">2. (T):</span> It guards the left atrioventricular orifice.
-                  </div>
-                </div>
-              </article>
-            </div>
+            <AppearancePreviewPanel title="Live preview · All questions" hint="Paper shell, stem, options, and explanation block from current draft.">
+              <AllQuestionsLivePreview explanationTitle={aq.explanationTitle || "Explanations"} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="landing" className="mt-4 space-y-4">
@@ -2006,6 +1974,13 @@ export default function AdminAppearance() {
                 <TextField label="FAB label" value={lp.fabLabel} onChange={(v) => updateLandingPage("fabLabel", v)} />
               </div>
             ) : null}
+
+            <AppearancePreviewPanel
+              title={`Live preview · Landing · ${landingSection === "colors" ? "Colors" : landingSection === "nav" ? "Header & nav" : landingSection === "hero" ? "Hero" : landingSection === "featured" ? "Featured" : landingSection === "courses" ? "Courses" : landingSection === "about" ? "About" : landingSection === "faq" ? "FAQ" : "Footer"}`}
+              hint="Uses landing page CSS variables from current draft."
+            >
+              <LandingLivePreview section={landingSection} lp={lp} faq={faq} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="progress" className="mt-4 space-y-4">
@@ -2125,6 +2100,12 @@ export default function AdminAppearance() {
                 <TextField label="Mistake accent" value={prog.mistakeAccentColor} onChange={(v) => updateProgressPlan("mistakeAccentColor", v)} />
               </div>
             ) : null}
+
+            <AppearancePreviewPanel
+              title={`Live preview · Progress · ${progressSection === "steps" ? "4-step labels" : progressSection === "copy" ? "Messages" : progressSection === "features" ? "Toggles" : "Colors"}`}
+            >
+              <ProgressLivePreview section={progressSection} prog={prog} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="headingSlides" className="mt-4 space-y-4">
@@ -2153,10 +2134,13 @@ export default function AdminAppearance() {
             </div>
             <div>
               <p className="mb-2 text-xs font-medium">Split on these headings</p>
-              <div className="grid gap-2 sm:grid-cols-3">
+              <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
                 <BoolField label="H1" checked={hs.splitH1} onChange={(v) => updateHeadingSlides("splitH1", v)} />
                 <BoolField label="H2" checked={hs.splitH2} onChange={(v) => updateHeadingSlides("splitH2", v)} />
                 <BoolField label="H3" checked={hs.splitH3} onChange={(v) => updateHeadingSlides("splitH3", v)} />
+                <BoolField label="H4" checked={hs.splitH4} onChange={(v) => updateHeadingSlides("splitH4", v)} />
+                <BoolField label="H5" checked={hs.splitH5} onChange={(v) => updateHeadingSlides("splitH5", v)} />
+                <BoolField label="H6" checked={hs.splitH6} onChange={(v) => updateHeadingSlides("splitH6", v)} />
               </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -2229,22 +2213,71 @@ export default function AdminAppearance() {
               <TextField label="Next bar background" value={hs.nextBarBg} onChange={(v) => updateHeadingSlides("nextBarBg", v)} />
               <TextField label="Next bar text color" value={hs.nextBarFg} onChange={(v) => updateHeadingSlides("nextBarFg", v)} />
             </div>
-            <div className="space-y-2 rounded-md border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-medium">Live preview</p>
-                <AppearanceOptionGuide
-                  title="Heading slides — অপশন গাইড"
-                  description="Live preview-এর আগে সব অপশনের সম্পূর্ণ ব্যাখ্যা।"
-                  items={GUIDE_HEADING_SLIDES}
-                />
-              </div>
-              <HeadingSlideReader
-                config={hs}
-                richClassName="concept-detail-rich"
-                className="max-h-[22rem]"
-                html={`<h1>Nerve supply of Eye</h1><p>The eye is innervated by several cranial nerves. Scroll down to continue reading this sample slide.</p><p>More detail about sensory and motor supply appears here so you can scroll.</p><p>Keep scrolling until the Next button appears at the bottom.</p><h1>Blood supply of eye</h1><p>Arterial supply comes primarily from the ophthalmic artery and its branches.</p><p>Venous drainage includes the superior and inferior ophthalmic veins.</p>`}
+            <AppearancePreviewPanel title="Live preview · Heading slides">
+              <HeadingSlidesLivePreview config={hs} />
+            </AppearancePreviewPanel>
+          </TabsContent>
+
+          <TabsContent value="richEditor" className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                CKEditor textbox — image lazy load, upload, compression, Google Drive embeds. Shared across all devices.
+              </p>
+              <AppearanceOptionGuide
+                title="Rich editor · Images — অপশন গাইড"
+                description="Concept details, Story, Home textbox — image আচরণ।"
+                items={GUIDE_RICH_EDITOR}
               />
             </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <BoolField
+                label="Image lazy loading"
+                checked={re.imageLazyLoading}
+                onChange={(v) => updateRichEditor("imageLazyLoading", v)}
+                hint="Read views — images load when scrolled near"
+              />
+              <BoolField
+                label="Direct image upload"
+                checked={re.directImageUpload}
+                onChange={(v) => updateRichEditor("directImageUpload", v)}
+                hint="CKEditor upload button (base64 in HTML)"
+              />
+              <BoolField
+                label="Image compression on upload"
+                checked={re.imageCompression}
+                onChange={(v) => updateRichEditor("imageCompression", v)}
+                hint={re.directImageUpload ? "Resize + JPEG before embed" : "Enable direct upload first"}
+              />
+              <BoolField
+                label="Google Drive link → image"
+                checked={re.googleDriveEmbeds}
+                onChange={(v) => updateRichEditor("googleDriveEmbeds", v)}
+                hint="Paste share link — shows inline without click"
+              />
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <NumberField
+                label="Compression max width (px)"
+                value={re.imageCompressionMaxWidthPx}
+                min={640}
+                max={3840}
+                step={80}
+                onChange={(n) => updateRichEditor("imageCompressionMaxWidthPx", n)}
+                hint="Only when compression is on"
+              />
+              <NumberField
+                label="Compression quality (0.5–1)"
+                value={re.imageCompressionQuality}
+                min={0.5}
+                max={1}
+                step={0.05}
+                onChange={(n) => updateRichEditor("imageCompressionQuality", n)}
+                hint="JPEG quality — lower = smaller file"
+              />
+            </div>
+            <AppearancePreviewPanel title="Live preview · Rich editor images">
+              <RichEditorLivePreview re={re} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="performance" className="mt-4 space-y-3">
@@ -2258,6 +2291,9 @@ export default function AdminAppearance() {
             </div>
             <BoolField label="Smooth scroll" checked={p.smoothScroll} onChange={(v) => updatePerf("smoothScroll", v)} hint="Shared across all devices — often laggy" />
             <BoolField label="Reduce motion" checked={p.reduceMotion} onChange={(v) => updatePerf("reduceMotion", v)} />
+            <AppearancePreviewPanel title="Live preview · Performance">
+              <PerformanceLivePreview smoothScroll={p.smoothScroll} reduceMotion={p.reduceMotion} />
+            </AppearancePreviewPanel>
           </TabsContent>
 
           <TabsContent value="preview" className="mt-4 space-y-3">

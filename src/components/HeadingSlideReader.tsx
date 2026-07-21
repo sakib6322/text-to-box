@@ -23,8 +23,8 @@ type Props = {
 
 export function HeadingSlideReader({ html, config, richClassName, className, onReachLastSlide }: Props) {
   const levels = useMemo(
-    () => levelsFromFlags(config.splitH1, config.splitH2, config.splitH3),
-    [config.splitH1, config.splitH2, config.splitH3],
+    () => levelsFromFlags(config),
+    [config.splitH1, config.splitH2, config.splitH3, config.splitH4, config.splitH5, config.splitH6],
   );
 
   const slides = useMemo(

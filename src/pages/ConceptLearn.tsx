@@ -16,6 +16,7 @@ import { sortKeyPointsByImportance, sortQuestionsByBoardImportance } from "@/lib
 import { fetchProgressSets, type ProgressPracticeSet } from "@/lib/progressApi";
 import { apiUrl } from "@/lib/apiBase";
 import { useProgressAppearance, useProgressStepLabel } from "@/hooks/useProgressAppearance";
+import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
 import {
   getStudyProgress,
   hydrateProgressFromServer,
@@ -72,6 +73,7 @@ export default function ConceptLearn() {
   const step2Done = isStep2Complete(progress, keyPoints.length);
   const step3Done = isStep3Complete(progress, selfTestTotal);
   const pp = useProgressAppearance();
+  const csu = useConceptStudentUi();
   const stepLabel = useProgressStepLabel(activeStep);
 
   const loadAll = useCallback(async () => {
@@ -222,16 +224,20 @@ export default function ConceptLearn() {
             <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
           </div>
           <div className={userStickyHeaderActions}>
-            <Button type="button" variant="outline" size="sm" className={userHeaderActionBtn} onClick={() => setQuestionsOpen(true)}>
-              <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
-              <span className={userHeaderActionLabel}>Questions</span>
-            </Button>
-            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn}>
-              <Link to={`/concept/${conceptId}/details`}>
-                <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
-                <span className={userHeaderActionLabel}>Details</span>
-              </Link>
-            </Button>
+            {csu.showQuestionsButton ? (
+              <Button type="button" variant="outline" size="sm" className={userHeaderActionBtn} onClick={() => setQuestionsOpen(true)}>
+                <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
+                <span className={userHeaderActionLabel}>Questions</span>
+              </Button>
+            ) : null}
+            {csu.showDetailsButton ? (
+              <Button asChild variant="outline" size="sm" className={userHeaderActionBtn}>
+                <Link to={`/concept/${conceptId}/details`}>
+                  <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+                  <span className={userHeaderActionLabel}>Details</span>
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

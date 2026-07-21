@@ -12,6 +12,8 @@ import { ConceptDetailPreview } from "@/components/ConceptDetailPreview";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
+import { richHtmlImageOptionsFromEditor } from "@/lib/richHtmlImages";
+import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -80,6 +82,7 @@ export function ConceptDetailsDialog({
   conceptId,
   showSelfQaEditor = false,
 }: Props) {
+  const { appearance } = useUiAppearance();
   const [draft, setDraft] = useState<ConceptDetail>(detail);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const normalizedKps = normalizeKeyPoints(keyPoints);
@@ -109,6 +112,7 @@ export function ConceptDetailsDialog({
         conceptName,
         payload,
         normalizedKps.map((kp) => kp.content),
+        richHtmlImageOptionsFromEditor(appearance.richEditor),
       );
       toast.success("PDF downloaded");
     } catch (e) {

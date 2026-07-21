@@ -70,18 +70,28 @@ export function currentConceptStep(input: ConceptProgressInput): 1 | 2 | 3 | 4 {
 export type KeyPointSortable = {
   id?: string | null;
   increment_count?: number | null;
+  incrementCount?: number | null;
   boards?: { mention_count?: number | null }[];
+  boardLinks?: { mention_count?: number | null }[];
+  key_point_boards?: { mention_count?: number | null }[];
 };
 
-/** Sort key points by board importance (high-yield first). */
+function keyPointIncrementCount(kp: KeyPointSortable): number {
+  return Math.max(0, Number(kp.incrementCount ?? kp.increment_count ?? 0));
+}
+
+function keyPointBoardScore(kp: KeyPointSortable): number {
+  const links = kp.boardLinks ?? kp.boards ?? kp.key_point_boards ?? [];
+  return links.reduce((sum, board) => sum + Math.max(0, Number(board.mention_count ?? 0)), 0);
+}
+
+/** Sort key points: higher suggestion count first, then total board mentions. */
 export function sortKeyPointsByImportance<T extends KeyPointSortable>(items: T[]): T[] {
   return [...items].sort((a, b) => {
-    const incA = Number(a.increment_count ?? 0);
-    const incB = Number(b.increment_count ?? 0);
+    const incA = keyPointIncrementCount(a);
+    const incB = keyPointIncrementCount(b);
     if (incB !== incA) return incB - incA;
-    const boardA = (a.boards ?? []).reduce((s, b) => s + Math.max(0, Number(b.mention_count ?? 0)), 0);
-    const boardB = (b.boards ?? []).reduce((s, b) => s + Math.max(0, Number(b.mention_count ?? 0)), 0);
-    return boardB - boardA;
+    return keyPointBoardScore(b) - keyPointBoardScore(a);
   });
 }
 

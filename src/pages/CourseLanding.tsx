@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, BookOpen, CalendarDays, ChevronRight, Headphones, Menu, Play, X } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarDays, ChevronDown, ChevronRight, Headphones, Menu, Play, X } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { getSession, isAuthenticated } from "@/lib/auth";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -28,6 +28,51 @@ function formatRoutineDate(raw: string) {
   const d = new Date(`${String(raw).slice(0, 10)}T00:00:00`);
   if (Number.isNaN(d.getTime())) return raw;
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+function CourseRoutineDropdown({
+  routines,
+  routineLabel,
+  routineEmpty,
+}: {
+  routines: CourseRoutine[];
+  routineLabel: string;
+  routineEmpty: string;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className={`pg-course-routine ${open ? "is-open" : ""}`}>
+      <button
+        type="button"
+        className="pg-course-routine-head"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+        <span>{routineLabel}</span>
+        <span className="pg-course-routine-count">{routines.length}</span>
+        <ChevronDown className="pg-course-routine-chevron" aria-hidden />
+      </button>
+      {open ? (
+        routines.length === 0 ? (
+          <p className="px-3 pb-3 text-xs text-cyan-50/60">{routineEmpty}</p>
+        ) : (
+          <ul className="pg-course-routine-list">
+            {routines.map((r) => (
+              <li key={r.id}>
+                <span className="pg-routine-date">{formatRoutineDate(r.publish_date)}</span>
+                <span className="pg-routine-meta">
+                  {[r.subject_name, r.system_name].filter(Boolean).join(" · ") || "System unlock"}
+                  {r.label?.trim() ? ` — ${r.label.trim()}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )
+      ) : null}
+    </div>
+  );
 }
 
 function FaqItemCard({
@@ -339,28 +384,11 @@ export default function CourseLanding() {
                         </div>
                       </Link>
 
-                      <div className="pg-course-routine">
-                        <div className="pg-course-routine-head">
-                          <CalendarDays className="h-3.5 w-3.5" />
-                          <span>{lp.routineLabel}</span>
-                          <span className="pg-course-routine-count">{routines.length}</span>
-                        </div>
-                        {routines.length === 0 ? (
-                          <p className="px-3 pb-3 text-xs text-cyan-50/60">{lp.routineEmpty}</p>
-                        ) : (
-                          <ul className="pg-course-routine-list">
-                            {routines.map((r) => (
-                              <li key={r.id}>
-                                <span className="pg-routine-date">{formatRoutineDate(r.publish_date)}</span>
-                                <span className="pg-routine-meta">
-                                  {[r.subject_name, r.system_name].filter(Boolean).join(" · ") || "System unlock"}
-                                  {r.label?.trim() ? ` — ${r.label.trim()}` : ""}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
+                      <CourseRoutineDropdown
+                        routines={routines}
+                        routineLabel={lp.routineLabel}
+                        routineEmpty={lp.routineEmpty}
+                      />
                     </article>
                   );
                 })}

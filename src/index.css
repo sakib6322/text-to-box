@@ -398,14 +398,20 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   }
 }
 
-/* CKEditor 5 â€” match app theme */
+/* CKEditor 5 — match app theme */
 .ckeditor-field {
   width: 100%;
+  overflow: visible;
 }
 
 .ckeditor-field .ck.ck-editor {
   border: none;
   width: 100%;
+  overflow: visible;
+}
+
+.ckeditor-field .ck.ck-editor__top .ck-sticky-panel .ck-sticky-panel__content {
+  overflow: visible;
 }
 
 .ckeditor-field .ck.ck-editor__main {
@@ -421,11 +427,18 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
 .ckeditor-field .ck.ck-toolbar {
   background: hsl(var(--muted));
   border-color: hsl(var(--border));
-  flex-wrap: wrap;
+  flex-wrap: wrap !important;
+  height: auto !important;
+  overflow: visible !important;
 }
 
 .ckeditor-field .ck.ck-toolbar .ck-toolbar__items {
-  flex-wrap: wrap;
+  flex-wrap: wrap !important;
+  row-gap: 0.15rem;
+}
+
+.ckeditor-field .ck.ck-toolbar .ck-toolbar__separator {
+  flex-shrink: 0;
 }
 
 .ckeditor-field .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
@@ -1183,12 +1196,38 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.65rem 0.9rem 0.45rem;
+  width: 100%;
+  padding: 0.65rem 0.9rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: #a5f3fc;
+  transition: background 0.15s ease;
+}
+
+.pg-course-routine-head:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.pg-course-routine.is-open .pg-course-routine-head {
+  padding-bottom: 0.45rem;
+}
+
+.pg-course-routine-chevron {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex-shrink: 0;
+  color: rgba(165, 243, 252, 0.85);
+  transition: transform 0.2s ease;
+}
+
+.pg-course-routine.is-open .pg-course-routine-chevron {
+  transform: rotate(180deg);
 }
 
 .pg-course-routine-count {

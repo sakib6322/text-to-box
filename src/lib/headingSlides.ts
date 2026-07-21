@@ -1,4 +1,4 @@
-export type HeadingLevel = "h1" | "h2" | "h3";
+export type HeadingLevel = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
 export type HeadingSlide = {
   id: string;
@@ -15,13 +15,25 @@ export type SplitHtmlByHeadingsOptions = {
   minCharsPerSlide?: number;
 };
 
-const LEVEL_RANK: Record<string, number> = { h1: 1, h2: 2, h3: 3 };
+const LEVEL_RANK: Record<string, number> = { h1: 1, h2: 2, h3: 3, h4: 4, h5: 5, h6: 6 };
 
-export function levelsFromFlags(splitH1: boolean, splitH2: boolean, splitH3: boolean): HeadingLevel[] {
+export type HeadingSplitFlags = {
+  splitH1?: boolean;
+  splitH2?: boolean;
+  splitH3?: boolean;
+  splitH4?: boolean;
+  splitH5?: boolean;
+  splitH6?: boolean;
+};
+
+export function levelsFromFlags(flags: HeadingSplitFlags): HeadingLevel[] {
   const levels: HeadingLevel[] = [];
-  if (splitH1) levels.push("h1");
-  if (splitH2) levels.push("h2");
-  if (splitH3) levels.push("h3");
+  if (flags.splitH1) levels.push("h1");
+  if (flags.splitH2) levels.push("h2");
+  if (flags.splitH3) levels.push("h3");
+  if (flags.splitH4) levels.push("h4");
+  if (flags.splitH5) levels.push("h5");
+  if (flags.splitH6) levels.push("h6");
   return levels.length ? levels : ["h1"];
 }
 

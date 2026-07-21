@@ -92,6 +92,19 @@ export type ConceptDetailsAppearance = {
   blockquoteBorder: string;
 };
 
+/** Student concept UI — shared across devices (not typography). */
+export type ConceptStudentUiAppearance = {
+  /** Show key points list under concept detail on student pages */
+  showKeyPointsOnDetails: boolean;
+  /** Concept detail page + learn header */
+  showDetailsButton: boolean;
+  showQuestionsButton: boolean;
+  showStudyButton: boolean;
+  showPracticeButton: boolean;
+  /** My Suggestions concept card */
+  showStudyAndPracticeButton: boolean;
+};
+
 /** Story-based learning modal + content styling (per device) */
 export type StoryBasedLearningAppearance = {
   fontFamily: string;
@@ -352,6 +365,9 @@ export type HeadingSlidesAppearance = {
   splitH1: boolean;
   splitH2: boolean;
   splitH3: boolean;
+  splitH4: boolean;
+  splitH5: boolean;
+  splitH6: boolean;
   preHeadingMode: "intro" | "mergeFirst";
   requireScrollToEnd: boolean;
   scrollShowNextAtPercent: number;
@@ -376,6 +392,20 @@ export type HeadingSlidesAppearance = {
   trapNestedScroll: boolean;
 };
 
+export type RichEditorAppearance = {
+  /** Lazy-load images in concept details, story, slides, etc. */
+  imageLazyLoading: boolean;
+  /** Allow direct image upload in CKEditor (base64 in HTML) */
+  directImageUpload: boolean;
+  /** Compress images before base64 embed on upload */
+  imageCompression: boolean;
+  imageCompressionMaxWidthPx: number;
+  /** JPEG quality 0.5–1 when compression is on */
+  imageCompressionQuality: number;
+  /** Convert Google Drive share links to embedded images */
+  googleDriveEmbeds: boolean;
+};
+
 export type UiAppearance = {
   version: 2;
   mobile: DeviceAppearance;
@@ -385,6 +415,8 @@ export type UiAppearance = {
     smoothScroll: boolean;
     reduceMotion: boolean;
   };
+  /** CKEditor + rich HTML image behavior (shared) */
+  richEditor: RichEditorAppearance;
   /** Public course landing FAQ section */
   landingFaq: LandingFaqAppearance;
   /** Public course landing design + copy */
@@ -393,6 +425,8 @@ export type UiAppearance = {
   progressPlan: ProgressPlanAppearance;
   /** Heading-based auto slides (Concept details + Story learning) */
   headingSlides: HeadingSlidesAppearance;
+  /** Student concept details actions + key points visibility */
+  conceptStudentUi: ConceptStudentUiAppearance;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -1058,6 +1092,67 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
   };
 }
 
+export function defaultConceptStudentUi(
+  overrides: Partial<ConceptStudentUiAppearance> = {},
+): ConceptStudentUiAppearance {
+  return {
+    showKeyPointsOnDetails: true,
+    showDetailsButton: true,
+    showQuestionsButton: true,
+    showStudyButton: true,
+    showPracticeButton: true,
+    showStudyAndPracticeButton: true,
+    ...overrides,
+  };
+}
+
+export function mergeConceptStudentUi(
+  base: ConceptStudentUiAppearance,
+  patch: unknown,
+): ConceptStudentUiAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<ConceptStudentUiAppearance>;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    showKeyPointsOnDetails: bool(p.showKeyPointsOnDetails, base.showKeyPointsOnDetails),
+    showDetailsButton: bool(p.showDetailsButton, base.showDetailsButton),
+    showQuestionsButton: bool(p.showQuestionsButton, base.showQuestionsButton),
+    showStudyButton: bool(p.showStudyButton, base.showStudyButton),
+    showPracticeButton: bool(p.showPracticeButton, base.showPracticeButton),
+    showStudyAndPracticeButton: bool(p.showStudyAndPracticeButton, base.showStudyAndPracticeButton),
+  };
+}
+
+export function defaultRichEditor(overrides: Partial<RichEditorAppearance> = {}): RichEditorAppearance {
+  return {
+    imageLazyLoading: true,
+    directImageUpload: true,
+    imageCompression: true,
+    imageCompressionMaxWidthPx: 1600,
+    imageCompressionQuality: 0.82,
+    googleDriveEmbeds: true,
+    ...overrides,
+  };
+}
+
+export function mergeRichEditor(base: RichEditorAppearance, patch: unknown): RichEditorAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<RichEditorAppearance>;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  const num = (v: unknown, fallback: number, min: number, max: number) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  return {
+    imageLazyLoading: bool(p.imageLazyLoading, base.imageLazyLoading),
+    directImageUpload: bool(p.directImageUpload, base.directImageUpload),
+    imageCompression: bool(p.imageCompression, base.imageCompression),
+    imageCompressionMaxWidthPx: num(p.imageCompressionMaxWidthPx, base.imageCompressionMaxWidthPx, 640, 3840),
+    imageCompressionQuality: num(p.imageCompressionQuality, base.imageCompressionQuality, 0.5, 1),
+    googleDriveEmbeds: bool(p.googleDriveEmbeds, base.googleDriveEmbeds),
+  };
+}
+
 export function defaultHeadingSlides(overrides: Partial<HeadingSlidesAppearance> = {}): HeadingSlidesAppearance {
   return {
     conceptDetailsEnabled: true,
@@ -1065,6 +1160,9 @@ export function defaultHeadingSlides(overrides: Partial<HeadingSlidesAppearance>
     splitH1: true,
     splitH2: false,
     splitH3: false,
+    splitH4: false,
+    splitH5: false,
+    splitH6: false,
     preHeadingMode: "intro",
     requireScrollToEnd: true,
     scrollShowNextAtPercent: 85,
@@ -1103,6 +1201,9 @@ export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown
     splitH1: bool(p.splitH1, base.splitH1),
     splitH2: bool(p.splitH2, base.splitH2),
     splitH3: bool(p.splitH3, base.splitH3),
+    splitH4: bool(p.splitH4, base.splitH4 ?? false),
+    splitH5: bool(p.splitH5, base.splitH5 ?? false),
+    splitH6: bool(p.splitH6, base.splitH6 ?? false),
     preHeadingMode: mode,
     requireScrollToEnd: bool(p.requireScrollToEnd, base.requireScrollToEnd),
     scrollShowNextAtPercent: num(p.scrollShowNextAtPercent, base.scrollShowNextAtPercent),
@@ -1133,10 +1234,12 @@ export function defaultUiAppearance(): UiAppearance {
       smoothScroll: false,
       reduceMotion: false,
     },
+    richEditor: defaultRichEditor(),
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
     progressPlan: defaultProgressPlan(),
     headingSlides: defaultHeadingSlides(),
+    conceptStudentUi: defaultConceptStudentUi(),
   };
 }
 
@@ -1262,10 +1365,12 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     },
     desktop: sharedDevice,
     performance: { ...base.performance, ...performance },
+    richEditor: mergeRichEditor(base.richEditor, raw.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, raw.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, raw.headingSlides),
+    conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw.conceptStudentUi),
   };
 }
 
@@ -1284,10 +1389,12 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
       ...base.performance,
       ...((p.performance && typeof p.performance === "object" ? p.performance : {}) as object),
     },
+    richEditor: mergeRichEditor(base.richEditor, p.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, p.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, p.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, p.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, p.headingSlides),
+    conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, p.conceptStudentUi),
   };
 }
 

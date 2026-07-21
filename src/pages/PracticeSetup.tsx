@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchConceptByIdWithBoards } from "@/lib/conceptDetail";
+import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
 import {
   getPracticeSessionsForConcept,
   savePracticeSession,
@@ -57,6 +58,7 @@ export default function PracticeSetup() {
   const [importantFirst, setImportantFirst] = useState(false);
   const [selectCountInput, setSelectCountInput] = useState("");
   const [pastSessions, setPastSessions] = useState<PracticeSession[]>([]);
+  const csu = useConceptStudentUi();
 
   const load = useCallback(async () => {
     if (!conceptId) return;
@@ -165,12 +167,14 @@ export default function PracticeSetup() {
             <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
           </div>
           <div className={userStickyHeaderActions}>
-            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Study">
-              <Link to={`/concept/${conceptId}/learn`}>
-                <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
-                <span className={userHeaderActionLabel}>Study</span>
-              </Link>
-            </Button>
+            {csu.showStudyButton ? (
+              <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Study">
+                <Link to={`/concept/${conceptId}/learn`}>
+                  <BookOpen className="h-3.5 w-3.5 sm:mr-1" />
+                  <span className={userHeaderActionLabel}>Study</span>
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

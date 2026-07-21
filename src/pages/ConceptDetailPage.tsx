@@ -8,6 +8,8 @@ import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
+import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
+import { sortKeyPointsByImportance } from "@/lib/progressEngine";
 import { userContentCard, userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
 
@@ -21,6 +23,7 @@ export default function ConceptDetailPage() {
   const [keyPoints, setKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
+  const csu = useConceptStudentUi();
 
   useEffect(() => {
     if (!conceptId) return;
@@ -29,7 +32,7 @@ export default function ConceptDetailPage() {
       .then((data) => {
         setConceptName(data.conceptName);
         setDetail(data.detail);
-        setKeyPoints(data.keyPoints);
+        setKeyPoints(sortKeyPointsByImportance(data.keyPoints));
         const parts = [data.taxonomy.subject, data.taxonomy.system, data.taxonomy.chapter, data.taxonomy.topic]
           .map((x) => x.trim())
           .filter(Boolean);
@@ -64,34 +67,40 @@ export default function ConceptDetailPage() {
             {taxonomy ? <p className="truncate text-[10px] text-muted-foreground md:text-xs">{taxonomy}</p> : null}
           </div>
           <div className={userStickyHeaderActions}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className={userHeaderActionBtn}
-              title="Questions"
-              onClick={() => {
-                setBoardFilter(null);
-                setQuestionsOpen(true);
-              }}
-            >
-              <HelpCircle className="h-3.5 w-3.5 shrink-0" />
-              <span className="sm:hidden">Qtns</span>
-              <span className="hidden sm:inline">Questions</span>
-            </Button>
-            <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
-              <Link to={`/concept/${conceptId}/learn`}>
-                <Target className="h-3.5 w-3.5 shrink-0" />
-                <span className="sm:hidden">Study</span>
-                <span className="hidden sm:inline">Key Point Study</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
-              <Link to={`/practice/${conceptId}/setup`}>
-                <Play className="h-3.5 w-3.5 shrink-0" />
-                <span>Practice</span>
-              </Link>
-            </Button>
+            {csu.showQuestionsButton ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={userHeaderActionBtn}
+                title="Questions"
+                onClick={() => {
+                  setBoardFilter(null);
+                  setQuestionsOpen(true);
+                }}
+              >
+                <HelpCircle className="h-3.5 w-3.5 shrink-0" />
+                <span className="sm:hidden">Qtns</span>
+                <span className="hidden sm:inline">Questions</span>
+              </Button>
+            ) : null}
+            {csu.showStudyButton ? (
+              <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
+                <Link to={`/concept/${conceptId}/learn`}>
+                  <Target className="h-3.5 w-3.5 shrink-0" />
+                  <span className="sm:hidden">Study</span>
+                  <span className="hidden sm:inline">Key Point Study</span>
+                </Link>
+              </Button>
+            ) : null}
+            {csu.showPracticeButton ? (
+              <Button asChild variant="outline" size="sm" className={userHeaderActionBtn} title="Practice">
+                <Link to={`/practice/${conceptId}/setup`}>
+                  <Play className="h-3.5 w-3.5 shrink-0" />
+                  <span>Practice</span>
+                </Link>
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -105,23 +114,27 @@ export default function ConceptDetailPage() {
             </div>
             <ConceptDetailBody detail={detail} showVerbatim />
           </div>
-          {keyPoints.length ? (
+          {csu.showKeyPointsOnDetails && keyPoints.length ? (
             <div className="space-y-2 border-t pt-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
                 <div className="flex flex-wrap gap-2">
-                  <Button asChild size="sm" className="h-8 text-xs">
-                    <Link to={`/concept/${conceptId}/learn`}>
-                      <Target className="mr-1 h-3 w-3" />
-                      Key Point Study
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                    <Link to={`/practice/${conceptId}/setup`}>
-                      <Play className="mr-1 h-3 w-3" />
-                      Practice
-                    </Link>
-                  </Button>
+                  {csu.showStudyButton ? (
+                    <Button asChild size="sm" className="h-8 text-xs">
+                      <Link to={`/concept/${conceptId}/learn`}>
+                        <Target className="mr-1 h-3 w-3" />
+                        Key Point Study
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {csu.showPracticeButton ? (
+                    <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+                      <Link to={`/practice/${conceptId}/setup`}>
+                        <Play className="mr-1 h-3 w-3" />
+                        Practice
+                      </Link>
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             <KeyPointList

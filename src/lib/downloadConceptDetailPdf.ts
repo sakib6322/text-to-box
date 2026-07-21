@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { looksLikeHtml } from "@/lib/htmlContent";
+import { prepareRichHtmlForDisplay, attachGoogleDriveImageFallbacks, type RichHtmlImageOptions } from "@/lib/richHtmlImages";
 import { resolveBodyHtml } from "@/lib/conceptDetail";
 
 function sanitizeFilename(name: string): string {
@@ -21,10 +22,10 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function richHtml(value: string): string {
+function richHtml(value: string, imageOptions?: RichHtmlImageOptions): string {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
-  if (looksLikeHtml(raw)) return raw;
+  if (looksLikeHtml(raw)) return prepareRichHtmlForDisplay(raw, imageOptions);
   return `<p>${escapeHtml(raw).replace(/\n/g, "<br/>")}</p>`;
 }
 
@@ -49,17 +50,18 @@ function buildConceptHtml(
   conceptName: string,
   detail: ConceptDetail,
   keyPoints: string[],
+  imageOptions?: RichHtmlImageOptions,
 ): string {
-  const body = richHtml(resolveBodyHtml(detail));
+  const body = richHtml(resolveBodyHtml(detail), imageOptions);
   const hasLegacy =
     Boolean(detail.summary.trim()) ||
     detail.paragraphs.length > 1 ||
     (detail.table?.rows?.length ?? 0) > 0;
-  const summary = !body || hasLegacy ? richHtml(detail.summary) : "";
+  const summary = !body || hasLegacy ? richHtml(detail.summary, imageOptions) : "";
   const paragraphs =
-    !body || hasLegacy ? detail.paragraphs.map(richHtml).filter(Boolean) : [];
+    !body || hasLegacy ? detail.paragraphs.map((p) => richHtml(p, imageOptions)).filter(Boolean) : [];
   const table = !body || hasLegacy ? detail.table : null;
-  const story = richHtml(detail.storyHtml);
+  const story = richHtml(detail.storyHtml, imageOptions);
 
   let tableHtml = "";
   if (table?.rows?.length) {
@@ -71,7 +73,7 @@ function buildConceptHtml(
       .map((row) => {
         const cells = row.cells ?? [];
         return `<tr>${headers
-          .map((_, i) => `<td>${richHtml(cells[i] ?? "") || "&nbsp;"}</td>`)
+          .map((_, i) => `<td>${richHtml(cells[i] ?? "", imageOptions) || "&nbsp;"}</td>`)
           .join("")}</tr>`;
       })
       .join("");
@@ -120,6 +122,7 @@ export async function downloadConceptDetailPdf(
   conceptName: string,
   detail: ConceptDetail,
   keyPoints: string[],
+  imageOptions?: RichHtmlImageOptions,
 ): Promise<void> {
   await ensureBanglaFontStylesheet();
 
@@ -190,12 +193,14 @@ export async function downloadConceptDetailPdf(
 
   host.appendChild(style);
   const content = document.createElement("div");
-  content.innerHTML = buildConceptHtml(conceptName, detail, keyPoints);
+  content.innerHTML = buildConceptHtml(conceptName, detail, keyPoints, imageOptions);
   host.appendChild(content);
   document.body.appendChild(host);
 
   try {
-    // Allow images (base64) to decode before capture
+    attachGoogleDriveImageFallbacks(host);
+
+    // Allow images (base64 / Drive proxy) to decode before capture
     const images = Array.from(host.querySelectorAll("img"));
     await Promise.all(
       images.map(

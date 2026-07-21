@@ -21,6 +21,8 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   { title: "Paragraph / Heading / Link / Bullet colors", body: "বডি, H1–H3, লিংক ও বুলেটের রঙ।" },
   { title: "Table colors & sizing", body: "টেবিল হেডার ব্যাকগ্রাউন্ড/টেক্সট, বর্ডার, জোড় সারি, ফন্ট সাইজ ও সেল প্যাডিং।" },
   { title: "Code background / Blockquote border", body: "ইনলাইন কোডের ব্যাকগ্রাউন্ড এবং ব্লককোটের বাম বর্ডার রঙ।" },
+  { title: "Show key points on details", body: "Concept details page-এ body-র নিচে key points list দেখাবে কি না। Count/board বেশি থাকলে আগে থাকে।" },
+  { title: "Student action buttons", body: "Details, Questions, Study, Practice, Study & Practice — কোন বাটন student/user দেখবে তা চালু/বন্ধ।" },
 ];
 
 export const GUIDE_STORY: AppearanceGuideItem[] = [
@@ -121,7 +123,7 @@ export const GUIDE_PROGRESS_COLORS: AppearanceGuideItem[] = [
 export const GUIDE_HEADING_SLIDES: AppearanceGuideItem[] = [
   { title: "Enable on Concept details", body: "কনসেপ্ট ডিটেইলস পড়ার ভিউতে (Learn Step 1, ডায়ালগ, পেজ) heading অনুযায়ী স্লাইড চালু।" },
   { title: "Enable on Story-based learning", body: "স্টোরি রিড/প্রিভিউতে একই স্লাইড UI চালু।" },
-  { title: "Split H1 / H2 / H3", body: "কোন হেডিং লেভেলে নতুন স্লাইড শুরু হবে। ডিফল্ট শুধু H1।" },
+  { title: "Split H1–H6", body: "কোন হেডিং লেভেলে নতুন স্লাইড শুরু হবে। একাধিক লেভেল একসাথে চালু করা যায়। ডিফল্ট শুধু H1।" },
   { title: "Content before first heading", body: "প্রথম স্প্লিট হেডিংয়ের আগের কন্টেন্ট আলাদা Intro স্লাইড হবে, নাকি প্রথম স্লাইডে মিলবে।" },
   { title: "Show Next after scroll %", body: "স্ক্রল কত % হলে Next দেখাবে (যেমন 85)।" },
   { title: "Min chars per slide", body: "খুব ছোট স্লাইড আগেরটার সাথে মার্জ — 0 মানে বন্ধ।" },
@@ -139,6 +141,15 @@ export const GUIDE_HEADING_SLIDES: AppearanceGuideItem[] = [
 export const GUIDE_PERFORMANCE: AppearanceGuideItem[] = [
   { title: "Smooth scroll", body: "পেজ স্মুথ স্ক্রল। সব ডিভাইসে শেয়ারড — অনেক সময় ল্যাগ বাড়ায়।" },
   { title: "Reduce motion", body: "অ্যানিমেশন কমায় (অ্যাক্সেসিবিলিটি / পারফরম্যান্স)।" },
+];
+
+export const GUIDE_RICH_EDITOR: AppearanceGuideItem[] = [
+  { title: "Image lazy loading", body: "Concept details, Story, slides ইত্যাদিতে image viewport-এ আসলে load হবে — page speed ভালো থাকে।" },
+  { title: "Direct image upload", body: "CKEditor-এ image upload বাটন। বন্ধ থাকলে Google Drive link বা URL ব্যবহার করুন — database ছোট থাকে।" },
+  { title: "Image compression", body: "Upload-এর আগে JPEG compress/resize — base64 size কমায়। শুধু direct upload চালু থাকলে কাজ করে।" },
+  { title: "Max width / quality", body: "Compression চালু থাকলে image কত px পর্যন্ত resize ও JPEG quality (0.5–1)।" },
+  { title: "Google Drive embeds", body: "Drive share link paste করলে automatic image embed + lazy load।" },
+  { title: "Toolbar wrap", body: "Editor toolbar এখন একাধিক লাইনে wrap হয় — সব icon দেখা যায়।" },
 ];
 
 export const GUIDE_PREVIEW: AppearanceGuideItem[] = [

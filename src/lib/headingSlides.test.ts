@@ -13,13 +13,23 @@ describe('splitHtmlByHeadings', () => {
   it('respects H1+H2 config', () => {
     const mixed = '<h1>A</h1><p>x</p><h2>B</h2><p>y</p><h1>C</h1><p>z</p>';
     expect(splitHtmlByHeadings(mixed, { levels: ['h1'] })).toHaveLength(2);
-    expect(splitHtmlByHeadings(mixed, { levels: levelsFromFlags(true, true, false) })).toHaveLength(3);
+    expect(splitHtmlByHeadings(mixed, { levels: levelsFromFlags({ splitH1: true, splitH2: true, splitH3: false }) })).toHaveLength(3);
   });
 
   it('falls back to one slide without headings', () => {
     const slides = splitHtmlByHeadings('<p>only para</p>', { levels: ['h1'] });
     expect(slides).toHaveLength(1);
     expect(slides[0].headingTag).toBe('intro');
+  });
+
+  it('splits on H4–H6 when enabled', () => {
+    const html = '<h4>A</h4><p>x</p><h5>B</h5><p>y</p><h6>C</h6><p>z</p>';
+    expect(splitHtmlByHeadings(html, { levels: ['h4'] })).toHaveLength(1);
+    expect(
+      splitHtmlByHeadings(html, {
+        levels: levelsFromFlags({ splitH4: true, splitH5: true, splitH6: true }),
+      }),
+    ).toHaveLength(3);
   });
 
   it('formats next label', () => {

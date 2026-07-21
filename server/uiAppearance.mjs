@@ -226,10 +226,41 @@ export function getDefaultUiAppearance() {
     tablet: defaultDevice("tablet"),
     desktop: defaultDevice("desktop"),
     performance: { smoothScroll: false, reduceMotion: false },
+    richEditor: defaultRichEditor(),
     landingFaq: defaultLandingFaq(),
     landingPage: defaultLandingPage(),
     progressPlan: defaultProgressPlan(),
     headingSlides: defaultHeadingSlides(),
+    conceptStudentUi: defaultConceptStudentUi(),
+  };
+}
+
+function defaultRichEditor(overrides = {}) {
+  return {
+    imageLazyLoading: true,
+    directImageUpload: true,
+    imageCompression: true,
+    imageCompressionMaxWidthPx: 1600,
+    imageCompressionQuality: 0.82,
+    googleDriveEmbeds: true,
+    ...overrides,
+  };
+}
+
+function mergeRichEditor(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  const num = (v, fallback, min, max) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  return {
+    imageLazyLoading: bool(patch.imageLazyLoading, base.imageLazyLoading),
+    directImageUpload: bool(patch.directImageUpload, base.directImageUpload),
+    imageCompression: bool(patch.imageCompression, base.imageCompression),
+    imageCompressionMaxWidthPx: num(patch.imageCompressionMaxWidthPx, base.imageCompressionMaxWidthPx, 640, 3840),
+    imageCompressionQuality: num(patch.imageCompressionQuality, base.imageCompressionQuality, 0.5, 1),
+    googleDriveEmbeds: bool(patch.googleDriveEmbeds, base.googleDriveEmbeds),
   };
 }
 
@@ -240,6 +271,9 @@ function defaultHeadingSlides(overrides = {}) {
     splitH1: true,
     splitH2: false,
     splitH3: false,
+    splitH4: false,
+    splitH5: false,
+    splitH6: false,
     preHeadingMode: "intro",
     requireScrollToEnd: true,
     scrollShowNextAtPercent: 85,
@@ -261,6 +295,31 @@ function defaultHeadingSlides(overrides = {}) {
   };
 }
 
+function defaultConceptStudentUi(overrides = {}) {
+  return {
+    showKeyPointsOnDetails: true,
+    showDetailsButton: true,
+    showQuestionsButton: true,
+    showStudyButton: true,
+    showPracticeButton: true,
+    showStudyAndPracticeButton: true,
+    ...overrides,
+  };
+}
+
+function mergeConceptStudentUi(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  return {
+    showKeyPointsOnDetails: bool(patch.showKeyPointsOnDetails, base.showKeyPointsOnDetails),
+    showDetailsButton: bool(patch.showDetailsButton, base.showDetailsButton),
+    showQuestionsButton: bool(patch.showQuestionsButton, base.showQuestionsButton),
+    showStudyButton: bool(patch.showStudyButton, base.showStudyButton),
+    showPracticeButton: bool(patch.showPracticeButton, base.showPracticeButton),
+    showStudyAndPracticeButton: bool(patch.showStudyAndPracticeButton, base.showStudyAndPracticeButton),
+  };
+}
+
 function mergeHeadingSlides(base, patch) {
   if (!patch || typeof patch !== "object") return base;
   const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
@@ -276,6 +335,9 @@ function mergeHeadingSlides(base, patch) {
     splitH1: bool(patch.splitH1, base.splitH1),
     splitH2: bool(patch.splitH2, base.splitH2),
     splitH3: bool(patch.splitH3, base.splitH3),
+    splitH4: bool(patch.splitH4, base.splitH4 ?? false),
+    splitH5: bool(patch.splitH5, base.splitH5 ?? false),
+    splitH6: bool(patch.splitH6, base.splitH6 ?? false),
     preHeadingMode: mode,
     requireScrollToEnd: bool(patch.requireScrollToEnd, base.requireScrollToEnd),
     scrollShowNextAtPercent: num(patch.scrollShowNextAtPercent, base.scrollShowNextAtPercent),
@@ -724,10 +786,12 @@ function fromV1(raw) {
     },
     desktop: shared,
     performance: { ...base.performance, ...performance },
+    richEditor: mergeRichEditor(base.richEditor, raw?.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, raw?.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw?.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw?.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, raw?.headingSlides),
+    conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw?.conceptStudentUi),
   };
 }
 
@@ -744,10 +808,12 @@ export function parseUiAppearance(raw) {
       tablet: mergeDevice(defaults.tablet, parsed.tablet),
       desktop: mergeDevice(defaults.desktop, parsed.desktop),
       performance: { ...defaults.performance, ...(parsed.performance ?? {}) },
+      richEditor: mergeRichEditor(defaults.richEditor, parsed.richEditor),
       landingFaq: mergeLandingFaq(defaults.landingFaq, parsed.landingFaq),
       landingPage: mergeLandingPage(defaults.landingPage, parsed.landingPage),
       progressPlan: mergeProgressPlan(defaults.progressPlan, parsed.progressPlan),
       headingSlides: mergeHeadingSlides(defaults.headingSlides, parsed.headingSlides),
+      conceptStudentUi: mergeConceptStudentUi(defaults.conceptStudentUi, parsed.conceptStudentUi),
     };
   } catch {
     return defaults;
