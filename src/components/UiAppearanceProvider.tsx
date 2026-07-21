@@ -143,6 +143,8 @@ export function UiAppearanceProvider({ children }: { children: ReactNode }) {
     applyUiAppearance(merged, detectDeviceKey());
   }, []);
 
+
+  
   const value = useMemo(
     () => ({
       appearance,

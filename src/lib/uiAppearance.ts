@@ -197,6 +197,13 @@ export type ConceptDetailsAppearance = {
   cardShadowOffsetYPx: number;
   cardShadowOpacity: number;
   cardShadowColor: string;
+  /** CKEditor / textbox shape (edit + body shell) */
+  textboxRadiusPx: number;
+  textboxBorderWidthPx: number;
+  textboxBorderColor: string;
+  textboxBg: string;
+  textboxMinHeightPx: number;
+  textboxPaddingPx: number;
   boldWeight: number;
   linkColor: string;
   bulletColor: string;
@@ -260,6 +267,13 @@ export type StoryBasedLearningAppearance = {
   panelShadowOffsetYPx: number;
   panelShadowOpacity: number;
   panelShadowColor: string;
+  /** CKEditor textbox shape inside story edit panel */
+  textboxRadiusPx: number;
+  textboxBorderWidthPx: number;
+  textboxBorderColor: string;
+  textboxBg: string;
+  textboxMinHeightPx: number;
+  textboxPaddingPx: number;
   dialogMaxWidth: StoryDialogWidth;
   buttonLabel: string;
   showButtonIcon: boolean;
@@ -851,6 +865,12 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     cardShadowOffsetYPx: 1,
     cardShadowOpacity: 0.1,
     cardShadowColor: "#0f172a",
+    textboxRadiusPx: 8,
+    textboxBorderWidthPx: 1,
+    textboxBorderColor: "",
+    textboxBg: "",
+    textboxMinHeightPx: 360,
+    textboxPaddingPx: 12,
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
@@ -890,6 +910,12 @@ function defaultStory(overrides: Partial<StoryBasedLearningAppearance> = {}): St
     panelShadowOffsetYPx: 2,
     panelShadowOpacity: 0.08,
     panelShadowColor: "#0f172a",
+    textboxRadiusPx: 8,
+    textboxBorderWidthPx: 1,
+    textboxBorderColor: "",
+    textboxBg: "",
+    textboxMinHeightPx: 280,
+    textboxPaddingPx: 12,
     dialogMaxWidth: "lg",
     buttonLabel: "Story-based learning",
     showButtonIcon: true,
@@ -2227,6 +2253,20 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
     typeof c.cardShadowColor === "string" && c.cardShadowColor.trim() ? c.cardShadowColor.trim() : "#0f172a",
   );
   root.dataset.cdCardShadow = c.cardShadow !== false ? "1" : "0";
+  root.style.setProperty("--cd-textbox-radius", `${c.textboxRadiusPx ?? 8}px`);
+  root.style.setProperty("--cd-textbox-border-width", `${c.textboxBorderWidthPx ?? 1}px`);
+  root.style.setProperty(
+    "--cd-textbox-border",
+    typeof c.textboxBorderColor === "string" && c.textboxBorderColor.trim()
+      ? c.textboxBorderColor.trim()
+      : "hsl(var(--border))",
+  );
+  root.style.setProperty(
+    "--cd-textbox-bg",
+    typeof c.textboxBg === "string" && c.textboxBg.trim() ? c.textboxBg.trim() : "hsl(var(--background))",
+  );
+  root.style.setProperty("--cd-textbox-min-height", `${c.textboxMinHeightPx ?? 360}px`);
+  root.style.setProperty("--cd-textbox-padding", `${c.textboxPaddingPx ?? 12}px`);
 
   root.style.setProperty("--sbl-font-family", s.fontFamily);
   root.style.setProperty("--sbl-font-size", `${s.fontSizePx}px`);
@@ -2251,6 +2291,20 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
     typeof s.panelShadowColor === "string" && s.panelShadowColor.trim() ? s.panelShadowColor.trim() : "#0f172a",
   );
   root.dataset.sblPanelShadow = s.panelShadow ? "1" : "0";
+  root.style.setProperty("--sbl-textbox-radius", `${s.textboxRadiusPx ?? 8}px`);
+  root.style.setProperty("--sbl-textbox-border-width", `${s.textboxBorderWidthPx ?? 1}px`);
+  root.style.setProperty(
+    "--sbl-textbox-border",
+    typeof s.textboxBorderColor === "string" && s.textboxBorderColor.trim()
+      ? s.textboxBorderColor.trim()
+      : "hsl(var(--border))",
+  );
+  root.style.setProperty(
+    "--sbl-textbox-bg",
+    typeof s.textboxBg === "string" && s.textboxBg.trim() ? s.textboxBg.trim() : "hsl(var(--background))",
+  );
+  root.style.setProperty("--sbl-textbox-min-height", `${s.textboxMinHeightPx ?? 280}px`);
+  root.style.setProperty("--sbl-textbox-padding", `${s.textboxPaddingPx ?? 12}px`);
   root.dataset.sblDialogWidth = s.dialogMaxWidth;
 
   root.style.setProperty("--aq-list-max", `${aq.listMaxWidthPx}px`);

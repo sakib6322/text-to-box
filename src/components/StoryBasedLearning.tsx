@@ -120,7 +120,7 @@ export function StoryBasedLearningButton({
                     value={draftStory}
                     onChange={handleStoryChange}
                     placeholder="Story লিখুন — heading, bold, list, table…"
-                    minHeight="280px"
+                    appearanceScope="story"
                     className="w-full"
                   />
                 </div>

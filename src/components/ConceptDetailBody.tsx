@@ -111,7 +111,7 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
             )
           }
           placeholder="Concept detail — heading, bold, underline, list, table…"
-          minHeight="360px"
+          appearanceScope="concept"
           className="w-full"
         />
       </div>

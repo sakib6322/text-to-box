@@ -1477,6 +1477,57 @@ export default function AdminAppearance() {
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox shape</p>
+              <p className="text-[11px] text-muted-foreground">
+                Concept details CKEditor textbox — radius, border, background, height, padding।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <NumberField
+                  label="Corner radius (px)"
+                  value={c.textboxRadiusPx ?? 8}
+                  min={0}
+                  max={32}
+                  onChange={(n) => updateCd("textboxRadiusPx", n)}
+                />
+                <NumberField
+                  label="Border width (px)"
+                  value={c.textboxBorderWidthPx ?? 1}
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  onChange={(n) => updateCd("textboxBorderWidthPx", n)}
+                />
+                <ColorField
+                  label="Border color"
+                  value={c.textboxBorderColor?.trim() || "#e2e8f0"}
+                  onChange={(v) => updateCd("textboxBorderColor", v)}
+                  hint="খালি = theme border"
+                />
+                <ColorField
+                  label="Textbox background"
+                  value={c.textboxBg?.trim() || "#ffffff"}
+                  onChange={(v) => updateCd("textboxBg", v)}
+                  hint="খালি = page background"
+                />
+                <NumberField
+                  label="Min height (px)"
+                  value={c.textboxMinHeightPx ?? 360}
+                  min={120}
+                  max={800}
+                  step={20}
+                  onChange={(n) => updateCd("textboxMinHeightPx", n)}
+                />
+                <NumberField
+                  label="Inner padding (px)"
+                  value={c.textboxPaddingPx ?? 12}
+                  min={0}
+                  max={40}
+                  onChange={(n) => updateCd("textboxPaddingPx", n)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox card</p>
               <p className="text-[11px] text-muted-foreground">
                 Concept details-এর বাইরের কার্ড (`.concept-detail-card`) — Details / Learn / Suggestions preview।
@@ -1757,6 +1808,57 @@ export default function AdminAppearance() {
                 max={32}
                 onChange={(n) => updateSbl("titleSizePx", n)}
               />
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox shape</p>
+              <p className="text-[11px] text-muted-foreground">
+                Story edit CKEditor textbox — radius, border, background, height, padding।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <NumberField
+                  label="Corner radius (px)"
+                  value={s.textboxRadiusPx ?? 8}
+                  min={0}
+                  max={32}
+                  onChange={(n) => updateSbl("textboxRadiusPx", n)}
+                />
+                <NumberField
+                  label="Border width (px)"
+                  value={s.textboxBorderWidthPx ?? 1}
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  onChange={(n) => updateSbl("textboxBorderWidthPx", n)}
+                />
+                <ColorField
+                  label="Border color"
+                  value={s.textboxBorderColor?.trim() || "#e2e8f0"}
+                  onChange={(v) => updateSbl("textboxBorderColor", v)}
+                  hint="খালি = theme border"
+                />
+                <ColorField
+                  label="Textbox background"
+                  value={s.textboxBg?.trim() || "#ffffff"}
+                  onChange={(v) => updateSbl("textboxBg", v)}
+                  hint="খালি = page background"
+                />
+                <NumberField
+                  label="Min height (px)"
+                  value={s.textboxMinHeightPx ?? 280}
+                  min={120}
+                  max={800}
+                  step={20}
+                  onChange={(n) => updateSbl("textboxMinHeightPx", n)}
+                />
+                <NumberField
+                  label="Inner padding (px)"
+                  value={s.textboxPaddingPx ?? 12}
+                  min={0}
+                  max={40}
+                  onChange={(n) => updateSbl("textboxPaddingPx", n)}
+                />
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">

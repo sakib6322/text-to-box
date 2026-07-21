@@ -666,6 +666,54 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   min-width: 1.75rem;
 }
 
+/* Concept details textbox shape */
+.ckeditor-field--concept .ck.ck-editor {
+  border-radius: var(--cd-textbox-radius, 8px);
+  overflow: hidden;
+}
+
+.ckeditor-field--concept .ck.ck-toolbar {
+  border-radius: var(--cd-textbox-radius, 8px) var(--cd-textbox-radius, 8px) 0 0;
+  border: var(--cd-textbox-border-width, 1px) solid var(--cd-textbox-border, hsl(var(--border)));
+  border-bottom-width: 0;
+}
+
+.ckeditor-field--concept .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable) {
+  min-height: var(--cd-textbox-min-height, 360px);
+  background: var(--cd-textbox-bg, hsl(var(--background)));
+  border: var(--cd-textbox-border-width, 1px) solid var(--cd-textbox-border, hsl(var(--border)));
+  border-radius: 0 0 var(--cd-textbox-radius, 8px) var(--cd-textbox-radius, 8px);
+  padding: var(--cd-textbox-padding, 12px);
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
+  border-color: hsl(var(--ring));
+}
+
+/* Story-based learning textbox shape */
+.ckeditor-field--story .ck.ck-editor {
+  border-radius: var(--sbl-textbox-radius, 8px);
+  overflow: hidden;
+}
+
+.ckeditor-field--story .ck.ck-toolbar {
+  border-radius: var(--sbl-textbox-radius, 8px) var(--sbl-textbox-radius, 8px) 0 0;
+  border: var(--sbl-textbox-border-width, 1px) solid var(--sbl-textbox-border, hsl(var(--border)));
+  border-bottom-width: 0;
+}
+
+.ckeditor-field--story .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable) {
+  min-height: var(--sbl-textbox-min-height, 280px);
+  background: var(--sbl-textbox-bg, hsl(var(--background)));
+  border: var(--sbl-textbox-border-width, 1px) solid var(--sbl-textbox-border, hsl(var(--border)));
+  border-radius: 0 0 var(--sbl-textbox-radius, 8px) var(--sbl-textbox-radius, 8px);
+  padding: var(--sbl-textbox-padding, 12px);
+}
+
+.ckeditor-field--story .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
+  border-color: hsl(var(--ring));
+}
+
 .concept-detail-rich,
 .concept-detail-rich .prose {
   font-family: var(--cd-font-family, inherit);

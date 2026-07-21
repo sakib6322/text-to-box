@@ -49,6 +49,8 @@ type Props = {
   className?: string;
   minHeight?: string;
   variant?: "default" | "compact";
+  /** Appearance-driven textbox shape from Concept details / Story tabs */
+  appearanceScope?: "concept" | "story";
 };
 
 const FONT_FAMILIES = [
@@ -279,6 +281,7 @@ export function CKEditorField({
   className,
   minHeight = "180px",
   variant = "default",
+  appearanceScope,
 }: Props) {
   const { appearance } = useUiAppearance();
   const re = appearance.richEditor;
@@ -335,11 +338,23 @@ export function CKEditorField({
   return (
     <div
       className={cn(
-        "ckeditor-field rounded-md border bg-background",
+        "ckeditor-field",
+        !appearanceScope && "rounded-md border bg-background",
+        appearanceScope === "concept" && "ckeditor-field--concept",
+        appearanceScope === "story" && "ckeditor-field--story",
         variant === "compact" && "ckeditor-field--compact",
         className,
       )}
-      style={{ "--ck-editor-min-height": minHeight } as React.CSSProperties}
+      style={
+        {
+          "--ck-editor-min-height":
+            appearanceScope === "concept"
+              ? "var(--cd-textbox-min-height, 360px)"
+              : appearanceScope === "story"
+                ? "var(--sbl-textbox-min-height, 280px)"
+                : minHeight,
+        } as React.CSSProperties
+      }
     >
       {re.googleDriveEmbeds ? (
         <div className="flex justify-end border-b bg-muted/20 px-2 py-1">
