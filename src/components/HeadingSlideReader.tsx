@@ -11,6 +11,61 @@ import {
 import type { HeadingSlidesAppearance } from "@/lib/uiAppearance";
 import { cn } from "@/lib/utils";
 
+function HeadingSlideProgress({
+  config,
+  currentIndex,
+  total,
+}: {
+  config: HeadingSlidesAppearance;
+  currentIndex: number;
+  total: number;
+}) {
+  if (!config.showProgressIndicator || total <= 1) return null;
+
+  const percent = Math.round(((currentIndex + 1) / total) * 100);
+  const showBar = config.progressStyle === "bar" || config.progressStyle === "barAndDots";
+  const showDots = config.progressStyle === "dots" || config.progressStyle === "barAndDots";
+  const progressLabel = config.showProgressPercent
+    ? formatSlideTemplate(config.progressLabelTemplate || "{percent}%", {
+        current: currentIndex + 1,
+        total,
+        percent,
+      })
+    : "";
+
+  return (
+    <div
+      className="heading-slide-progress"
+      role="progressbar"
+      aria-valuemin={1}
+      aria-valuemax={total}
+      aria-valuenow={currentIndex + 1}
+      aria-label={`Slide ${currentIndex + 1} of ${total}`}
+    >
+      {showBar ? (
+        <div className="heading-slide-progress-bar-track">
+          <div className="heading-slide-progress-bar-fill" style={{ width: `${percent}%` }} />
+        </div>
+      ) : null}
+      {progressLabel ? <span className="heading-slide-progress-label">{progressLabel}</span> : null}
+      {showDots ? (
+        <div className="heading-slide-progress-dots" aria-hidden={Boolean(progressLabel)}>
+          {Array.from({ length: total }, (_, i) => (
+            <span
+              key={i}
+              className={cn(
+                "heading-slide-progress-dot",
+                i < currentIndex && "is-complete",
+                i === currentIndex && "is-current",
+              )}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type Props = {
   html: string;
   config: HeadingSlidesAppearance;
@@ -182,6 +237,8 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
           </Button>
         ) : null}
       </div>
+
+      <HeadingSlideProgress config={config} currentIndex={safeIndex} total={slides.length} />
 
       <div
         ref={scrollRef}

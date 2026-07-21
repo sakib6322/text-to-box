@@ -184,13 +184,20 @@ export function splitHtmlByHeadings(html: string, options: SplitHtmlByHeadingsOp
 
 export function formatSlideTemplate(
   template: string,
-  vars: { next?: string; heading?: string; current?: number | string; total?: number | string },
+  vars: {
+    next?: string;
+    heading?: string;
+    current?: number | string;
+    total?: number | string;
+    percent?: number | string;
+  },
 ): string {
   return template
     .replaceAll("{next}", vars.next ?? "")
     .replaceAll("{heading}", vars.heading ?? "")
     .replaceAll("{current}", String(vars.current ?? ""))
     .replaceAll("{total}", String(vars.total ?? ""))
+    .replaceAll("{percent}", String(vars.percent ?? ""))
     .trim();
 }
 

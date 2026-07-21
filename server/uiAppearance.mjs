@@ -414,6 +414,14 @@ function defaultHeadingSlides(overrides = {}) {
     minCharsPerSlide: 0,
     scrollMode: "page",
     trapNestedScroll: false,
+    showProgressIndicator: true,
+    progressStyle: "bar",
+    progressBarHeightPx: 5,
+    progressTrackColor: "hsl(var(--border))",
+    progressFillColor: "hsl(var(--primary))",
+    progressDotSizePx: 8,
+    showProgressPercent: false,
+    progressLabelTemplate: "{percent}%",
     ...overrides,
   };
 }
@@ -452,6 +460,10 @@ function mergeHeadingSlides(base, patch) {
   let nextTemplate = str(patch.nextTemplate, base.nextTemplate);
   if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
   const scrollMode = patch.scrollMode === "nested" || patch.scrollMode === "page" ? patch.scrollMode : base.scrollMode;
+  const progressStyle =
+    patch.progressStyle === "bar" || patch.progressStyle === "dots" || patch.progressStyle === "barAndDots"
+      ? patch.progressStyle
+      : base.progressStyle ?? "bar";
   return {
     conceptDetailsEnabled: bool(patch.conceptDetailsEnabled, base.conceptDetailsEnabled),
     storyEnabled: bool(patch.storyEnabled, base.storyEnabled),
@@ -478,6 +490,14 @@ function mergeHeadingSlides(base, patch) {
     minCharsPerSlide: num(patch.minCharsPerSlide, base.minCharsPerSlide),
     scrollMode,
     trapNestedScroll: bool(patch.trapNestedScroll, base.trapNestedScroll),
+    showProgressIndicator: bool(patch.showProgressIndicator, base.showProgressIndicator ?? true),
+    progressStyle,
+    progressBarHeightPx: num(patch.progressBarHeightPx, base.progressBarHeightPx ?? 5),
+    progressTrackColor: str(patch.progressTrackColor, base.progressTrackColor ?? "hsl(var(--border))"),
+    progressFillColor: str(patch.progressFillColor, base.progressFillColor ?? "hsl(var(--primary))"),
+    progressDotSizePx: num(patch.progressDotSizePx, base.progressDotSizePx ?? 8),
+    showProgressPercent: bool(patch.showProgressPercent, base.showProgressPercent ?? false),
+    progressLabelTemplate: str(patch.progressLabelTemplate, base.progressLabelTemplate ?? "{percent}%"),
   };
 }
 

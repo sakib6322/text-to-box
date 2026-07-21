@@ -2371,6 +2371,51 @@ export default function AdminAppearance() {
               <BoolField label="Show slide counter" checked={hs.showCounter} onChange={(v) => updateHeadingSlides("showCounter", v)} />
               <BoolField label="Sticky Next bar" checked={hs.stickyNextBar} onChange={(v) => updateHeadingSlides("stickyNextBar", v)} hint="Nested mode only — overlays the scroll box footer" />
             </div>
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Progress indicator</p>
+              <p className="text-[11px] text-muted-foreground">
+                Heading slides-এর উপরে slide progress bar/dots — Concept details ও Story read view।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <BoolField
+                  label="Show progress indicator"
+                  checked={hs.showProgressIndicator}
+                  onChange={(v) => updateHeadingSlides("showProgressIndicator", v)}
+                  hint="Bar বা dots — counter-এর নিচে"
+                />
+                <Field label="Progress style">
+                  <Select
+                    value={hs.progressStyle}
+                    onValueChange={(v) => updateHeadingSlides("progressStyle", v as "bar" | "dots" | "barAndDots")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bar">Bar only</SelectItem>
+                      <SelectItem value="dots">Dots only</SelectItem>
+                      <SelectItem value="barAndDots">Bar + dots</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <NumberField label="Bar height (px)" value={hs.progressBarHeightPx} min={2} max={16} onChange={(n) => updateHeadingSlides("progressBarHeightPx", n)} />
+                <NumberField label="Dot size (px)" value={hs.progressDotSizePx} min={4} max={16} onChange={(n) => updateHeadingSlides("progressDotSizePx", n)} />
+                <ColorField label="Track color" value={hs.progressTrackColor} onChange={(v) => updateHeadingSlides("progressTrackColor", v)} hint="Bar track / inactive dots" />
+                <ColorField label="Fill color" value={hs.progressFillColor} onChange={(v) => updateHeadingSlides("progressFillColor", v)} hint="Completed + current slide" />
+                <BoolField
+                  label="Show progress label"
+                  checked={hs.showProgressPercent}
+                  onChange={(v) => updateHeadingSlides("showProgressPercent", v)}
+                  hint="যেমন 50% বা Slide 2 of 4"
+                />
+                <TextField
+                  label="Progress label template"
+                  value={hs.progressLabelTemplate}
+                  onChange={(v) => updateHeadingSlides("progressLabelTemplate", v)}
+                  hint="{percent}, {current}, {total}"
+                />
+              </div>
+            </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <TextField label="Next label" value={hs.nextLabel} onChange={(v) => updateHeadingSlides("nextLabel", v)} />
               <TextField label="Heading card template" value={hs.nextTemplate} onChange={(v) => updateHeadingSlides("nextTemplate", v)} hint="{heading} — shown under the Next button" />

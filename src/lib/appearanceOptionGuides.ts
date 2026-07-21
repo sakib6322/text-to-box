@@ -209,6 +209,14 @@ export const GUIDE_HEADING_SLIDES: AppearanceGuideItem[] = [
   { title: "Require scroll to end before Next", body: "কোথায়: must reach slide bottom before Next shows।" },
   { title: "Show next heading below button (card)", body: "কোথায়: heading preview card under Next button (`{heading}` template)।" },
   { title: "Show Previous / Show slide counter", body: "কোথায়: Previous button & `1 / N` counter in slide reader।" },
+  {
+    title: "Progress indicator (bar / dots)",
+    body: "কোথায়: counter-এর নিচে visual progress — bar, dots, বা দুটো। Track/fill color, height, dot size Appearance থেকে। Concept details + Story heading slides।",
+  },
+  {
+    title: "Progress label template",
+    body: "কোথায়: bar/dots-এর পাশে label — `{percent}%`, `{current} of {total}`। Show progress label চালু থাকলে দেখায়।",
+  },
   { title: "Sticky Next bar", body: "Nested mode — Next bar overlays scroll box footer।" },
   { title: "Next / Previous / Counter / Last slide labels", body: "কোথায়: button & counter text in `HeadingSlideReader`।" },
   { title: "Next bar background / text color", body: "রঙ picker। কোথায়: `--hs-next-bar-bg/fg` sticky Next bar।" },

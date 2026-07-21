@@ -1628,6 +1628,62 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   font-variant-numeric: tabular-nums;
 }
 
+.heading-slide-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0 0.15rem 0.45rem;
+  flex-shrink: 0;
+}
+
+.heading-slide-progress-bar-track {
+  width: 100%;
+  height: var(--hs-progress-height, 5px);
+  border-radius: 9999px;
+  background: var(--hs-progress-track, hsl(var(--border)));
+  overflow: hidden;
+}
+
+.heading-slide-progress-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--hs-progress-fill, hsl(var(--primary)));
+  transition: width 0.25s ease;
+}
+
+.heading-slide-progress-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.heading-slide-progress-dots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.heading-slide-progress-dot {
+  width: var(--hs-progress-dot-size, 8px);
+  height: var(--hs-progress-dot-size, 8px);
+  border-radius: 9999px;
+  background: var(--hs-progress-track, hsl(var(--border)));
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.heading-slide-progress-dot.is-complete,
+.heading-slide-progress-dot.is-current {
+  background: var(--hs-progress-fill, hsl(var(--primary)));
+}
+
+.heading-slide-progress-dot.is-current {
+  transform: scale(1.15);
+}
+
 .heading-slide-scroll {
   flex: 1 1 auto;
   min-height: 8rem;

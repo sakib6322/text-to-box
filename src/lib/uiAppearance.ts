@@ -444,6 +444,15 @@ export type HeadingSlidesAppearance = {
   scrollMode: "nested" | "page";
   /** Only for nested mode: when true, scroll does not chain to the page at the edges */
   trapNestedScroll: boolean;
+  /** Visual slide progress (bar / dots) */
+  showProgressIndicator: boolean;
+  progressStyle: "bar" | "dots" | "barAndDots";
+  progressBarHeightPx: number;
+  progressTrackColor: string;
+  progressFillColor: string;
+  progressDotSizePx: number;
+  showProgressPercent: boolean;
+  progressLabelTemplate: string;
 };
 
 export type RichEditorAppearance = {
@@ -1361,6 +1370,14 @@ export function defaultHeadingSlides(overrides: Partial<HeadingSlidesAppearance>
     minCharsPerSlide: 0,
     scrollMode: "page",
     trapNestedScroll: false,
+    showProgressIndicator: true,
+    progressStyle: "bar",
+    progressBarHeightPx: 5,
+    progressTrackColor: "hsl(var(--border))",
+    progressFillColor: "hsl(var(--primary))",
+    progressDotSizePx: 8,
+    showProgressPercent: false,
+    progressLabelTemplate: "{percent}%",
     ...overrides,
   };
 }
@@ -1376,6 +1393,10 @@ export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown
   // Migrate old in-button label template → heading card template
   if (nextTemplate === "{next} ({heading})") nextTemplate = "{heading}";
   const scrollMode = p.scrollMode === "nested" || p.scrollMode === "page" ? p.scrollMode : base.scrollMode;
+  const progressStyle =
+    p.progressStyle === "bar" || p.progressStyle === "dots" || p.progressStyle === "barAndDots"
+      ? p.progressStyle
+      : base.progressStyle;
   return {
     conceptDetailsEnabled: bool(p.conceptDetailsEnabled, base.conceptDetailsEnabled),
     storyEnabled: bool(p.storyEnabled, base.storyEnabled),
@@ -1402,6 +1423,14 @@ export function mergeHeadingSlides(base: HeadingSlidesAppearance, patch: unknown
     minCharsPerSlide: num(p.minCharsPerSlide, base.minCharsPerSlide),
     scrollMode,
     trapNestedScroll: bool(p.trapNestedScroll, base.trapNestedScroll),
+    showProgressIndicator: bool(p.showProgressIndicator, base.showProgressIndicator ?? true),
+    progressStyle,
+    progressBarHeightPx: num(p.progressBarHeightPx, base.progressBarHeightPx ?? 5),
+    progressTrackColor: str(p.progressTrackColor, base.progressTrackColor ?? "hsl(var(--border))"),
+    progressFillColor: str(p.progressFillColor, base.progressFillColor ?? "hsl(var(--primary))"),
+    progressDotSizePx: num(p.progressDotSizePx, base.progressDotSizePx ?? 8),
+    showProgressPercent: bool(p.showProgressPercent, base.showProgressPercent ?? false),
+    progressLabelTemplate: str(p.progressLabelTemplate, base.progressLabelTemplate ?? "{percent}%"),
   };
 }
 
@@ -1785,6 +1814,11 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   const hs = theme.headingSlides;
   root.style.setProperty("--hs-next-bar-bg", hs.nextBarBg);
   root.style.setProperty("--hs-next-bar-fg", hs.nextBarFg);
+  root.style.setProperty("--hs-progress-track", hs.progressTrackColor);
+  root.style.setProperty("--hs-progress-fill", hs.progressFillColor);
+  root.style.setProperty("--hs-progress-height", `${hs.progressBarHeightPx}px`);
+  root.style.setProperty("--hs-progress-dot-size", `${hs.progressDotSizePx}px`);
+  root.dataset.hsProgress = hs.showProgressIndicator ? "1" : "0";
   root.dataset.headingSlidesConcept = hs.conceptDetailsEnabled ? "1" : "0";
   root.dataset.headingSlidesStory = hs.storyEnabled ? "1" : "0";
 
