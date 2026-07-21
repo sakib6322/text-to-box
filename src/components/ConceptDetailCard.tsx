@@ -6,6 +6,7 @@ import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasConceptDetailContent } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { BookOpen } from "lucide-react";
+import { useState } from "react";
 
 type Props = {
   conceptName: string;
@@ -22,6 +23,7 @@ export function ConceptDetailCard({
   editable = false,
   onDetailChange,
 }: Props) {
+  const [storyOpen, setStoryOpen] = useState(false);
   if (!hasConceptDetailContent(detail)) return null;
 
   return (
@@ -31,7 +33,9 @@ export function ConceptDetailCard({
         conceptName={conceptName}
         editable={editable}
         onDetailChange={onDetailChange}
+        onOpenChange={setStoryOpen}
       />
+      {!storyOpen ? (
       <Card className="space-y-4 p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -47,6 +51,7 @@ export function ConceptDetailCard({
 
         <ConceptDetailBody detail={detail} showVerbatim={false} />
       </Card>
+      ) : null}
     </div>
   );
 }

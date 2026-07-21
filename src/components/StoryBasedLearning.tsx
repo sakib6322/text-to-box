@@ -23,6 +23,8 @@ type StoryBasedLearningButtonProps = {
   variant?: "outline" | "secondary" | "default" | "ghost";
   size?: "default" | "sm" | "lg" | "icon";
   className?: string;
+  /** Fired when story panel opens/closes — parents can hide Concept Details below. */
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function StoryBasedLearningButton({
@@ -35,12 +37,18 @@ export function StoryBasedLearningButton({
   variant = "outline",
   size = "sm",
   className,
+  onOpenChange,
 }: StoryBasedLearningButtonProps) {
   const { appearance, activeDevice } = useUiAppearance();
   const sbl = resolveDeviceTheme(appearance, activeDevice).storyBasedLearning;
   const hs = appearance.headingSlides;
   const [open, setOpen] = useState(false);
   const [draftStory, setDraftStory] = useState(detail.storyHtml);
+
+  const setOpenAndNotify = (next: boolean) => {
+    setOpen(next);
+    onOpenChange?.(next);
+  };
 
   useEffect(() => {
     if (open) setDraftStory(detail.storyHtml);
@@ -63,7 +71,7 @@ export function StoryBasedLearningButton({
   return (
     <Collapsible
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={setOpenAndNotify}
       className={cn("story-based-learning-root w-full", className)}
     >
       <div className="flex justify-end">
@@ -141,7 +149,7 @@ export function StoryBasedLearningButton({
               </div>
 
               <div className="flex flex-wrap justify-end gap-2 lg:col-span-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)} disabled={saving}>
+                <Button type="button" variant="outline" size="sm" onClick={() => setOpenAndNotify(false)} disabled={saving}>
                   Close
                 </Button>
                 {onSave ? (
@@ -150,7 +158,7 @@ export function StoryBasedLearningButton({
                     Save story
                   </Button>
                 ) : (
-                  <Button type="button" size="sm" onClick={() => setOpen(false)}>
+                  <Button type="button" size="sm" onClick={() => setOpenAndNotify(false)}>
                     Done
                   </Button>
                 )}

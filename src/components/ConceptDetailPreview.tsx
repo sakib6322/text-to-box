@@ -16,7 +16,7 @@ export function ConceptDetailPreview({ conceptName, detail, keyPoints = [] }: Pr
         <h2 className="text-lg font-bold text-primary mt-1">{conceptName || "Untitled concept"}</h2>
       </div>
 
-      <ConceptDetailBody detail={detail} showVerbatim={false} />
+      <ConceptDetailBody detail={detail} showVerbatim={false} adminPreview />
 
       {keyPoints.length ? (
         <div className="space-y-2 pt-2 border-t">

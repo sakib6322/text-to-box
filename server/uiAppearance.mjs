@@ -55,6 +55,20 @@ function defaultSidebar(overrides = {}) {
     menuGapPx: 8,
     activeFontWeight: 500,
     mutedOpacity: 0.6,
+    menuTransformEnabled: true,
+    menuTransitionDurationMs: 180,
+    menuHoverSlidePx: 2,
+    menuActiveSlidePx: 4,
+    menuPressScale: 0.98,
+    collapseTransitionEnabled: true,
+    collapseDurationMs: 200,
+    collapseEasing: "linear",
+    collapseAnimateWidth: true,
+    collapseAnimateTransform: true,
+    collapseIconInnerSlide: false,
+    menuCollapseSizeTransition: true,
+    groupLabelTransition: true,
+    railTransition: true,
     ...overrides,
   };
 }
@@ -93,6 +107,23 @@ function mergeSidebar(base, patch, legacy = {}) {
     menuGapPx: num(patch.menuGapPx, base.menuGapPx, 4, 16),
     activeFontWeight: num(patch.activeFontWeight, base.activeFontWeight, 400, 800),
     mutedOpacity: num(patch.mutedOpacity, base.mutedOpacity, 0.2, 1),
+    menuTransformEnabled: bool(patch.menuTransformEnabled, base.menuTransformEnabled),
+    menuTransitionDurationMs: num(patch.menuTransitionDurationMs, base.menuTransitionDurationMs, 0, 400),
+    menuHoverSlidePx: num(patch.menuHoverSlidePx, base.menuHoverSlidePx, 0, 12),
+    menuActiveSlidePx: num(patch.menuActiveSlidePx, base.menuActiveSlidePx, 0, 16),
+    menuPressScale: num(patch.menuPressScale, base.menuPressScale, 0.94, 1),
+    collapseTransitionEnabled: bool(patch.collapseTransitionEnabled, base.collapseTransitionEnabled),
+    collapseDurationMs: num(patch.collapseDurationMs, base.collapseDurationMs, 0, 600),
+    collapseEasing:
+      patch.collapseEasing === "ease" || patch.collapseEasing === "ease-in-out"
+        ? patch.collapseEasing
+        : base.collapseEasing,
+    collapseAnimateWidth: bool(patch.collapseAnimateWidth, base.collapseAnimateWidth),
+    collapseAnimateTransform: bool(patch.collapseAnimateTransform, base.collapseAnimateTransform),
+    collapseIconInnerSlide: bool(patch.collapseIconInnerSlide, base.collapseIconInnerSlide),
+    menuCollapseSizeTransition: bool(patch.menuCollapseSizeTransition, base.menuCollapseSizeTransition),
+    groupLabelTransition: bool(patch.groupLabelTransition, base.groupLabelTransition),
+    railTransition: bool(patch.railTransition, base.railTransition),
   };
   if (legacy.sidebarBgHsl) merged.backgroundHsl = legacy.sidebarBgHsl;
   if (legacy.sidebarFgHsl) merged.foregroundHsl = legacy.sidebarFgHsl;
@@ -180,6 +211,13 @@ function defaultGlobal(overrides = {}) {
     pagePaddingPx: 24,
     sectionGapPx: 16,
     sidebarLabels: defaultSidebarLabels(),
+    motionEnabled: true,
+    motionDurationMs: 180,
+    motionEasing: "ease-out",
+    motionInteractive: true,
+    motionHoverLiftPx: 0,
+    motionHoverScale: 1,
+    motionPressScale: 0.98,
     ...overrides,
   };
 }
@@ -198,6 +236,8 @@ function defaultConcept(overrides = {}) {
     heading2Color: "#0f172a",
     heading3Color: "#1e293b",
     paragraphColor: "#1e293b",
+    unsetTextColor: "#ffffff",
+    backgroundColor: "",
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
@@ -355,6 +395,7 @@ export function getDefaultUiAppearance() {
     progressPlan: defaultProgressPlan(),
     headingSlides: defaultHeadingSlides(),
     conceptStudentUi: defaultConceptStudentUi(),
+    conceptAdminPreview: defaultConceptAdminPreview(),
   };
 }
 
@@ -448,6 +489,31 @@ function mergeConceptStudentUi(base, patch) {
     showStudyButton: bool(patch.showStudyButton, base.showStudyButton),
     showPracticeButton: bool(patch.showPracticeButton, base.showPracticeButton),
     showStudyAndPracticeButton: bool(patch.showStudyAndPracticeButton, base.showStudyAndPracticeButton),
+  };
+}
+
+function defaultConceptAdminPreview(overrides = {}) {
+  return {
+    showPreviewOnMobile: true,
+    showPreviewOnTablet: true,
+    showPreviewOnDesktop: true,
+    showHeadingSlidesOnMobile: true,
+    showHeadingSlidesOnTablet: true,
+    showHeadingSlidesOnDesktop: true,
+    ...overrides,
+  };
+}
+
+function mergeConceptAdminPreview(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  return {
+    showPreviewOnMobile: bool(patch.showPreviewOnMobile, base.showPreviewOnMobile),
+    showPreviewOnTablet: bool(patch.showPreviewOnTablet, base.showPreviewOnTablet),
+    showPreviewOnDesktop: bool(patch.showPreviewOnDesktop, base.showPreviewOnDesktop),
+    showHeadingSlidesOnMobile: bool(patch.showHeadingSlidesOnMobile, base.showHeadingSlidesOnMobile),
+    showHeadingSlidesOnTablet: bool(patch.showHeadingSlidesOnTablet, base.showHeadingSlidesOnTablet),
+    showHeadingSlidesOnDesktop: bool(patch.showHeadingSlidesOnDesktop, base.showHeadingSlidesOnDesktop),
   };
 }
 
@@ -712,12 +778,19 @@ function defaultLandingPage(overrides = {}) {
     heroFixedOverlayTopPercent: 30,
     featuredAutoplay: true,
     featuredIntervalSec: 5,
+    featuredPauseOnHover: true,
+    featuredTransitionEnabled: true,
     featuredTransitionSec: 0.3,
     featuredTransition: "fade",
+    featuredEasing: "ease-out",
+    featuredSlideDistancePx: 14,
+    featuredScaleFrom: 0.98,
     featuredShineEnabled: false,
     featuredShineSec: 8,
     featuredTiltEnabled: false,
     featuredHoverLift: true,
+    featuredHoverLiftPx: 3,
+    featuredHoverDurationMs: 250,
     featuredMaxSlides: 4,
     coursesTitle: "আপনার কাঙ্ক্ষিত কোর্সটি খুঁজে নিন",
     coursesSubtitle: "নিচের ক্যাটাগরিতে প্রবেশ করে আপনার পছন্দের কোর্সে এনরোল করুন",
@@ -823,6 +896,7 @@ function mergeLandingPage(base, patch) {
     else if (typeof val === "boolean" && typeof base[key] === "boolean") next[key] = val;
   }
   if (valIsTransition(patch.featuredTransition)) next.featuredTransition = patch.featuredTransition;
+  if (valIsFeaturedEasing(patch.featuredEasing)) next.featuredEasing = patch.featuredEasing;
   if (Array.isArray(patch.whyItems)) {
     next.whyItems = patch.whyItems
       .map((it, i) => normalizeWhyItem(it, `why-${i + 1}`))
@@ -832,7 +906,11 @@ function mergeLandingPage(base, patch) {
 }
 
 function valIsTransition(v) {
-  return v === "fade" || v === "slide" || v === "scale";
+  return v === "fade" || v === "slide" || v === "scale" || v === "none";
+}
+
+function valIsFeaturedEasing(v) {
+  return v === "linear" || v === "ease" || v === "ease-out" || v === "ease-in-out";
 }
 
 function newFaqId() {
@@ -874,13 +952,37 @@ function mergeLandingFaq(base, patch) {
   };
 }
 
+function mergePerformance(base, patch) {
+  const p = patch && typeof patch === "object" ? patch : {};
+  return {
+    smoothScroll: typeof p.smoothScroll === "boolean" ? p.smoothScroll : base.smoothScroll,
+    reduceMotion: typeof p.reduceMotion === "boolean" ? p.reduceMotion : base.reduceMotion,
+  };
+}
+
 function mergeDevice(base, patch) {
   const p = patch && typeof patch === "object" ? patch : {};
   const pg = p.global && typeof p.global === "object" ? p.global : {};
+  const easing =
+    pg.motionEasing === "linear" ||
+    pg.motionEasing === "ease" ||
+    pg.motionEasing === "ease-out" ||
+    pg.motionEasing === "ease-in-out"
+      ? pg.motionEasing
+      : undefined;
+  const clamp = (v, fallback, min, max) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
   return {
     global: {
       ...base.global,
       ...pg,
+      ...(easing ? { motionEasing: easing } : {}),
+      motionDurationMs: clamp(pg.motionDurationMs, base.global.motionDurationMs, 0, 600),
+      motionHoverLiftPx: clamp(pg.motionHoverLiftPx, base.global.motionHoverLiftPx, 0, 12),
+      motionHoverScale: clamp(pg.motionHoverScale, base.global.motionHoverScale, 1, 1.15),
+      motionPressScale: clamp(pg.motionPressScale, base.global.motionPressScale, 0.9, 1),
       sidebarLabels: {
         ...base.global.sidebarLabels,
         ...(pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}),
@@ -938,13 +1040,14 @@ function fromV1(raw) {
       allQuestions: { ...shared.allQuestions, listMaxWidthPx: 680 },
     },
     desktop: shared,
-    performance: { ...base.performance, ...performance },
+    performance: mergePerformance(base.performance, performance),
     richEditor: mergeRichEditor(base.richEditor, raw?.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, raw?.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw?.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw?.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, raw?.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw?.conceptStudentUi),
+    conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, raw?.conceptAdminPreview),
   };
 }
 
@@ -960,13 +1063,14 @@ export function parseUiAppearance(raw) {
       mobile: mergeDevice(defaults.mobile, parsed.mobile),
       tablet: mergeDevice(defaults.tablet, parsed.tablet),
       desktop: mergeDevice(defaults.desktop, parsed.desktop),
-      performance: { ...defaults.performance, ...(parsed.performance ?? {}) },
+      performance: mergePerformance(defaults.performance, parsed.performance),
       richEditor: mergeRichEditor(defaults.richEditor, parsed.richEditor),
       landingFaq: mergeLandingFaq(defaults.landingFaq, parsed.landingFaq),
       landingPage: mergeLandingPage(defaults.landingPage, parsed.landingPage),
       progressPlan: mergeProgressPlan(defaults.progressPlan, parsed.progressPlan),
       headingSlides: mergeHeadingSlides(defaults.headingSlides, parsed.headingSlides),
       conceptStudentUi: mergeConceptStudentUi(defaults.conceptStudentUi, parsed.conceptStudentUi),
+      conceptAdminPreview: mergeConceptAdminPreview(defaults.conceptAdminPreview, parsed.conceptAdminPreview),
     };
   } catch {
     return defaults;

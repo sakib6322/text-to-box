@@ -9,10 +9,14 @@ import {
   heroSectionBackground,
   landingPageStyleVars,
   progressStepLabel,
+  conceptAdminPreviewHeadingSlidesEnabled,
+  conceptAdminPreviewPanelEnabled,
   type GlobalAppearance,
   type SidebarAppearance,
   type HeaderAppearance,
   type ConceptStudentUiAppearance,
+  type ConceptAdminPreviewAppearance,
+  type DeviceKey,
   type HeadingSlidesAppearance,
   type LandingFaqAppearance,
   type LandingPageAppearance,
@@ -182,7 +186,19 @@ export function GlobalWebsiteLivePreview({
   );
 }
 
-export function ConceptDetailsLivePreview({ studentUi }: { studentUi?: ConceptStudentUiAppearance }) {
+const CONCEPT_DETAILS_SLIDES_SAMPLE = `<h1>Sample topic one</h1><p>Paragraph under first heading — admin preview uses heading slides when enabled for this device.</p><h1>Sample topic two</h1><p>Second slide content.</p>`;
+
+export function ConceptDetailsLivePreview({
+  studentUi,
+  adminPreview,
+  headingSlides,
+  previewDevice = "desktop",
+}: {
+  studentUi?: ConceptStudentUiAppearance;
+  adminPreview?: ConceptAdminPreviewAppearance;
+  headingSlides?: HeadingSlidesAppearance;
+  previewDevice?: DeviceKey;
+}) {
   const csu = studentUi ?? {
     showKeyPointsOnDetails: true,
     showDetailsButton: true,
@@ -191,9 +207,38 @@ export function ConceptDetailsLivePreview({ studentUi }: { studentUi?: ConceptSt
     showPracticeButton: true,
     showStudyAndPracticeButton: true,
   };
+  const cap = adminPreview ?? {
+    showPreviewOnMobile: true,
+    showPreviewOnTablet: true,
+    showPreviewOnDesktop: true,
+    showHeadingSlidesOnMobile: true,
+    showHeadingSlidesOnTablet: true,
+    showHeadingSlidesOnDesktop: true,
+  };
+  const hs = headingSlides;
+  const showAdminPreview = conceptAdminPreviewPanelEnabled(cap, previewDevice);
+  const showAdminSlides = hs && showAdminPreview && conceptAdminPreviewHeadingSlidesEnabled(cap, previewDevice);
 
   return (
     <div className="space-y-4">
+      {!showAdminPreview ? (
+        <p className="rounded-md border border-dashed bg-muted/20 px-3 py-2 text-[11px] text-muted-foreground">
+          Admin edit preview ({previewDevice}): Preview column off — Suggestions → Details shows Edit only.
+        </p>
+      ) : null}
+      {showAdminSlides ? (
+        <div className="rounded-md border bg-muted/20 p-2">
+          <p className="mb-2 text-[10px] text-muted-foreground">
+            Admin edit preview mock ({previewDevice}) — heading slides + progress
+          </p>
+          <HeadingSlideReader
+            html={CONCEPT_DETAILS_SLIDES_SAMPLE}
+            config={hs}
+            richClassName="concept-detail-rich"
+            className="max-h-[14rem]"
+          />
+        </div>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {csu.showQuestionsButton ? <span className="rounded border px-2 py-1 text-xs">Questions</span> : null}
         {csu.showStudyButton ? <span className="rounded border px-2 py-1 text-xs">Study</span> : null}
@@ -418,7 +463,9 @@ export function LandingLivePreview({
           <p className="font-semibold">{lp.heroFallbackTitle || "Featured course"}</p>
           <p className="mt-1 text-xs opacity-80">{lp.heroFallbackDesc}</p>
           <p className="mt-2 text-[10px] opacity-70">
-            {lp.featuredAutoplay ? "Autoplay" : "Manual"} · {lp.featuredTransition} · shine{" "}
+            {lp.featuredAutoplay ? "Autoplay" : "Manual"}
+            {lp.featuredPauseOnHover ? " · pause hover" : ""} ·{" "}
+            {lp.featuredTransitionEnabled ? lp.featuredTransition : "no-anim"} · shine{" "}
             {lp.featuredShineEnabled ? "on" : "off"}
           </p>
         </Card>

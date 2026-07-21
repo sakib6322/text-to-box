@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import type { ConceptDetail, DetailTable } from "@/lib/conceptDetail";
 import { conceptDetailFromSourceHtml, resolveBodyHtml } from "@/lib/conceptDetail";
+import { conceptAdminPreviewHeadingSlidesEnabled } from "@/lib/uiAppearance";
 
 export type ConceptDetailUpdater = (prev: ConceptDetail) => ConceptDetail;
 
@@ -20,6 +21,8 @@ type Props = {
   editable?: boolean;
   onChange?: (updater: ConceptDetailUpdater) => void;
   showVerbatim?: boolean;
+  /** Admin Suggestions → Details edit preview panel */
+  adminPreview?: boolean;
 };
 
 function defaultHeaders(table: DetailTable | null): string[] {
@@ -90,8 +93,8 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
   );
 }
 
-export function ConceptDetailBody({ detail, editable = false, onChange, showVerbatim = true }: Props) {
-  const { appearance } = useUiAppearance();
+export function ConceptDetailBody({ detail, editable = false, onChange, showVerbatim = true, adminPreview = false }: Props) {
+  const { appearance, activeDevice } = useUiAppearance();
   const hs = appearance.headingSlides;
 
   if (editable) {
@@ -117,9 +120,13 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
 
   const unifiedBody = resolveBodyHtml(detail).trim();
   if (unifiedBody && !hasLegacyStructuredContent(detail)) {
+    const useHeadingSlides = adminPreview
+      ? conceptAdminPreviewHeadingSlidesEnabled(appearance.conceptAdminPreview, activeDevice)
+      : hs.conceptDetailsEnabled;
+
     return (
       <div className="space-y-4 text-sm leading-relaxed">
-        {hs.conceptDetailsEnabled ? (
+        {useHeadingSlides ? (
           <HeadingSlideReader html={unifiedBody} config={hs} richClassName="concept-detail-rich" />
         ) : (
           <div className="concept-detail-rich">

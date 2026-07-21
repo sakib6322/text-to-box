@@ -12,7 +12,7 @@ import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
-import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { ConceptDetailsInlinePanel } from "@/components/ConceptDetailsInlinePanel";
 import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, conceptDetailToSavePayload, clearConceptCaches, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { hasPermission } from "@/lib/auth";
@@ -161,7 +161,6 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const addBulkJsonRef = useRef<HTMLInputElement>(null);
   const [savingKeyPoint, setSavingKeyPoint] = useState(false);
   const [search, setSearch] = useState("");
-  const [detailsOpen, setDetailsOpen] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsConceptName, setDetailsConceptName] = useState("");
   const [detailsConceptId, setDetailsConceptId] = useState<string | null>(null);
@@ -519,6 +518,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       setAddBulkJsonText("");
       return;
     }
+    closeDetailsPanel();
     setAddTarget({ conceptId, title });
     setAddDrafts([newAddDraft()]);
     setAddBulkJsonText("");
@@ -537,13 +537,25 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     setQuestionsPanelOpen(true);
   };
 
-  const openConceptDetails = async (conceptId: string, conceptTitle?: string) => {
-    setDetailsOpen(true);
-    setDetailsLoading(true);
+  const closeDetailsPanel = () => {
+    setDetailsConceptId(null);
+    setDetailsConceptName("");
+    setDetailsConceptDetail(emptyConceptDetail());
+    setDetailsKeyPoints([]);
+  };
+
+  const toggleConceptDetails = async (conceptId: string, conceptTitle?: string) => {
+    if (detailsConceptId === conceptId) {
+      closeDetailsPanel();
+      return;
+    }
+    setAddTarget(null);
     setDetailsConceptId(conceptId);
+    setDetailsLoading(true);
     setDetailsConceptName((conceptTitle ?? "").trim());
     setDetailsConceptDetail(emptyConceptDetail());
     setDetailsKeyPoints([]);
+    setExpandedConceptIds((prev) => new Set(prev).add(conceptId));
     try {
       const loaded = await fetchConceptByIdWithBoards(conceptId);
       setDetailsConceptName(loaded.conceptName);
@@ -551,7 +563,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       setDetailsKeyPoints(loaded.keyPoints);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to load concept details");
-      setDetailsOpen(false);
+      closeDetailsPanel();
     } finally {
       setDetailsLoading(false);
     }
@@ -1349,7 +1361,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             </h1>
             <p className="text-muted-foreground mt-1">
               {adminView
-                ? "Browse concepts — click a concept to see its key points. Use Details for full concept content."
+                ? "Browse concepts — click a concept to see its key points. Use Details for full concept content (inline panel)."
                 : "Browse only the syllabus mapped to your enrolled course — subject → system → chapter → topic."}
             </p>
           </div>
@@ -1688,7 +1700,33 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   studyPct={pct}
                   sessionCount={sessionCount}
                   deleting={deleting}
-                  onDetails={adminView ? () => void openConceptDetails(g.conceptId, g.title) : undefined}
+                  onDetailsToggle={adminView ? () => void toggleConceptDetails(g.conceptId, g.title) : undefined}
+                  detailsOpen={detailsConceptId === g.conceptId}
+                  detailsPanel={
+                    detailsConceptId === g.conceptId ? (
+                      <ConceptDetailsInlinePanel
+                        active
+                        variant="inline"
+                        conceptName={detailsConceptName}
+                        detail={detailsConceptDetail}
+                        keyPoints={detailsKeyPoints}
+                        loading={detailsLoading}
+                        editable={canEdit}
+                        onDetailChange={setDetailsConceptDetail}
+                        onSave={saveConceptDetail}
+                        saving={savingConceptDetail}
+                        keyPointsEditable={canEdit || canAdd || canDelete}
+                        boardOptions={boardList}
+                        onSaveKeyPoint={saveDetailsKeyPoint}
+                        onAddKeyPoint={addDetailsKeyPoint}
+                        onDeleteKeyPoint={deleteDetailsKeyPoint}
+                        savingKeyPoint={savingKeyPoint}
+                        conceptId={g.conceptId}
+                        showSelfQaEditor={hasPermission("progress.self_qa.manage")}
+                        onClose={closeDetailsPanel}
+                      />
+                    ) : undefined
+                  }
                   onEdit={
                     adminView && canEdit
                       ? (row) => {
@@ -2107,26 +2145,6 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         }}
       />
 
-      <ConceptDetailsDialog
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        conceptName={detailsConceptName}
-        detail={detailsConceptDetail}
-        keyPoints={detailsKeyPoints}
-        loading={detailsLoading}
-        editable={canEdit}
-        onDetailChange={setDetailsConceptDetail}
-        onSave={saveConceptDetail}
-        saving={savingConceptDetail}
-        keyPointsEditable={canEdit || canAdd || canDelete}
-        boardOptions={boardList}
-        onSaveKeyPoint={saveDetailsKeyPoint}
-        onAddKeyPoint={addDetailsKeyPoint}
-        onDeleteKeyPoint={deleteDetailsKeyPoint}
-        savingKeyPoint={savingKeyPoint}
-        conceptId={detailsConceptId ?? undefined}
-        showSelfQaEditor={hasPermission("progress.self_qa.manage")}
-      />
     </div>
   );
 };

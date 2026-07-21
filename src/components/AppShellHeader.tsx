@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell, Monitor, Moon, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useAppShell } from "@/components/AppShellContext";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { useLocalColorScheme } from "@/hooks/use-local-color-scheme";
 import { resolveDeviceTheme } from "@/lib/uiAppearance";
+import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
 export function AppShellHeader({ title, leftSlot }: { title: string; leftSlot?: ReactNode }) {
   const { search, notifications, markAllRead } = useAppShell();
   const { appearance, activeDevice } = useUiAppearance();
+  const { mode: colorMode, setMode: setColorMode } = useLocalColorScheme();
   const headerStyle = resolveDeviceTheme(appearance, activeDevice).global.header;
   const [openNotifs, setOpenNotifs] = useState(false);
   const [visible, setVisible] = useState(true);
@@ -51,6 +54,42 @@ export function AppShellHeader({ title, leftSlot }: { title: string; leftSlot?: 
         ) : (
           <div className="flex-1" />
         )}
+        <div
+          className="flex h-7 shrink-0 items-center rounded-full border border-black bg-muted/40 p-0.5 dark:border-white"
+          role="group"
+          aria-label="Color scheme"
+        >
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+              colorMode === "dark"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={colorMode === "dark"}
+            aria-label="Dark mode"
+            title="Dark"
+            onClick={() => setColorMode("dark")}
+          >
+            <Moon className="h-3 w-3" />
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors",
+              colorMode === "system"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+            aria-pressed={colorMode === "system"}
+            aria-label="System mode"
+            title="System"
+            onClick={() => setColorMode("system")}
+          >
+            <Monitor className="h-3 w-3" />
+          </button>
+        </div>
         <div className="relative">
           <Button
             variant="ghost"

@@ -29,6 +29,7 @@ import {
   type StoryDialogWidth,
   type HeadingSlidesAppearance,
   type ConceptStudentUiAppearance,
+  type ConceptAdminPreviewAppearance,
   type RichEditorAppearance,
   type UiAppearance,
 } from "@/lib/uiAppearance";
@@ -48,6 +49,11 @@ import {
   RichEditorLivePreview,
   StoryLivePreview,
 } from "@/components/AppearanceLivePreviews";
+import {
+  appearanceResetLabel,
+  resetAppearanceSection,
+  type AppearanceTab,
+} from "@/lib/appearanceReset";
 import {
   GUIDE_CONCEPT,
   GUIDE_HEADING_SLIDES,
@@ -184,11 +190,11 @@ export default function AdminAppearance() {
     editDevice,
     setEditDevice,
     save,
-    reset,
   } = useUiAppearance();
   const [draft, setDraft] = useState<UiAppearance | null>(null);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [activeTab, setActiveTab] = useState<AppearanceTab>("global");
   const [landingSection, setLandingSection] = useState<
     "colors" | "nav" | "hero" | "featured" | "courses" | "about" | "faq" | "footer"
   >("colors");
@@ -327,6 +333,7 @@ export default function AdminAppearance() {
   const hs = theme.headingSlides;
   const re = theme.richEditor;
   const csu = theme.conceptStudentUi;
+  const cap = theme.conceptAdminPreview;
 
   const updateProgressPlan = <K extends keyof ProgressPlanAppearance>(key: K, value: ProgressPlanAppearance[K]) => {
     commit({ ...theme, progressPlan: { ...theme.progressPlan, [key]: value } });
@@ -341,6 +348,56 @@ export default function AdminAppearance() {
     value: ConceptStudentUiAppearance[K],
   ) => {
     commit({ ...theme, conceptStudentUi: { ...theme.conceptStudentUi, [key]: value } });
+  };
+
+  const updateConceptAdminPreview = <K extends keyof ConceptAdminPreviewAppearance>(
+    key: K,
+    value: ConceptAdminPreviewAppearance[K],
+  ) => {
+    commit({ ...theme, conceptAdminPreview: { ...theme.conceptAdminPreview, [key]: value } });
+  };
+
+  const applyConceptAdminPreviewTo = (targets: DeviceKey[]) => {
+    const slidesKey: keyof ConceptAdminPreviewAppearance =
+      editDevice === "mobile"
+        ? "showHeadingSlidesOnMobile"
+        : editDevice === "tablet"
+          ? "showHeadingSlidesOnTablet"
+          : "showHeadingSlidesOnDesktop";
+    const previewKey: keyof ConceptAdminPreviewAppearance =
+      editDevice === "mobile"
+        ? "showPreviewOnMobile"
+        : editDevice === "tablet"
+          ? "showPreviewOnTablet"
+          : "showPreviewOnDesktop";
+    const slidesValue = cap[slidesKey];
+    const previewValue = cap[previewKey];
+    let next = theme;
+    for (const target of targets) {
+      const targetSlidesKey: keyof ConceptAdminPreviewAppearance =
+        target === "mobile"
+          ? "showHeadingSlidesOnMobile"
+          : target === "tablet"
+            ? "showHeadingSlidesOnTablet"
+            : "showHeadingSlidesOnDesktop";
+      const targetPreviewKey: keyof ConceptAdminPreviewAppearance =
+        target === "mobile"
+          ? "showPreviewOnMobile"
+          : target === "tablet"
+            ? "showPreviewOnTablet"
+            : "showPreviewOnDesktop";
+      next = {
+        ...next,
+        conceptAdminPreview: {
+          ...next.conceptAdminPreview,
+          [targetSlidesKey]: slidesValue,
+          [targetPreviewKey]: previewValue,
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Admin preview settings applied to ${labels} (unsaved)`);
   };
 
   const updateProgressStep = (id: 1 | 2 | 3 | 4, patch: Partial<ProgressStepConfig>) => {
@@ -594,18 +651,34 @@ export default function AdminAppearance() {
     }
   };
 
-  const handleReset = async () => {
+  const handleResetSection = () => {
+    if (activeTab === "preview") {
+      toast.message("Live preview tab has nothing to reset");
+      return;
+    }
     setResetting(true);
     try {
-      await reset();
-      setDraft(null);
-      toast.success("Reset to defaults");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Reset failed");
+      const scope = {
+        tab: activeTab,
+        landingSection: activeTab === "landing" ? landingSection : undefined,
+        progressSection: activeTab === "progress" ? progressSection : undefined,
+      };
+      const next = resetAppearanceSection(theme, scope, editDevice);
+      commit(next);
+      toast.success(`${appearanceResetLabel(scope, editDevice)} reset to defaults (unsaved)`);
     } finally {
       setResetting(false);
     }
   };
+
+  const resetSectionLabel = appearanceResetLabel(
+    {
+      tab: activeTab,
+      landingSection: activeTab === "landing" ? landingSection : undefined,
+      progressSection: activeTab === "progress" ? progressSection : undefined,
+    },
+    editDevice,
+  );
 
   const g = deviceTheme.global;
   const sb = deviceTheme.global.sidebar;
@@ -654,9 +727,15 @@ export default function AdminAppearance() {
               Discard
             </Button>
           ) : null}
-          <Button type="button" variant="outline" size="sm" onClick={() => void handleReset()} disabled={resetting}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleResetSection}
+            disabled={resetting || activeTab === "preview"}
+          >
             {resetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-            Reset defaults
+            Reset · {resetSectionLabel}
           </Button>
           <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving || !dirty}>
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -711,7 +790,7 @@ export default function AdminAppearance() {
           </Button>
         </div>
 
-        <Tabs defaultValue="global">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AppearanceTab)}>
           <TabsList className="flex h-auto flex-wrap gap-1">
             <TabsTrigger value="global">{deviceMeta[editDevice].label} · Website UI</TabsTrigger>
             <TabsTrigger value="concept">{deviceMeta[editDevice].label} · Concept details</TabsTrigger>
@@ -882,6 +961,80 @@ export default function AdminAppearance() {
               />
             </div>
 
+            <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Global motion</p>
+              <p className="text-[11px] text-muted-foreground">
+                পুরো ওয়েবসাইটের master animation। Duration/easing sidebar, featured card, why carousel ইত্যাদি
+                সব token-এ remap হয় — local section override হয় না। শুধু opacity/transform/colors (GPU) — width
+                animate নেই। Performance → Reduce motion চালু থাকলে এটাও বন্ধ।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Enable global motion"
+                  checked={g.motionEnabled}
+                  onChange={(v) => updateGlobal("motionEnabled", v)}
+                  hint="Off = সব transition instant (0ms)"
+                />
+                <NumberField
+                  label="Duration (ms)"
+                  value={g.motionDurationMs}
+                  min={0}
+                  max={600}
+                  step={20}
+                  onChange={(n) => updateGlobal("motionDurationMs", n)}
+                  hint="150–220 recommended"
+                />
+                <Field label="Easing">
+                  <Select
+                    value={g.motionEasing}
+                    onValueChange={(v) => updateGlobal("motionEasing", v as typeof g.motionEasing)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ease-out">Ease out</SelectItem>
+                      <SelectItem value="ease">Ease</SelectItem>
+                      <SelectItem value="ease-in-out">Ease in-out</SelectItem>
+                      <SelectItem value="linear">Linear</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <BoolField
+                  label="Interactive hover / press"
+                  checked={g.motionInteractive}
+                  onChange={(v) => updateGlobal("motionInteractive", v)}
+                  hint="Buttons, links, cards — transform only"
+                />
+                <NumberField
+                  label="Hover lift (px)"
+                  value={g.motionHoverLiftPx}
+                  min={0}
+                  max={12}
+                  onChange={(n) => updateGlobal("motionHoverLiftPx", n)}
+                  hint="0 = no lift"
+                />
+                <NumberField
+                  label="Hover scale"
+                  value={g.motionHoverScale}
+                  min={1}
+                  max={1.15}
+                  step={0.01}
+                  onChange={(n) => updateGlobal("motionHoverScale", n)}
+                  hint="1 = no grow"
+                />
+                <NumberField
+                  label="Press scale"
+                  value={g.motionPressScale}
+                  min={0.9}
+                  max={1}
+                  step={0.01}
+                  onChange={(n) => updateGlobal("motionPressScale", n)}
+                  hint="Click shrink"
+                />
+              </div>
+            </div>
+
             <div className="space-y-3 rounded-lg border p-4">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <p className="text-xs font-semibold uppercase text-muted-foreground">Sidebar style</p>
@@ -933,6 +1086,128 @@ export default function AdminAppearance() {
                 <NumberField label="Menu icon gap (px)" value={sb.menuGapPx} min={4} max={16} onChange={(n) => updateSidebar("menuGapPx", n)} />
                 <NumberField label="Active item font weight" value={sb.activeFontWeight} min={400} max={800} step={100} onChange={(n) => updateSidebar("activeFontWeight", n)} />
                 <NumberField label="Muted subtitle opacity" value={sb.mutedOpacity} min={0.2} max={1} step={0.05} onChange={(n) => updateSidebar("mutedOpacity", n)} />
+              </div>
+              <div className="space-y-3 rounded-md border border-dashed bg-muted/10 p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Menu interaction</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Transform-only (GPU) — sidebar width instant; menu click/hover-এ translate + scale। Lag হওয়ার কারণ width animation নেই।
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <BoolField
+                    label="Enable menu transform"
+                    checked={sb.menuTransformEnabled}
+                    onChange={(v) => updateSidebar("menuTransformEnabled", v)}
+                    hint="Hover, active, press effects"
+                  />
+                  <NumberField
+                    label="Duration (ms)"
+                    value={sb.menuTransitionDurationMs}
+                    min={0}
+                    max={400}
+                    step={20}
+                    onChange={(n) => updateSidebar("menuTransitionDurationMs", n)}
+                  />
+                  <NumberField
+                    label="Hover slide (px)"
+                    value={sb.menuHoverSlidePx}
+                    min={0}
+                    max={12}
+                    onChange={(n) => updateSidebar("menuHoverSlidePx", n)}
+                    hint="translateX on hover"
+                  />
+                  <NumberField
+                    label="Active slide (px)"
+                    value={sb.menuActiveSlidePx}
+                    min={0}
+                    max={16}
+                    onChange={(n) => updateSidebar("menuActiveSlidePx", n)}
+                    hint="translateX on current route"
+                  />
+                  <NumberField
+                    label="Press scale"
+                    value={sb.menuPressScale}
+                    min={0.94}
+                    max={1}
+                    step={0.01}
+                    onChange={(n) => updateSidebar("menuPressScale", n)}
+                    hint="1 = no shrink on click"
+                  />
+                </div>
+              </div>
+              <div className="space-y-3 rounded-md border border-dashed bg-muted/10 p-3">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Sidebar open / close</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Toggle ক্লিকে sidebar hide/open — আগে shadcn-এ hardcoded ছিল (width/transform 200ms linear)। এখন Appearance থেকে control;{" "}
+                  <code className="text-[10px]">sidebar.tsx</code>-এ transition class নেই।
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <BoolField
+                    label="Enable collapse transition"
+                    checked={sb.collapseTransitionEnabled}
+                    onChange={(v) => updateSidebar("collapseTransitionEnabled", v)}
+                    hint="Master — toggle open/hide animation"
+                  />
+                  <NumberField
+                    label="Duration (ms)"
+                    value={sb.collapseDurationMs}
+                    min={0}
+                    max={600}
+                    step={25}
+                    onChange={(n) => updateSidebar("collapseDurationMs", n)}
+                    hint="Original shadcn: 200"
+                  />
+                  <Field label="Easing" hint="Original shadcn: linear">
+                    <Select
+                      value={sb.collapseEasing}
+                      onValueChange={(v) => updateSidebar("collapseEasing", v as SidebarAppearance["collapseEasing"])}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="linear">Linear</SelectItem>
+                        <SelectItem value="ease">Ease</SelectItem>
+                        <SelectItem value="ease-in-out">Ease in-out</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <BoolField
+                    label="Animate width"
+                    checked={sb.collapseAnimateWidth}
+                    onChange={(v) => updateSidebar("collapseAnimateWidth", v)}
+                    hint="Spacer + panel — original shadcn; lag হতে পারে"
+                  />
+                  <BoolField
+                    label="Animate transform"
+                    checked={sb.collapseAnimateTransform}
+                    onChange={(v) => updateSidebar("collapseAnimateTransform", v)}
+                    hint="Offcanvas slide (translateX)"
+                  />
+                  <BoolField
+                    label="Icon mode inner slide"
+                    checked={sb.collapseIconInnerSlide}
+                    onChange={(v) => updateSidebar("collapseIconInnerSlide", v)}
+                    hint="Transform-only icon collapse (lag-free)"
+                  />
+                  <BoolField
+                    label="Menu size on collapse"
+                    checked={sb.menuCollapseSizeTransition}
+                    onChange={(v) => updateSidebar("menuCollapseSizeTransition", v)}
+                    hint="width/height/padding — original menu button"
+                  />
+                  <BoolField
+                    label="Group label fade"
+                    checked={sb.groupLabelTransition}
+                    onChange={(v) => updateSidebar("groupLabelTransition", v)}
+                    hint="Opacity + margin on collapse"
+                  />
+                  <BoolField
+                    label="Edge rail transition"
+                    checked={sb.railTransition}
+                    onChange={(v) => updateSidebar("railTransition", v)}
+                    hint="Original transition-all on rail"
+                  />
+                </div>
               </div>
               <BoolField
                 label="Brand bottom border"
@@ -1067,7 +1342,24 @@ export default function AdminAppearance() {
               <NumberField label="List indent (px)" value={c.listIndentPx} min={8} max={40} onChange={(n) => updateCd("listIndentPx", n)} />
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <ColorField label="Paragraph color" value={c.paragraphColor} onChange={(v) => updateCd("paragraphColor", v)} />
+              <ColorField
+                label="Background color"
+                value={c.backgroundColor?.trim() || "#ffffff"}
+                onChange={(v) => updateCd("backgroundColor", v)}
+                hint="Concept detail body bg। খালি/transparent = পেজের bg।"
+              />
+              <ColorField
+                label="Unset text color"
+                value={c.unsetTextColor || "#ffffff"}
+                onChange={(v) => updateCd("unsetTextColor", v)}
+                hint="Textbox-এ color না দিলে এই রঙ (ডিফল্ট white)। Dark mode-এ গাঢ় paragraph/heading হলেও এটা।"
+              />
+              <ColorField
+                label="Paragraph color"
+                value={c.paragraphColor}
+                onChange={(v) => updateCd("paragraphColor", v)}
+                hint="খালি রাখলে Unset text color"
+              />
               <ColorField label="H1 color" value={c.heading1Color} onChange={(v) => updateCd("heading1Color", v)} />
               <ColorField label="H2 color" value={c.heading2Color} onChange={(v) => updateCd("heading2Color", v)} />
               <ColorField label="H3 color" value={c.heading3Color} onChange={(v) => updateCd("heading3Color", v)} />
@@ -1128,8 +1420,79 @@ export default function AdminAppearance() {
               </div>
             </div>
 
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Admin edit preview</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyConceptAdminPreviewTo(["mobile"])}>
+                    Set to Phone
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyConceptAdminPreviewTo(["tablet"])}>
+                    Set to Tablet
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyConceptAdminPreviewTo(["desktop"])}>
+                    Set to Computer
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyConceptAdminPreviewTo(["mobile", "tablet", "desktop"])}
+                  >
+                    Set to all
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Suggestions → Details edit panel। Browser width অনুযায়ী Phone/Tablet/Computer detect হয়। Preview column বন্ধ = শুধু Edit; চালু + slides = HeadingSlideReader + progress (Heading slides tab)।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Phone — show preview column"
+                  checked={cap.showPreviewOnMobile}
+                  onChange={(v) => updateConceptAdminPreview("showPreviewOnMobile", v)}
+                  hint="Viewport &lt; 768px"
+                />
+                <BoolField
+                  label="Phone — heading slides in preview"
+                  checked={cap.showHeadingSlidesOnMobile}
+                  onChange={(v) => updateConceptAdminPreview("showHeadingSlidesOnMobile", v)}
+                  hint="Preview column-এ slides + progress"
+                />
+                <BoolField
+                  label="Tablet — show preview column"
+                  checked={cap.showPreviewOnTablet}
+                  onChange={(v) => updateConceptAdminPreview("showPreviewOnTablet", v)}
+                  hint="768–1023px"
+                />
+                <BoolField
+                  label="Tablet — heading slides in preview"
+                  checked={cap.showHeadingSlidesOnTablet}
+                  onChange={(v) => updateConceptAdminPreview("showHeadingSlidesOnTablet", v)}
+                  hint="Preview column-এ slides + progress"
+                />
+                <BoolField
+                  label="Computer — show preview column"
+                  checked={cap.showPreviewOnDesktop}
+                  onChange={(v) => updateConceptAdminPreview("showPreviewOnDesktop", v)}
+                  hint="≥ 1024px"
+                />
+                <BoolField
+                  label="Computer — heading slides in preview"
+                  checked={cap.showHeadingSlidesOnDesktop}
+                  onChange={(v) => updateConceptAdminPreview("showHeadingSlidesOnDesktop", v)}
+                  hint="Preview column-এ slides + progress"
+                />
+              </div>
+            </div>
+
             <AppearancePreviewPanel title="Live preview · Concept details">
-              <ConceptDetailsLivePreview studentUi={csu} />
+              <ConceptDetailsLivePreview
+                studentUi={csu}
+                adminPreview={cap}
+                headingSlides={hs}
+                previewDevice={editDevice}
+              />
             </AppearancePreviewPanel>
           </TabsContent>
 
@@ -1786,83 +2149,173 @@ export default function AdminAppearance() {
             {landingSection === "featured" ? (
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Featured Track card — light by default (shine/tilt off) to avoid lag. Prefer Fade + short
-                  transition. Shine &amp; 3D tilt are heavier; enable only if needed.
+                  Featured Track card animation — শুধু opacity/transform (GPU)। Shine ও 3D tilt heavier; default off।
+                  Lag এড়াতে: Fade + short duration, shine/tilt বন্ধ রাখুন।
                 </p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <BoolField
-                    label="Autoplay slides"
-                    checked={lp.featuredAutoplay}
-                    onChange={(v) => updateLandingPage("featuredAutoplay", v)}
-                    hint="Rotate featured courses automatically"
-                  />
-                  <NumberField
-                    label="Slide interval (seconds)"
-                    value={lp.featuredIntervalSec}
-                    min={1}
-                    max={30}
-                    step={0.5}
-                    onChange={(n) => updateLandingPage("featuredIntervalSec", n)}
-                    hint="How long each course stays before switching"
-                  />
-                  <NumberField
-                    label="Transition duration (seconds)"
-                    value={lp.featuredTransitionSec}
-                    min={0.1}
-                    max={3}
-                    step={0.05}
-                    onChange={(n) => updateLandingPage("featuredTransitionSec", n)}
-                    hint="Fade / slide / scale animation length"
-                  />
-                  <Field label="Transition style">
-                    <Select
-                      value={lp.featuredTransition}
-                      onValueChange={(v) =>
-                        updateLandingPage("featuredTransition", v as "fade" | "slide" | "scale")
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="fade">Fade</SelectItem>
-                        <SelectItem value="slide">Slide</SelectItem>
-                        <SelectItem value="scale">Scale</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </Field>
-                  <NumberField
-                    label="Max slides"
-                    value={lp.featuredMaxSlides}
-                    min={1}
-                    max={8}
-                    step={1}
-                    onChange={(n) => updateLandingPage("featuredMaxSlides", Math.round(n))}
-                  />
-                  <BoolField
-                    label="Shine animation"
-                    checked={lp.featuredShineEnabled}
-                    onChange={(v) => updateLandingPage("featuredShineEnabled", v)}
-                  />
-                  <NumberField
-                    label="Shine loop (seconds)"
-                    value={lp.featuredShineSec}
-                    min={1}
-                    max={20}
-                    step={0.5}
-                    onChange={(n) => updateLandingPage("featuredShineSec", n)}
-                    hint="One full shine sweep duration"
-                  />
-                  <BoolField
-                    label="3D tilt"
-                    checked={lp.featuredTiltEnabled}
-                    onChange={(v) => updateLandingPage("featuredTiltEnabled", v)}
-                  />
-                  <BoolField
-                    label="Hover lift"
-                    checked={lp.featuredHoverLift}
-                    onChange={(v) => updateLandingPage("featuredHoverLift", v)}
-                  />
+
+                <div className="space-y-3 rounded-md border border-dashed bg-muted/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Slide rotation</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <BoolField
+                      label="Autoplay slides"
+                      checked={lp.featuredAutoplay}
+                      onChange={(v) => updateLandingPage("featuredAutoplay", v)}
+                      hint="Rotate featured courses automatically"
+                    />
+                    <BoolField
+                      label="Pause autoplay on hover"
+                      checked={lp.featuredPauseOnHover}
+                      onChange={(v) => updateLandingPage("featuredPauseOnHover", v)}
+                      hint="Pointer over card = timer pauses"
+                    />
+                    <NumberField
+                      label="Slide interval (seconds)"
+                      value={lp.featuredIntervalSec}
+                      min={1}
+                      max={30}
+                      step={0.5}
+                      onChange={(n) => updateLandingPage("featuredIntervalSec", n)}
+                      hint="How long each course stays"
+                    />
+                    <NumberField
+                      label="Max slides"
+                      value={lp.featuredMaxSlides}
+                      min={1}
+                      max={8}
+                      step={1}
+                      onChange={(n) => updateLandingPage("featuredMaxSlides", Math.round(n))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border border-dashed bg-muted/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Slide transition</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Content enter animation when slide changes — fade/slide/scale use GPU only (no layout reflow)।
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <BoolField
+                      label="Enable slide transition"
+                      checked={lp.featuredTransitionEnabled}
+                      onChange={(v) => updateLandingPage("featuredTransitionEnabled", v)}
+                      hint="Off = instant content swap"
+                    />
+                    <Field label="Transition style" hint="Fade = lightest; None = no anim">
+                      <Select
+                        value={lp.featuredTransition}
+                        onValueChange={(v) =>
+                          updateLandingPage(
+                            "featuredTransition",
+                            v as LandingPageAppearance["featuredTransition"],
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="fade">Fade (opacity)</SelectItem>
+                          <SelectItem value="slide">Slide (translateX)</SelectItem>
+                          <SelectItem value="scale">Scale</SelectItem>
+                          <SelectItem value="none">None</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <NumberField
+                      label="Duration (seconds)"
+                      value={lp.featuredTransitionSec}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      onChange={(n) => updateLandingPage("featuredTransitionSec", n)}
+                      hint="0.2–0.35 recommended"
+                    />
+                    <Field label="Easing">
+                      <Select
+                        value={lp.featuredEasing}
+                        onValueChange={(v) =>
+                          updateLandingPage("featuredEasing", v as LandingPageAppearance["featuredEasing"])
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ease-out">Ease out</SelectItem>
+                          <SelectItem value="ease">Ease</SelectItem>
+                          <SelectItem value="ease-in-out">Ease in-out</SelectItem>
+                          <SelectItem value="linear">Linear</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </Field>
+                    <NumberField
+                      label="Slide distance (px)"
+                      value={lp.featuredSlideDistancePx}
+                      min={0}
+                      max={48}
+                      onChange={(n) => updateLandingPage("featuredSlideDistancePx", n)}
+                      hint="Only for Slide style"
+                    />
+                    <NumberField
+                      label="Scale from"
+                      value={lp.featuredScaleFrom}
+                      min={0.9}
+                      max={1}
+                      step={0.01}
+                      onChange={(n) => updateLandingPage("featuredScaleFrom", n)}
+                      hint="Only for Scale style (0.98 = subtle)"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border border-dashed bg-muted/10 p-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Card effects</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Hover lift = transform only (safe)। Shine = continuous paint; 3D tilt = perspective — both heavier।
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <BoolField
+                      label="Hover lift"
+                      checked={lp.featuredHoverLift}
+                      onChange={(v) => updateLandingPage("featuredHoverLift", v)}
+                      hint="Card rises on hover (GPU)"
+                    />
+                    <NumberField
+                      label="Hover lift (px)"
+                      value={lp.featuredHoverLiftPx}
+                      min={0}
+                      max={16}
+                      onChange={(n) => updateLandingPage("featuredHoverLiftPx", n)}
+                    />
+                    <NumberField
+                      label="Hover duration (ms)"
+                      value={lp.featuredHoverDurationMs}
+                      min={0}
+                      max={600}
+                      step={25}
+                      onChange={(n) => updateLandingPage("featuredHoverDurationMs", n)}
+                    />
+                    <BoolField
+                      label="Shine animation"
+                      checked={lp.featuredShineEnabled}
+                      onChange={(v) => updateLandingPage("featuredShineEnabled", v)}
+                      hint="May cost FPS on low-end devices"
+                    />
+                    <NumberField
+                      label="Shine loop (seconds)"
+                      value={lp.featuredShineSec}
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      onChange={(n) => updateLandingPage("featuredShineSec", n)}
+                    />
+                    <BoolField
+                      label="3D tilt"
+                      checked={lp.featuredTiltEnabled}
+                      onChange={(v) => updateLandingPage("featuredTiltEnabled", v)}
+                      hint="Heavier — prefer off"
+                    />
+                  </div>
                 </div>
               </div>
             ) : null}

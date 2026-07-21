@@ -4,6 +4,7 @@
  */
 
 import { CONCEPT_STEPS } from "@/lib/progressPlan";
+import { getLocalColorScheme, resolveLocalIsDark } from "@/lib/colorSchemeLocal";
 
 export type DeviceKey = "mobile" | "tablet" | "desktop";
 
@@ -58,6 +59,31 @@ export type SidebarAppearance = {
   menuGapPx: number;
   activeFontWeight: number;
   mutedOpacity: number;
+  /** Menu click/hover — transform only (GPU; no width animation / layout reflow) */
+  menuTransformEnabled: boolean;
+  menuTransitionDurationMs: number;
+  /** Hover slide (translateX) */
+  menuHoverSlidePx: number;
+  /** Active route slide (translateX) */
+  menuActiveSlidePx: number;
+  /** Press scale on :active (0.94–1) */
+  menuPressScale: number;
+  /** Toggle open/hide — original shadcn shell transitions (Appearance-controlled) */
+  collapseTransitionEnabled: boolean;
+  collapseDurationMs: number;
+  collapseEasing: "linear" | "ease" | "ease-in-out";
+  /** Spacer + panel width (original shadcn; may lag on large pages) */
+  collapseAnimateWidth: boolean;
+  /** Panel transform e.g. offcanvas slide */
+  collapseAnimateTransform: boolean;
+  /** Icon mode: inner content slide via transform (lag-free) */
+  collapseIconInnerSlide: boolean;
+  /** Menu width/height/padding on icon collapse */
+  menuCollapseSizeTransition: boolean;
+  /** Group label opacity/margin on collapse */
+  groupLabelTransition: boolean;
+  /** Edge rail transition-all */
+  railTransition: boolean;
 };
 
 /** Top app header bar — search, title, notifications */
@@ -116,6 +142,19 @@ export type GlobalAppearance = {
   sectionGapPx: number;
   /** Sidebar labels */
   sidebarLabels: SidebarLabels;
+  /**
+   * Site-wide motion master (Website UI).
+   * When enabled, remaps all feature duration/easing tokens to these values so local sections cannot override.
+   * GPU-safe only (transform/opacity/colors) — no width/height layout animation.
+   */
+  motionEnabled: boolean;
+  motionDurationMs: number;
+  motionEasing: "linear" | "ease" | "ease-out" | "ease-in-out";
+  /** Buttons / links / cards hover+press (transform only) */
+  motionInteractive: boolean;
+  motionHoverLiftPx: number;
+  motionHoverScale: number;
+  motionPressScale: number;
 };
 
 export type ConceptDetailsAppearance = {
@@ -131,6 +170,13 @@ export type ConceptDetailsAppearance = {
   heading2Color: string;
   heading3Color: string;
   paragraphColor: string;
+  /**
+   * Textbox/HTML-এ text color না দিলে (বা dark mode-এ গাঢ় Appearance color) এই রঙ।
+   * Appearance থেকে manage — default white.
+   */
+  unsetTextColor: string;
+  /** Concept detail read body background — empty = transparent */
+  backgroundColor: string;
   boldWeight: number;
   linkColor: string;
   bulletColor: string;
@@ -157,6 +203,18 @@ export type ConceptStudentUiAppearance = {
   showPracticeButton: boolean;
   /** My Suggestions concept card */
   showStudyAndPracticeButton: boolean;
+};
+
+/** Admin concept edit preview (Suggestions → Details) — shared, per-device toggles */
+export type ConceptAdminPreviewAppearance = {
+  /** Phone: show Preview column beside Edit */
+  showPreviewOnMobile: boolean;
+  showPreviewOnTablet: boolean;
+  showPreviewOnDesktop: boolean;
+  /** Phone: admin edit preview panel uses heading slides + progress */
+  showHeadingSlidesOnMobile: boolean;
+  showHeadingSlidesOnTablet: boolean;
+  showHeadingSlidesOnDesktop: boolean;
 };
 
 /** Story-based learning modal + content styling (per device) */
@@ -316,18 +374,31 @@ export type LandingPageAppearance = {
   heroFixedOverlayHeightPercent: number;
   /** Distance from top of viewport (vh %) — default 30 centers a 40% band */
   heroFixedOverlayTopPercent: number;
-  /** Featured track card — advanced animation options */
+  /** Featured track card — lag-free animation (opacity/transform only) */
   featuredAutoplay: boolean;
   /** Seconds between slide changes */
   featuredIntervalSec: number;
-  /** Seconds for content enter/exit transition */
+  /** Pause autoplay while pointer is over the card */
+  featuredPauseOnHover: boolean;
+  /** Master: slide content enter animation */
+  featuredTransitionEnabled: boolean;
+  /** Seconds for content enter transition */
   featuredTransitionSec: number;
-  featuredTransition: "fade" | "slide" | "scale";
+  featuredTransition: "fade" | "slide" | "scale" | "none";
+  featuredEasing: "linear" | "ease" | "ease-out" | "ease-in-out";
+  /** Slide style: translateX distance (GPU) */
+  featuredSlideDistancePx: number;
+  /** Scale style: starting scale (0.9–1) */
+  featuredScaleFrom: number;
   featuredShineEnabled: boolean;
   /** Seconds for one shine loop */
   featuredShineSec: number;
   featuredTiltEnabled: boolean;
   featuredHoverLift: boolean;
+  /** Hover lift distance in px (transform only) */
+  featuredHoverLiftPx: number;
+  /** Hover transform transition ms */
+  featuredHoverDurationMs: number;
   featuredMaxSlides: number;
   coursesTitle: string;
   coursesSubtitle: string;
@@ -490,6 +561,8 @@ export type UiAppearance = {
   headingSlides: HeadingSlidesAppearance;
   /** Student concept details actions + key points visibility */
   conceptStudentUi: ConceptStudentUiAppearance;
+  /** Admin Suggestions/Details edit preview panel */
+  conceptAdminPreview: ConceptAdminPreviewAppearance;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -547,6 +620,20 @@ function defaultSidebar(overrides: Partial<SidebarAppearance> = {}): SidebarAppe
     menuGapPx: 8,
     activeFontWeight: 500,
     mutedOpacity: 0.6,
+    menuTransformEnabled: true,
+    menuTransitionDurationMs: 180,
+    menuHoverSlidePx: 2,
+    menuActiveSlidePx: 4,
+    menuPressScale: 0.98,
+    collapseTransitionEnabled: true,
+    collapseDurationMs: 200,
+    collapseEasing: "linear",
+    collapseAnimateWidth: true,
+    collapseAnimateTransform: true,
+    collapseIconInnerSlide: false,
+    menuCollapseSizeTransition: true,
+    groupLabelTransition: true,
+    railTransition: true,
     ...overrides,
   };
 }
@@ -589,6 +676,21 @@ function mergeSidebar(
     menuGapPx: num(p.menuGapPx, base.menuGapPx, 4, 16),
     activeFontWeight: num(p.activeFontWeight, base.activeFontWeight, 400, 800),
     mutedOpacity: num(p.mutedOpacity, base.mutedOpacity, 0.2, 1),
+    menuTransformEnabled: bool(p.menuTransformEnabled, base.menuTransformEnabled),
+    menuTransitionDurationMs: num(p.menuTransitionDurationMs, base.menuTransitionDurationMs, 0, 400),
+    menuHoverSlidePx: num(p.menuHoverSlidePx, base.menuHoverSlidePx, 0, 12),
+    menuActiveSlidePx: num(p.menuActiveSlidePx, base.menuActiveSlidePx, 0, 16),
+    menuPressScale: num(p.menuPressScale, base.menuPressScale, 0.94, 1),
+    collapseTransitionEnabled: bool(p.collapseTransitionEnabled, base.collapseTransitionEnabled),
+    collapseDurationMs: num(p.collapseDurationMs, base.collapseDurationMs, 0, 600),
+    collapseEasing:
+      p.collapseEasing === "ease" || p.collapseEasing === "ease-in-out" ? p.collapseEasing : base.collapseEasing,
+    collapseAnimateWidth: bool(p.collapseAnimateWidth, base.collapseAnimateWidth),
+    collapseAnimateTransform: bool(p.collapseAnimateTransform, base.collapseAnimateTransform),
+    collapseIconInnerSlide: bool(p.collapseIconInnerSlide, base.collapseIconInnerSlide),
+    menuCollapseSizeTransition: bool(p.menuCollapseSizeTransition, base.menuCollapseSizeTransition),
+    groupLabelTransition: bool(p.groupLabelTransition, base.groupLabelTransition),
+    railTransition: bool(p.railTransition, base.railTransition),
   };
   if (legacy?.sidebarBgHsl) merged.backgroundHsl = legacy.sidebarBgHsl;
   if (legacy?.sidebarFgHsl) merged.foregroundHsl = legacy.sidebarFgHsl;
@@ -676,6 +778,13 @@ function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppeara
     pagePaddingPx: 24,
     sectionGapPx: 16,
     sidebarLabels: defaultSidebarLabels(),
+    motionEnabled: true,
+    motionDurationMs: 180,
+    motionEasing: "ease-out",
+    motionInteractive: true,
+    motionHoverLiftPx: 0,
+    motionHoverScale: 1,
+    motionPressScale: 0.98,
     ...overrides,
   };
 }
@@ -694,6 +803,8 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     heading2Color: "#0f172a",
     heading3Color: "#1e293b",
     paragraphColor: "#1e293b",
+    unsetTextColor: "#ffffff",
+    backgroundColor: "",
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
@@ -1109,12 +1220,19 @@ export function defaultLandingPage(overrides: Partial<LandingPageAppearance> = {
     heroFixedOverlayTopPercent: 30,
     featuredAutoplay: true,
     featuredIntervalSec: 5,
+    featuredPauseOnHover: true,
+    featuredTransitionEnabled: true,
     featuredTransitionSec: 0.3,
     featuredTransition: "fade",
+    featuredEasing: "ease-out",
+    featuredSlideDistancePx: 14,
+    featuredScaleFrom: 0.98,
     featuredShineEnabled: false,
     featuredShineSec: 8,
     featuredTiltEnabled: false,
     featuredHoverLift: true,
+    featuredHoverLiftPx: 3,
+    featuredHoverDurationMs: 250,
     featuredMaxSlides: 4,
     coursesTitle: "আপনার কাঙ্ক্ষিত কোর্সটি খুঁজে নিন",
     coursesSubtitle: "নিচের ক্যাটাগরিতে প্রবেশ করে আপনার পছন্দের কোর্সে এনরোল করুন",
@@ -1235,9 +1353,18 @@ export function mergeLandingPage(base: LandingPageAppearance, patch: unknown): L
   if (
     p.featuredTransition === "fade" ||
     p.featuredTransition === "slide" ||
-    p.featuredTransition === "scale"
+    p.featuredTransition === "scale" ||
+    p.featuredTransition === "none"
   ) {
     next.featuredTransition = p.featuredTransition;
+  }
+  if (
+    p.featuredEasing === "linear" ||
+    p.featuredEasing === "ease" ||
+    p.featuredEasing === "ease-out" ||
+    p.featuredEasing === "ease-in-out"
+  ) {
+    next.featuredEasing = p.featuredEasing;
   }
   if (Array.isArray(p.whyItems)) {
     next.whyItems = p.whyItems
@@ -1271,7 +1398,12 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
     "--pg-course-routine-bg": lp.courseRoutineBg,
     "--pg-faq-card-bg": lp.faqCardBg,
     "--pg-featured-shine-sec": `${Math.max(1, lp.featuredShineSec || 6)}s`,
-    "--pg-featured-transition-sec": `${Math.max(0.1, lp.featuredTransitionSec || 0.45)}s`,
+    "--pg-featured-transition-sec": `${Math.max(0, lp.featuredTransitionSec || 0.3)}s`,
+    "--pg-featured-easing": lp.featuredEasing || "ease-out",
+    "--pg-featured-slide-px": `${Math.max(0, lp.featuredSlideDistancePx ?? 14)}px`,
+    "--pg-featured-scale-from": String(Math.min(1, Math.max(0.9, lp.featuredScaleFrom ?? 0.98))),
+    "--pg-featured-hover-lift-px": `${Math.max(0, lp.featuredHoverLiftPx ?? 3)}px`,
+    "--pg-featured-hover-duration": `${Math.max(0, lp.featuredHoverDurationMs ?? 250)}ms`,
     "--pg-why-transition-sec": `${Math.max(0.15, lp.whyTransitionSec || 0.55)}s`,
     "--pg-fixed-overlay-display": lp.heroFixedOverlayEnabled ? "block" : "none",
     "--pg-fixed-overlay-bg": lp.heroFixedOverlayColor || "#000000",
@@ -1311,6 +1443,55 @@ export function mergeConceptStudentUi(
     showPracticeButton: bool(p.showPracticeButton, base.showPracticeButton),
     showStudyAndPracticeButton: bool(p.showStudyAndPracticeButton, base.showStudyAndPracticeButton),
   };
+}
+
+export function defaultConceptAdminPreview(
+  overrides: Partial<ConceptAdminPreviewAppearance> = {},
+): ConceptAdminPreviewAppearance {
+  return {
+    showPreviewOnMobile: true,
+    showPreviewOnTablet: true,
+    showPreviewOnDesktop: true,
+    showHeadingSlidesOnMobile: true,
+    showHeadingSlidesOnTablet: true,
+    showHeadingSlidesOnDesktop: true,
+    ...overrides,
+  };
+}
+
+export function mergeConceptAdminPreview(
+  base: ConceptAdminPreviewAppearance,
+  patch: unknown,
+): ConceptAdminPreviewAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<ConceptAdminPreviewAppearance>;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    showPreviewOnMobile: bool(p.showPreviewOnMobile, base.showPreviewOnMobile),
+    showPreviewOnTablet: bool(p.showPreviewOnTablet, base.showPreviewOnTablet),
+    showPreviewOnDesktop: bool(p.showPreviewOnDesktop, base.showPreviewOnDesktop),
+    showHeadingSlidesOnMobile: bool(p.showHeadingSlidesOnMobile, base.showHeadingSlidesOnMobile),
+    showHeadingSlidesOnTablet: bool(p.showHeadingSlidesOnTablet, base.showHeadingSlidesOnTablet),
+    showHeadingSlidesOnDesktop: bool(p.showHeadingSlidesOnDesktop, base.showHeadingSlidesOnDesktop),
+  };
+}
+
+export function conceptAdminPreviewPanelEnabled(
+  config: ConceptAdminPreviewAppearance,
+  device: DeviceKey,
+): boolean {
+  if (device === "mobile") return config.showPreviewOnMobile;
+  if (device === "tablet") return config.showPreviewOnTablet;
+  return config.showPreviewOnDesktop;
+}
+
+export function conceptAdminPreviewHeadingSlidesEnabled(
+  config: ConceptAdminPreviewAppearance,
+  device: DeviceKey,
+): boolean {
+  if (device === "mobile") return config.showHeadingSlidesOnMobile;
+  if (device === "tablet") return config.showHeadingSlidesOnTablet;
+  return config.showHeadingSlidesOnDesktop;
 }
 
 export function defaultRichEditor(overrides: Partial<RichEditorAppearance> = {}): RichEditorAppearance {
@@ -1450,6 +1631,7 @@ export function defaultUiAppearance(): UiAppearance {
     progressPlan: defaultProgressPlan(),
     headingSlides: defaultHeadingSlides(),
     conceptStudentUi: defaultConceptStudentUi(),
+    conceptAdminPreview: defaultConceptAdminPreview(),
   };
 }
 
@@ -1503,10 +1685,26 @@ export function mergeLandingFaq(base: LandingFaqAppearance, patch: unknown): Lan
 function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
   const p = (patch && typeof patch === "object" ? patch : {}) as Partial<DeviceAppearance>;
   const pg = (p.global && typeof p.global === "object" ? p.global : {}) as Partial<GlobalAppearance>;
+  const easing =
+    pg.motionEasing === "linear" ||
+    pg.motionEasing === "ease" ||
+    pg.motionEasing === "ease-out" ||
+    pg.motionEasing === "ease-in-out"
+      ? pg.motionEasing
+      : undefined;
+  const clamp = (v: unknown, fallback: number, min: number, max: number) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
   return {
     global: {
       ...base.global,
       ...pg,
+      ...(easing ? { motionEasing: easing } : {}),
+      motionDurationMs: clamp(pg.motionDurationMs, base.global.motionDurationMs, 0, 600),
+      motionHoverLiftPx: clamp(pg.motionHoverLiftPx, base.global.motionHoverLiftPx, 0, 12),
+      motionHoverScale: clamp(pg.motionHoverScale, base.global.motionHoverScale, 1, 1.15),
+      motionPressScale: clamp(pg.motionPressScale, base.global.motionPressScale, 0.9, 1),
       sidebarLabels: {
         ...base.global.sidebarLabels,
         ...((pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}) as Partial<SidebarLabels>),
@@ -1584,13 +1782,14 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
       allQuestions: { ...sharedDevice.allQuestions, listMaxWidthPx: 680 },
     },
     desktop: sharedDevice,
-    performance: { ...base.performance, ...performance },
+    performance: mergePerformance(base.performance, performance),
     richEditor: mergeRichEditor(base.richEditor, raw.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, raw.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, raw.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, raw.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, raw.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw.conceptStudentUi),
+    conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, raw.conceptAdminPreview),
   };
 }
 
@@ -1605,18 +1804,136 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
     mobile: mergeDevice(base.mobile, p.mobile),
     tablet: mergeDevice(base.tablet, p.tablet),
     desktop: mergeDevice(base.desktop, p.desktop),
-    performance: {
-      ...base.performance,
-      ...((p.performance && typeof p.performance === "object" ? p.performance : {}) as object),
-    },
+    performance: mergePerformance(base.performance, p.performance),
     richEditor: mergeRichEditor(base.richEditor, p.richEditor),
     landingFaq: mergeLandingFaq(base.landingFaq, p.landingFaq),
     landingPage: mergeLandingPage(base.landingPage, p.landingPage),
     progressPlan: mergeProgressPlan(base.progressPlan, p.progressPlan),
     headingSlides: mergeHeadingSlides(base.headingSlides, p.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, p.conceptStudentUi),
+    conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, p.conceptAdminPreview),
   };
 }
+
+function hslTokenOr(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const v = value.trim();
+  return v ? v : fallback;
+}
+
+/** Parse HSL token lightness (`222 47% 11%` → 11). */
+function hslLightness(token: string): number | null {
+  const m = token.trim().match(/([\d.]+)\s*%\s*$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Night mode: missing text → white.
+ * Also if saved Appearance text is dark (light-theme color), force white so it stays readable.
+ */
+function resolveForeground(token: unknown, isDark: boolean): string {
+  const raw = typeof token === "string" ? token.trim() : "";
+  if (isDark) {
+    if (!raw) return DARK_FG;
+    const L = hslLightness(raw);
+    if (L != null && L < 50) return DARK_FG;
+    return raw;
+  }
+  return raw || LIGHT_FG;
+}
+
+/** Relative luminance 0–1 from #hex / rgb() / hsl(). */
+function cssColorLuminance(color: string): number | null {
+  const v = color.trim();
+  if (!v) return null;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (v.startsWith("#")) {
+    const h = v.slice(1);
+    if (h.length === 3) {
+      r = parseInt(h[0] + h[0], 16);
+      g = parseInt(h[1] + h[1], 16);
+      b = parseInt(h[2] + h[2], 16);
+    } else if (h.length === 6) {
+      const n = parseInt(h, 16);
+      if (Number.isNaN(n)) return null;
+      r = (n >> 16) & 255;
+      g = (n >> 8) & 255;
+      b = n & 255;
+    } else return null;
+  } else {
+    const rgb = v.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    if (rgb) {
+      r = Number(rgb[1]);
+      g = Number(rgb[2]);
+      b = Number(rgb[3]);
+    } else {
+      const hsl = v.match(/^hsla?\(\s*([\d.]+)\s*,?\s*([\d.]+)%\s*,?\s*([\d.]+)%/i);
+      if (!hsl) {
+        const L = hslLightness(v);
+        return L != null ? L / 100 : null;
+      }
+      const h = Number(hsl[1]) / 360;
+      const s = Number(hsl[2]) / 100;
+      const l = Number(hsl[3]) / 100;
+      const a = s * Math.min(l, 1 - l);
+      const f = (n: number) => {
+        const k = (n + h * 12) % 12;
+        return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+      };
+      r = f(0) * 255;
+      g = f(8) * 255;
+      b = f(4) * 255;
+    }
+  }
+  const lin = (c: number) => {
+    const x = c / 255;
+    return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+/**
+ * Concept details / textbox text: empty → unsetTextColor (default white).
+ * Dark mode + dark-looking saved color → unsetTextColor so content stays readable.
+ */
+function resolveConceptTextColor(saved: unknown, unsetTextColor: string, isDark: boolean): string {
+  const fallback = (typeof unsetTextColor === "string" && unsetTextColor.trim()) || "#ffffff";
+  const raw = typeof saved === "string" ? saved.trim() : "";
+  if (!raw) return fallback;
+  if (!isDark) return raw;
+  const L = cssColorLuminance(raw);
+  if (L != null && L < 0.35) return fallback;
+  return raw;
+}
+
+function resolveMutedForeground(token: unknown, isDark: boolean): string {
+  const raw = typeof token === "string" ? token.trim() : "";
+  if (isDark) {
+    if (!raw) return DARK_MUTED;
+    const L = hslLightness(raw);
+    if (L != null && L < 45) return DARK_MUTED;
+    return raw;
+  }
+  return raw || LIGHT_MUTED;
+}
+
+/** Light palette text fallback (readable on light bg). Night/dark uses white. */
+const LIGHT_FG = "222 47% 11%";
+const LIGHT_MUTED = "215 16% 42%";
+const LIGHT_BG = "210 40% 98%";
+const LIGHT_CARD = "0 0% 100%";
+const LIGHT_BORDER = "214 28% 88%";
+
+const DARK_FG = "0 0% 100%"; // white when text color missing / night mode
+const DARK_MUTED = "215 18% 72%";
+const DARK_BG = "222 47% 7%";
+const DARK_CARD = "222 40% 11%";
+const DARK_BORDER = "222 28% 20%";
+const DARK_CARD_FG = "0 0% 100%";
 
 export function detectDeviceKey(width = typeof window !== "undefined" ? window.innerWidth : 1280): DeviceKey {
   if (width < 768) return "mobile";
@@ -1628,6 +1945,17 @@ export function resolveDeviceTheme(theme: UiAppearance, device: DeviceKey = dete
   return theme[device] ?? theme.desktop;
 }
 
+function mergePerformance(
+  base: UiAppearance["performance"],
+  patch: unknown,
+): UiAppearance["performance"] {
+  const p = (patch && typeof patch === "object" ? patch : {}) as Partial<UiAppearance["performance"]>;
+  return {
+    smoothScroll: typeof p.smoothScroll === "boolean" ? p.smoothScroll : base.smoothScroll,
+    reduceMotion: typeof p.reduceMotion === "boolean" ? p.reduceMotion : base.reduceMotion,
+  };
+}
+
 /** Apply active device appearance as CSS custom properties on :root */
 export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detectDeviceKey()) {
   const root = document.documentElement;
@@ -1637,6 +1965,33 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   const s = resolved.storyBasedLearning;
   const aq = resolved.allQuestions;
   const p = theme.performance;
+  // Dark mode is per-browser (localStorage) — never from Appearance DB
+  const localScheme = getLocalColorScheme();
+  const isDark = resolveLocalIsDark(localScheme);
+
+  root.classList.toggle("dark", isDark);
+  root.style.colorScheme = isDark ? "dark" : "light";
+  root.dataset.colorScheme = localScheme;
+  root.dataset.colorSchemeResolved = isDark ? "dark" : "light";
+
+  const fg = resolveForeground(g.foregroundHsl, isDark);
+  const muted = resolveMutedForeground(g.mutedForegroundHsl, isDark);
+  const bg = isDark ? hslTokenOr(g.backgroundHsl, DARK_BG) : hslTokenOr(g.backgroundHsl, LIGHT_BG);
+  // Light-theme bg/card on night mode would wash out — use dark surfaces when L is high
+  const bgResolved = (() => {
+    if (!isDark) return bg;
+    const L = hslLightness(bg);
+    if (L != null && L > 40) return DARK_BG;
+    return bg;
+  })();
+  const cardRaw = isDark ? hslTokenOr(g.cardHsl, DARK_CARD) : hslTokenOr(g.cardHsl, LIGHT_CARD);
+  const card = (() => {
+    if (!isDark) return cardRaw;
+    const L = hslLightness(cardRaw);
+    if (L != null && L > 40) return DARK_CARD;
+    return cardRaw;
+  })();
+  const border = isDark ? hslTokenOr(g.borderHsl, DARK_BORDER) : hslTokenOr(g.borderHsl, LIGHT_BORDER);
 
   root.style.setProperty("--ui-font-family", g.fontFamily);
   root.style.setProperty("--ui-font-size", `${g.baseFontSizePx}px`);
@@ -1644,12 +1999,16 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--radius", `${g.radiusRem}rem`);
   root.style.setProperty("--primary", g.primaryHsl);
   root.style.setProperty("--accent", g.accentHsl);
-  root.style.setProperty("--background", g.backgroundHsl);
-  root.style.setProperty("--foreground", g.foregroundHsl);
-  root.style.setProperty("--card", g.cardHsl);
-  root.style.setProperty("--border", g.borderHsl);
-  root.style.setProperty("--input", g.borderHsl);
-  root.style.setProperty("--muted-foreground", g.mutedForegroundHsl);
+  root.style.setProperty("--background", bgResolved);
+  root.style.setProperty("--foreground", fg);
+  root.style.setProperty("--card", card);
+  root.style.setProperty("--card-foreground", isDark ? DARK_CARD_FG : fg);
+  root.style.setProperty("--popover", card);
+  root.style.setProperty("--popover-foreground", isDark ? DARK_CARD_FG : fg);
+  root.style.setProperty("--secondary-foreground", isDark ? DARK_FG : fg);
+  root.style.setProperty("--border", border);
+  root.style.setProperty("--input", border);
+  root.style.setProperty("--muted-foreground", muted);
   const sb = g.sidebar;
   root.style.setProperty("--sidebar-background", sb.backgroundHsl);
   root.style.setProperty("--sidebar-foreground", sb.foregroundHsl);
@@ -1673,7 +2032,24 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--sb-menu-gap", `${sb.menuGapPx}px`);
   root.style.setProperty("--sb-active-weight", String(sb.activeFontWeight));
   root.style.setProperty("--sb-muted-opacity", String(sb.mutedOpacity));
+  root.style.setProperty("--sb-menu-transition-duration", `${sb.menuTransitionDurationMs}ms`);
+  root.style.setProperty("--sb-menu-hover-slide", `${sb.menuHoverSlidePx}px`);
+  root.style.setProperty("--sb-menu-active-slide", `${sb.menuActiveSlidePx}px`);
+  root.style.setProperty("--sb-menu-press-scale", String(sb.menuPressScale));
   root.dataset.sidebarBrandBorder = sb.brandShowBorder ? "1" : "0";
+  root.dataset.sbMenuTransform = sb.menuTransformEnabled ? "1" : "0";
+  root.style.setProperty("--sb-collapse-duration", `${sb.collapseDurationMs}ms`);
+  root.style.setProperty(
+    "--sb-collapse-easing",
+    sb.collapseEasing === "linear" ? "linear" : sb.collapseEasing === "ease-in-out" ? "ease-in-out" : "ease",
+  );
+  root.dataset.sbCollapseTransition = sb.collapseTransitionEnabled ? "1" : "0";
+  root.dataset.sbCollapseWidth = sb.collapseAnimateWidth ? "1" : "0";
+  root.dataset.sbCollapseTransform = sb.collapseAnimateTransform ? "1" : "0";
+  root.dataset.sbCollapseIconSlide = sb.collapseIconInnerSlide ? "1" : "0";
+  root.dataset.sbMenuCollapseSize = sb.menuCollapseSizeTransition ? "1" : "0";
+  root.dataset.sbGroupLabelTransition = sb.groupLabelTransition ? "1" : "0";
+  root.dataset.sbRailTransition = sb.railTransition ? "1" : "0";
   const hdr = g.header;
   root.style.setProperty("--hdr-background", hdr.backgroundHsl);
   root.style.setProperty("--hdr-foreground", hdr.foregroundHsl);
@@ -1702,6 +2078,14 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--ui-page-padding", `${g.pagePaddingPx}px`);
   root.style.setProperty("--ui-section-gap", `${g.sectionGapPx}px`);
 
+  const unsetCd = (typeof c.unsetTextColor === "string" && c.unsetTextColor.trim()) || "#ffffff";
+  const cdParagraph = resolveConceptTextColor(c.paragraphColor, unsetCd, isDark);
+  const cdHeading = resolveConceptTextColor(c.headingColor, unsetCd, isDark);
+  const cdH1 = resolveConceptTextColor(c.heading1Color, unsetCd, isDark);
+  const cdH2 = resolveConceptTextColor(c.heading2Color, unsetCd, isDark);
+  const cdH3 = resolveConceptTextColor(c.heading3Color, unsetCd, isDark);
+  const cdBullet = resolveConceptTextColor(c.bulletColor, unsetCd, isDark);
+
   root.style.setProperty("--cd-font-family", c.fontFamily);
   root.style.setProperty("--cd-font-size", `${c.fontSizePx}px`);
   root.style.setProperty("--cd-line-height", String(c.lineHeight));
@@ -1709,14 +2093,18 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-h1-size", `${c.heading1SizePx}px`);
   root.style.setProperty("--cd-h2-size", `${c.heading2SizePx}px`);
   root.style.setProperty("--cd-h3-size", `${c.heading3SizePx}px`);
-  root.style.setProperty("--cd-heading", c.headingColor);
-  root.style.setProperty("--cd-h1-color", c.heading1Color);
-  root.style.setProperty("--cd-h2-color", c.heading2Color);
-  root.style.setProperty("--cd-h3-color", c.heading3Color);
-  root.style.setProperty("--cd-paragraph", c.paragraphColor);
+  root.style.setProperty("--cd-unset-text", unsetCd);
+  const cdBg = (typeof c.backgroundColor === "string" && c.backgroundColor.trim()) || "transparent";
+  root.style.setProperty("--cd-bg", cdBg);
+  root.dataset.cdBg = cdBg !== "transparent" ? "1" : "0";
+  root.style.setProperty("--cd-heading", cdHeading);
+  root.style.setProperty("--cd-h1-color", cdH1);
+  root.style.setProperty("--cd-h2-color", cdH2);
+  root.style.setProperty("--cd-h3-color", cdH3);
+  root.style.setProperty("--cd-paragraph", cdParagraph);
   root.style.setProperty("--cd-bold-weight", String(c.boldWeight));
   root.style.setProperty("--cd-link", c.linkColor);
-  root.style.setProperty("--cd-bullet", c.bulletColor);
+  root.style.setProperty("--cd-bullet", cdBullet);
   root.style.setProperty("--cd-bullet-size", `${c.bulletSizePx}px`);
   root.style.setProperty("--cd-list-indent", `${c.listIndentPx}px`);
   root.style.setProperty("--cd-table-header-bg", c.tableHeaderBg);
@@ -1797,6 +2185,22 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.dataset.uiDevice = device;
   root.dataset.smoothScroll = p.smoothScroll ? "1" : "0";
   root.dataset.reduceMotion = p.reduceMotion ? "1" : "0";
+
+  // Site-wide motion master (Website UI) — remaps feature tokens via CSS !important
+  const motionOn = g.motionEnabled && !p.reduceMotion;
+  const motionMs = motionOn ? Math.min(600, Math.max(0, g.motionDurationMs ?? 180)) : 0;
+  const motionEasing =
+    g.motionEasing === "linear" || g.motionEasing === "ease" || g.motionEasing === "ease-in-out"
+      ? g.motionEasing
+      : "ease-out";
+  root.style.setProperty("--ui-motion-duration", `${motionMs}ms`);
+  root.style.setProperty("--ui-motion-duration-sec", `${motionMs / 1000}s`);
+  root.style.setProperty("--ui-motion-easing", motionEasing);
+  root.style.setProperty("--ui-motion-hover-lift", `${Math.max(0, g.motionHoverLiftPx ?? 0)}px`);
+  root.style.setProperty("--ui-motion-hover-scale", String(g.motionHoverScale ?? 1));
+  root.style.setProperty("--ui-motion-press-scale", String(g.motionPressScale ?? 0.98));
+  root.dataset.uiMotion = motionOn ? "1" : "0";
+  root.dataset.uiMotionInteractive = motionOn && g.motionInteractive ? "1" : "0";
 
   const pp = theme.progressPlan;
 

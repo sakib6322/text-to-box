@@ -33,7 +33,11 @@ type Props = {
   studyPct?: number;
   sessionCount?: number;
   deleting?: string | null;
-  onDetails?: () => void;
+  /** Toggle inline details dropdown (not a modal) */
+  onDetailsToggle?: () => void;
+  detailsOpen?: boolean;
+  /** Inline concept details panel under Details button */
+  detailsPanel?: ReactNode;
   onEdit?: (row: ConceptSuggestionRow) => void;
   onDelete?: (row: ConceptSuggestionRow) => void;
   /** Toggle inline add panel (not a modal) */
@@ -53,7 +57,9 @@ export function ConceptSuggestionGroupCard({
   studyPct,
   sessionCount = 0,
   deleting,
-  onDetails,
+  onDetailsToggle,
+  detailsOpen = false,
+  detailsPanel,
   onEdit,
   onDelete,
   onAdd,
@@ -108,10 +114,18 @@ export function ConceptSuggestionGroupCard({
         <div className="flex shrink-0 flex-wrap gap-2 pl-9 sm:pl-0 lg:flex-col lg:items-stretch xl:flex-row">
           {adminView ? (
             <>
-              {onDetails ? (
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none" onClick={onDetails}>
+              {onDetailsToggle ? (
+                <Button
+                  type="button"
+                  variant={detailsOpen ? "default" : "outline"}
+                  size="sm"
+                  className="h-8 text-xs flex-1 sm:flex-none"
+                  onClick={onDetailsToggle}
+                  aria-expanded={detailsOpen}
+                >
                   <BookOpen className="mr-1 h-3.5 w-3.5" />
                   Details
+                  <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
                 </Button>
               ) : null}
               <Button asChild variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none">
@@ -143,6 +157,10 @@ export function ConceptSuggestionGroupCard({
           )}
         </div>
       </div>
+
+      {detailsOpen && detailsPanel ? (
+        <div className="border-t bg-muted/10 px-4 pb-4 pt-3 sm:px-5">{detailsPanel}</div>
+      ) : null}
 
       {expanded ? (
         <div className="border-t bg-muted/20 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">

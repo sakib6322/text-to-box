@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { apiFetch, apiUrl } from "@/lib/apiBase";
 import {
   applyUiAppearance,
@@ -8,6 +8,7 @@ import {
   type DeviceKey,
   type UiAppearance,
 } from "@/lib/uiAppearance";
+import { getLocalColorScheme } from "@/lib/colorSchemeLocal";
 
 type Ctx = {
   appearance: UiAppearance;
@@ -32,6 +33,8 @@ export function UiAppearanceProvider({ children }: { children: ReactNode }) {
   const [storage, setStorage] = useState<string | undefined>();
   const [activeDevice, setActiveDevice] = useState<DeviceKey>(() => detectDeviceKey());
   const [editDevice, setEditDevice] = useState<DeviceKey>(() => detectDeviceKey());
+  const appearanceRef = useRef(appearance);
+  appearanceRef.current = appearance;
 
   const refresh = useCallback(async () => {
     try {
@@ -66,14 +69,38 @@ export function UiAppearanceProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   useEffect(() => {
+    let raf = 0;
     const onResize = () => {
-      const next = detectDeviceKey();
-      setActiveDevice(next);
-      applyUiAppearance(appearance, next);
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const next = detectDeviceKey();
+        setActiveDevice((prev) => {
+          if (prev !== next) {
+            applyUiAppearance(appearanceRef.current, next);
+            return next;
+          }
+          return prev;
+        });
+      });
     };
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, [appearance]);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
+
+  // Follow OS light/dark when this device chose System (localStorage — not DB)
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => {
+      if (getLocalColorScheme() === "system") {
+        applyUiAppearance(appearanceRef.current, detectDeviceKey());
+      }
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   const setLocal = useCallback(
     (next: UiAppearance) => {

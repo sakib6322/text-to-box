@@ -158,6 +158,7 @@ export default function CourseLanding() {
 
   const heroStageRef = useRef<HTMLDivElement>(null);
   const [heroInView, setHeroInView] = useState(true);
+  const [heroHovered, setHeroHovered] = useState(false);
   const [tabVisible, setTabVisible] = useState(
     () => typeof document === "undefined" || document.visibilityState === "visible",
   );
@@ -181,7 +182,8 @@ export default function CourseLanding() {
 
   useEffect(() => {
     const max = Math.max(1, Math.min(lp.featuredMaxSlides || 4, courses.length || 1));
-    if (!courses.length || !lp.featuredAutoplay || max <= 1 || !heroInView || !tabVisible) return;
+    const pauseHover = lp.featuredPauseOnHover && heroHovered;
+    if (!courses.length || !lp.featuredAutoplay || max <= 1 || !heroInView || !tabVisible || pauseHover) return;
     const ms = Math.max(1500, (lp.featuredIntervalSec || 5) * 1000);
     const t = window.setInterval(() => {
       setHeroSlide((n) => (n + 1) % max);
@@ -192,13 +194,19 @@ export default function CourseLanding() {
     lp.featuredAutoplay,
     lp.featuredIntervalSec,
     lp.featuredMaxSlides,
+    lp.featuredPauseOnHover,
     heroInView,
+    heroHovered,
     tabVisible,
   ]);
 
   const featured = courses.slice(0, Math.max(1, lp.featuredMaxSlides || 4));
   const activeSlide = featured.length ? Math.min(heroSlide, featured.length - 1) : 0;
   const slide = featured[activeSlide] ?? null;
+  const slideTransition =
+    !lp.featuredTransitionEnabled || lp.featuredTransition === "none"
+      ? "none"
+      : lp.featuredTransition || "fade";
 
   return (
     <div className="pg-landing" style={landingStyle}>
@@ -290,6 +298,8 @@ export default function CourseLanding() {
               ]
                 .filter(Boolean)
                 .join(" ")}
+              onMouseEnter={() => setHeroHovered(true)}
+              onMouseLeave={() => setHeroHovered(false)}
             >
               <div className="pg-hero-card">
                 {lp.featuredShineEnabled && heroInView && tabVisible ? (
@@ -297,7 +307,7 @@ export default function CourseLanding() {
                 ) : null}
                 <div
                   key={slide?.id ?? "fallback"}
-                  className={`pg-hero-slide pg-hero-slide-${lp.featuredTransition || "fade"} relative flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8`}
+                  className={`pg-hero-slide pg-hero-slide-${slideTransition} relative flex h-full min-h-[280px] flex-col justify-between p-6 sm:p-8`}
                 >
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-cyan-200/90">

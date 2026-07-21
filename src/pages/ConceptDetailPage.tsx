@@ -23,6 +23,7 @@ export default function ConceptDetailPage() {
   const [keyPoints, setKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
+  const [storyOpen, setStoryOpen] = useState(false);
   const csu = useConceptStudentUi();
 
   useEffect(() => {
@@ -106,7 +107,8 @@ export default function ConceptDetailPage() {
       </div>
 
       <div className="space-y-3">
-        <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+        <StoryBasedLearningButton detail={detail} conceptName={conceptName} onOpenChange={setStoryOpen} />
+        {!storyOpen ? (
         <Card className={userContentCard}>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
@@ -147,6 +149,7 @@ export default function ConceptDetailPage() {
           </div>
         ) : null}
       </Card>
+        ) : null}
       </div>
 
       <ConceptQuestionsPanel

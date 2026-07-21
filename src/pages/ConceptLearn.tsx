@@ -60,6 +60,7 @@ export default function ConceptLearn() {
   const [questionsOpen, setQuestionsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
   const [completingStep3, setCompletingStep3] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
 
   const progress = conceptId ? getStudyProgress(conceptId) : null;
   const studiedIds = useMemo(() => new Set(progress?.studiedKeyPointIds ?? []), [progress]);
@@ -268,10 +269,12 @@ export default function ConceptLearn() {
 
         {activeStep === 1 ? (
           <div className="mx-auto max-w-3xl space-y-4">
-            <StoryBasedLearningButton detail={detail} conceptName={conceptName} />
+            <StoryBasedLearningButton detail={detail} conceptName={conceptName} onOpenChange={setStoryOpen} />
+            {!storyOpen ? (
             <Card className="p-4 sm:p-6">
               <ConceptDetailBody detail={detail} showVerbatim />
             </Card>
+            ) : null}
             <div className="flex justify-center">
               <Button onClick={() => void completeStep1()}>{pp.step1CompleteButton}</Button>
             </div>

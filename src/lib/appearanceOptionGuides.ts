@@ -37,6 +37,10 @@ export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
     title: "Mesh background",
     body: "কোথায়: `html[data-mesh-bg]` — page shell soft gradient mesh।",
   },
+    {
+    title: "Global motion",
+    body: "কোথায়: পুরো সাইট — `html[data-ui-motion]` + `--ui-motion-*`। Duration/easing sidebar, featured, why carousel token-এ !important remap → local section override হয় না। Interactive = button/link/card hover-press (transform only, lag-free)। Reduce motion চালু = বন্ধ।",
+  },
   {
     title: "Card backdrop blur / Sticky bar blur",
     body: "কোথায়: `.glass-card` blur; `.sticky-filter-card` (filter bars) blur। Mobile scroll lag হতে পারে। Header blur → Header style section (আলাদা)।",
@@ -52,6 +56,14 @@ export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
   {
     title: "Sidebar style — width / brand / menu",
     body: "কোথায়: `--sidebar-width` desktop expanded; icon mode width; mobile sheet `--sb-width-mobile`; brand title/subtitle `AdminSidebar` top; menu font/height/padding/radius `[data-sidebar=menu-button]` ও submenu `[data-sidebar=menu-sub-button]`।",
+  },
+  {
+    title: "Sidebar menu interaction",
+    body: "কোথায়: menu/submenu click/hover — slide + press scale (`data-sb-menu-transform`, `--sb-menu-*`)। Sidebar collapse-এর আলাদা।",
+  },
+  {
+    title: "Sidebar open / close",
+    body: "কোথায়: toggle ক্লিকে sidebar hide/open — spacer width, panel transform/width, icon inner slide, menu size, group label, edge rail। আগে shadcn hardcode (200ms linear); এখন `data-sb-collapse-*` + `--sb-collapse-duration/easing`। Width animate = lag হতে পারে; Icon inner slide = transform-only।",
   },
   {
     title: "Sidebar page names",
@@ -81,8 +93,16 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
     body: "কোথায়: concept body `<ul>/<ol>` lists।",
   },
   {
+    title: "Background color",
+    body: "কোথায়: `.concept-detail-rich` body background (`--cd-bg`)। খালি = transparent (পেজ bg)। রঙ সেট করলে হালকা padding + radius।",
+  },
+  {
+    title: "Unset text color",
+    body: "Textbox/HTML-এ font color না দিলে এই রঙ (ডিফল্ট `#ffffff`)। Dark mode-এ Appearance-এর গাঢ় paragraph/heading থাকলেও এটা ব্যবহার হয়। Save to database দিয়ে সেভ হয়।",
+  },
+  {
     title: "Paragraph / Heading / Link / Bullet colors",
-    body: "রঙ picker (#hex)। কোথায়: `.concept-detail-body` text, h1–h3, a, li markers।",
+    body: "রঙ picker (#hex)। কোথায়: `.concept-detail-rich` text, h1–h3, a, li markers। Paragraph খালি = Unset text color।",
   },
   {
     title: "Table colors & sizing",
@@ -99,6 +119,10 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   {
     title: "Student action buttons",
     body: "Details → concept header; Questions/Study/Practice → details + learn header; Study & Practice → My Suggestions card; Study → Practice setup back link। বন্ধ = বাটন render হয় না।",
+  },
+  {
+    title: "Admin edit preview — Phone / Tablet / Computer",
+    body: "কোথায়: Suggestions → Details inline panel। Browser width দিয়ে device detect (<768 Phone, 768–1023 Tablet, ≥1024 Computer)। Show preview column বন্ধ = শুধু Edit (Preview column নেই)। Preview চালু + slides চালু = HeadingSlideReader + progress। Preview চালু + slides বন্ধ = plain HTML preview।",
   },
 ];
 
@@ -144,9 +168,18 @@ export const GUIDE_LANDING_HERO: AppearanceGuideItem[] = [
 ];
 
 export const GUIDE_LANDING_FEATURED: AppearanceGuideItem[] = [
-  { title: "Autoplay / Interval / Transition", body: "কোথায়: `WhyCarousel`/featured slides on landing — timing & animation।" },
-  { title: "Max slides", body: "কোথায়: featured course carousel item cap।" },
-  { title: "Shine / 3D tilt / Hover lift", body: "কোথায়: featured card CSS effects — mobile perf সতর্কতা।" },
+  {
+    title: "Slide rotation",
+    body: "কোথায়: landing hero Featured Track card — autoplay, interval, max slides, pause on hover। Off-screen/tab hidden হলে timer চলে না।",
+  },
+  {
+    title: "Slide transition",
+    body: "কোথায়: slide change enter anim — enable, style (fade/slide/scale/none), duration, easing, slide distance, scale-from। শুধু opacity/transform (GPU); layout width animate নেই → lag কম।",
+  },
+  {
+    title: "Card effects",
+    body: "Hover lift = translateY (safe)। Shine = continuous paint; 3D tilt = perspective — heavier, default off।",
+  },
 ];
 
 export const GUIDE_LANDING_COURSES: AppearanceGuideItem[] = [
