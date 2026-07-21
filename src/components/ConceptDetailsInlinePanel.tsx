@@ -246,7 +246,9 @@ export function ConceptDetailsInlinePanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <ConceptDetailBody detail={detail} showVerbatim={false} />
+          <div className="concept-detail-card">
+            <ConceptDetailBody detail={detail} showVerbatim={false} />
+          </div>
           {keyPointsSection}
           {showSelfQaEditor && conceptId ? (
             <ConceptSelfQaEditor conceptId={conceptId} conceptName={conceptName} />

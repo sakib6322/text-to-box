@@ -1444,10 +1444,10 @@ export default function AdminAppearance() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <ColorField
-                label="Background color"
+                label="Body background"
                 value={c.backgroundColor?.trim() || "#ffffff"}
                 onChange={(v) => updateCd("backgroundColor", v)}
-                hint="Concept detail body bg। খালি/transparent = পেজের bg।"
+                hint="শুধু rich text body। খালি/transparent = পেজ bg।"
               />
               <ColorField
                 label="Unset text color"
@@ -1474,6 +1474,85 @@ export default function AdminAppearance() {
               <ColorField label="Blockquote border" value={c.blockquoteBorder} onChange={(v) => updateCd("blockquoteBorder", v)} />
               <NumberField label="Table font size (px)" value={c.tableFontSizePx} min={10} max={16} onChange={(n) => updateCd("tableFontSizePx", n)} />
               <NumberField label="Table cell padding (px)" value={c.tableCellPaddingPx} min={4} max={16} onChange={(n) => updateCd("tableCellPaddingPx", n)} />
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox card</p>
+              <p className="text-[11px] text-muted-foreground">
+                Concept details-এর বাইরের কার্ড (`.concept-detail-card`) — Details / Learn / Suggestions preview।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorField
+                  label="Card background"
+                  value={c.cardBg?.trim() || "#ffffff"}
+                  onChange={(v) => updateCd("cardBg", v)}
+                  hint="খালি = theme card color"
+                />
+                <ColorField
+                  label="Card border"
+                  value={c.cardBorderColor?.trim() || "#e2e8f0"}
+                  onChange={(v) => updateCd("cardBorderColor", v)}
+                  hint="খালি = theme border"
+                />
+                <NumberField
+                  label="Border width (px)"
+                  value={c.cardBorderWidthPx}
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  onChange={(n) => updateCd("cardBorderWidthPx", n)}
+                />
+                <NumberField
+                  label="Corner radius (px)"
+                  value={c.cardBorderRadiusPx}
+                  min={0}
+                  max={32}
+                  onChange={(n) => updateCd("cardBorderRadiusPx", n)}
+                />
+                <NumberField
+                  label="Padding (px)"
+                  value={c.cardPaddingPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateCd("cardPaddingPx", n)}
+                />
+                <BoolField
+                  label="Card shadow"
+                  checked={c.cardShadow !== false}
+                  onChange={(v) => updateCd("cardShadow", v)}
+                />
+                <ColorField
+                  label="Shadow color"
+                  value={c.cardShadowColor || "#0f172a"}
+                  onChange={(v) => updateCd("cardShadowColor", v)}
+                />
+                <NumberField
+                  label="Shadow blur (px)"
+                  value={c.cardShadowBlurPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateCd("cardShadowBlurPx", n)}
+                />
+                <NumberField
+                  label="Shadow offset Y (px)"
+                  value={c.cardShadowOffsetYPx}
+                  min={0}
+                  max={24}
+                  onChange={(n) => updateCd("cardShadowOffsetYPx", n)}
+                />
+                <NumberField
+                  label="Shadow opacity"
+                  value={c.cardShadowOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateCd("cardShadowOpacity", n)}
+                />
+              </div>
+              <div className="concept-detail-card max-w-md text-sm">
+                <p className="font-medium">Textbox card preview</p>
+                <p className="text-muted-foreground text-xs mt-1">Concept details outer card chrome</p>
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
@@ -1678,34 +1757,76 @@ export default function AdminAppearance() {
                 max={32}
                 onChange={(n) => updateSbl("titleSizePx", n)}
               />
-              <NumberField
-                label="Border radius (px)"
-                value={s.borderRadiusPx}
-                min={0}
-                max={24}
-                onChange={(n) => updateSbl("borderRadiusPx", n)}
-              />
-              <NumberField
-                label="Content padding (px)"
-                value={s.contentPaddingPx}
-                min={8}
-                max={40}
-                onChange={(n) => updateSbl("contentPaddingPx", n)}
-              />
             </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox card (panel)</p>
+              <p className="text-[11px] text-muted-foreground">
+                Story open করলে যে প্যানেল/কার্ড দেখায় (`.story-based-learning-panel`)।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ColorField label="Panel background" value={s.panelBg} onChange={(v) => updateSbl("panelBg", v)} />
+                <ColorField label="Card / content background" value={s.backgroundColor} onChange={(v) => updateSbl("backgroundColor", v)} />
+                <ColorField label="Border color" value={s.borderColor} onChange={(v) => updateSbl("borderColor", v)} />
+                <NumberField
+                  label="Border width (px)"
+                  value={s.borderWidthPx}
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  onChange={(n) => updateSbl("borderWidthPx", n)}
+                />
+                <NumberField
+                  label="Corner radius (px)"
+                  value={s.borderRadiusPx}
+                  min={0}
+                  max={32}
+                  onChange={(n) => updateSbl("borderRadiusPx", n)}
+                />
+                <NumberField
+                  label="Content padding (px)"
+                  value={s.contentPaddingPx}
+                  min={8}
+                  max={40}
+                  onChange={(n) => updateSbl("contentPaddingPx", n)}
+                />
+                <BoolField label="Panel shadow" checked={Boolean(s.panelShadow)} onChange={(v) => updateSbl("panelShadow", v)} />
+                <ColorField
+                  label="Shadow color"
+                  value={s.panelShadowColor || "#0f172a"}
+                  onChange={(v) => updateSbl("panelShadowColor", v)}
+                />
+                <NumberField
+                  label="Shadow blur (px)"
+                  value={s.panelShadowBlurPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateSbl("panelShadowBlurPx", n)}
+                />
+                <NumberField
+                  label="Shadow offset Y (px)"
+                  value={s.panelShadowOffsetYPx}
+                  min={0}
+                  max={24}
+                  onChange={(n) => updateSbl("panelShadowOffsetYPx", n)}
+                />
+                <NumberField
+                  label="Shadow opacity"
+                  value={s.panelShadowOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateSbl("panelShadowOpacity", n)}
+                />
+              </div>
+            </div>
+
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <ColorField label="Title color" value={s.titleColor} onChange={(v) => updateSbl("titleColor", v)} />
               <ColorField label="Body color" value={s.bodyColor} onChange={(v) => updateSbl("bodyColor", v)} />
               <ColorField label="Heading color" value={s.headingColor} onChange={(v) => updateSbl("headingColor", v)} />
               <ColorField label="Link color" value={s.linkColor} onChange={(v) => updateSbl("linkColor", v)} />
-              <ColorField
-                label="Background"
-                value={s.backgroundColor}
-                onChange={(v) => updateSbl("backgroundColor", v)}
-              />
-              <ColorField label="Panel background" value={s.panelBg} onChange={(v) => updateSbl("panelBg", v)} />
               <ColorField label="Accent" value={s.accentColor} onChange={(v) => updateSbl("accentColor", v)} />
-              <ColorField label="Border" value={s.borderColor} onChange={(v) => updateSbl("borderColor", v)} />
             </div>
             <AppearancePreviewPanel title="Live preview · Story learning">
               <StoryLivePreview s={s} />

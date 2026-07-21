@@ -186,6 +186,17 @@ export type ConceptDetailsAppearance = {
   unsetTextColor: string;
   /** Concept detail read body background — empty = transparent */
   backgroundColor: string;
+  /** Outer textbox card shell (around concept detail content) */
+  cardBg: string;
+  cardBorderColor: string;
+  cardBorderWidthPx: number;
+  cardBorderRadiusPx: number;
+  cardPaddingPx: number;
+  cardShadow: boolean;
+  cardShadowBlurPx: number;
+  cardShadowOffsetYPx: number;
+  cardShadowOpacity: number;
+  cardShadowColor: string;
   boldWeight: number;
   linkColor: string;
   bulletColor: string;
@@ -242,6 +253,13 @@ export type StoryBasedLearningAppearance = {
   borderColor: string;
   borderRadiusPx: number;
   contentPaddingPx: number;
+  /** Textbox / panel card chrome */
+  borderWidthPx: number;
+  panelShadow: boolean;
+  panelShadowBlurPx: number;
+  panelShadowOffsetYPx: number;
+  panelShadowOpacity: number;
+  panelShadowColor: string;
   dialogMaxWidth: StoryDialogWidth;
   buttonLabel: string;
   showButtonIcon: boolean;
@@ -823,6 +841,16 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     paragraphColor: "#1e293b",
     unsetTextColor: "#ffffff",
     backgroundColor: "",
+    cardBg: "",
+    cardBorderColor: "",
+    cardBorderWidthPx: 1,
+    cardBorderRadiusPx: 10,
+    cardPaddingPx: 16,
+    cardShadow: true,
+    cardShadowBlurPx: 6,
+    cardShadowOffsetYPx: 1,
+    cardShadowOpacity: 0.1,
+    cardShadowColor: "#0f172a",
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
@@ -856,6 +884,12 @@ function defaultStory(overrides: Partial<StoryBasedLearningAppearance> = {}): St
     borderColor: "#fde68a",
     borderRadiusPx: 12,
     contentPaddingPx: 16,
+    borderWidthPx: 1,
+    panelShadow: false,
+    panelShadowBlurPx: 8,
+    panelShadowOffsetYPx: 2,
+    panelShadowOpacity: 0.08,
+    panelShadowColor: "#0f172a",
     dialogMaxWidth: "lg",
     buttonLabel: "Story-based learning",
     showButtonIcon: true,
@@ -2177,6 +2211,22 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-table-pad", `${c.tableCellPaddingPx}px`);
   root.style.setProperty("--cd-code-bg", c.codeBg);
   root.style.setProperty("--cd-quote-border", c.blockquoteBorder);
+  const cdCardBg = typeof c.cardBg === "string" && c.cardBg.trim() ? c.cardBg.trim() : "";
+  const cdCardBorder =
+    typeof c.cardBorderColor === "string" && c.cardBorderColor.trim() ? c.cardBorderColor.trim() : "";
+  root.style.setProperty("--cd-card-bg", cdCardBg || "hsl(var(--card))");
+  root.style.setProperty("--cd-card-border", cdCardBorder || "hsl(var(--ui-card-border-color, var(--border)))");
+  root.style.setProperty("--cd-card-border-width", `${c.cardBorderWidthPx ?? 1}px`);
+  root.style.setProperty("--cd-card-radius", `${c.cardBorderRadiusPx ?? 10}px`);
+  root.style.setProperty("--cd-card-padding", `${c.cardPaddingPx ?? 16}px`);
+  root.style.setProperty("--cd-card-shadow-blur", `${c.cardShadowBlurPx ?? 6}px`);
+  root.style.setProperty("--cd-card-shadow-y", `${c.cardShadowOffsetYPx ?? 1}px`);
+  root.style.setProperty("--cd-card-shadow-opacity", String(c.cardShadowOpacity ?? 0.1));
+  root.style.setProperty(
+    "--cd-card-shadow-color",
+    typeof c.cardShadowColor === "string" && c.cardShadowColor.trim() ? c.cardShadowColor.trim() : "#0f172a",
+  );
+  root.dataset.cdCardShadow = c.cardShadow !== false ? "1" : "0";
 
   root.style.setProperty("--sbl-font-family", s.fontFamily);
   root.style.setProperty("--sbl-font-size", `${s.fontSizePx}px`);
@@ -2192,6 +2242,15 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--sbl-border", s.borderColor);
   root.style.setProperty("--sbl-radius", `${s.borderRadiusPx}px`);
   root.style.setProperty("--sbl-pad", `${s.contentPaddingPx}px`);
+  root.style.setProperty("--sbl-panel-border-width", `${s.borderWidthPx ?? 1}px`);
+  root.style.setProperty("--sbl-panel-shadow-blur", `${s.panelShadowBlurPx ?? 8}px`);
+  root.style.setProperty("--sbl-panel-shadow-y", `${s.panelShadowOffsetYPx ?? 2}px`);
+  root.style.setProperty("--sbl-panel-shadow-opacity", String(s.panelShadowOpacity ?? 0.08));
+  root.style.setProperty(
+    "--sbl-panel-shadow-color",
+    typeof s.panelShadowColor === "string" && s.panelShadowColor.trim() ? s.panelShadowColor.trim() : "#0f172a",
+  );
+  root.dataset.sblPanelShadow = s.panelShadow ? "1" : "0";
   root.dataset.sblDialogWidth = s.dialogMaxWidth;
 
   root.style.setProperty("--aq-list-max", `${aq.listMaxWidthPx}px`);

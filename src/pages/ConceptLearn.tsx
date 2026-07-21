@@ -271,7 +271,7 @@ export default function ConceptLearn() {
           <div className="mx-auto max-w-3xl space-y-4">
             <StoryBasedLearningButton detail={detail} conceptName={conceptName} onOpenChange={setStoryOpen} />
             {!storyOpen ? (
-            <Card className="p-4 sm:p-6">
+            <Card className="concept-detail-card">
               <ConceptDetailBody detail={detail} showVerbatim />
             </Card>
             ) : null}

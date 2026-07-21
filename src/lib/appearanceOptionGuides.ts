@@ -93,8 +93,12 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
     body: "কোথায়: concept body `<ul>/<ol>` lists।",
   },
   {
-    title: "Background color",
-    body: "কোথায়: `.concept-detail-rich` body background (`--cd-bg`)। খালি = transparent (পেজ bg)। রঙ সেট করলে হালকা padding + radius।",
+    title: "Body background",
+    body: "কোথায়: `.concept-detail-rich` body (`--cd-bg`)। খালি = transparent।",
+  },
+  {
+    title: "Textbox card",
+    body: "কোথায়: Appearance → Concept details → Textbox card — `.concept-detail-card` outer shell (bg, border, radius, padding, shadow)। Details / Learn / Suggestions preview।",
   },
   {
     title: "Unset text color",
@@ -130,9 +134,9 @@ export const GUIDE_STORY: AppearanceGuideItem[] = [
   { title: "Button label / Empty message", body: "কোথায়: concept pages-এ Story button text; story খালি থাকলে dialog message।" },
   { title: "Dialog max width", body: "কোথায়: Story panel/dialog — `data-sbl-dialog-width` (sm/md/lg/full)।" },
   { title: "Show button icon", body: "কোথায়: Story CTA button-এ book icon।" },
-  { title: "Font / sizes / radius / padding", body: "কোথায়: story reader content panel — `--sbl-*` typography ও padding।" },
-  { title: "Title / Body / Heading / Link colors", body: "রঙ picker। কোথায়: story dialog/panel text elements।" },
-  { title: "Background / Panel / Accent / Border", body: "কোথায়: story panel shell, accent dots, borders।" },
+  { title: "Font / sizes", body: "কোথায়: story reader content — `--sbl-*` typography।" },
+  { title: "Textbox card (panel)", body: "কোথায়: Appearance → Story → Textbox card — `.story-based-learning-panel` bg, border, width, radius, padding, shadow।" },
+  { title: "Title / Body / Heading / Link / Accent colors", body: "রঙ picker। কোথায়: story panel text elements।" },
   { title: "Set to Phone / Tablet / …", body: "Story design device间 copy — Save পর্যন্ত draft।" },
 ];
 

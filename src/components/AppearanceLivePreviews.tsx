@@ -245,6 +245,7 @@ export function ConceptDetailsLivePreview({
         {csu.showPracticeButton ? <span className="rounded border px-2 py-1 text-xs">Practice</span> : null}
         {csu.showDetailsButton ? <span className="rounded border px-2 py-1 text-xs">Details</span> : null}
       </div>
+      <div className="concept-detail-card">
       <div className="concept-detail-rich space-y-3 text-sm leading-relaxed">
       <h1>Heading 1 sample</h1>
       <h2>Heading 2 sample</h2>
@@ -274,6 +275,7 @@ export function ConceptDetailsLivePreview({
           </tr>
         </tbody>
       </table>
+      </div>
       </div>
       {csu.showKeyPointsOnDetails ? (
         <div className="rounded-md border bg-muted/30 p-3 text-xs">

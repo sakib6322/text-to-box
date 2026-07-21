@@ -36,7 +36,7 @@ export function ConceptDetailCard({
         onOpenChange={setStoryOpen}
       />
       {!storyOpen ? (
-      <Card className="space-y-4 p-4">
+      <Card className="concept-detail-card space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs uppercase tracking-wide text-muted-foreground">Concept detail</p>
