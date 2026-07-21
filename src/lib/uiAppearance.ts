@@ -132,29 +132,38 @@ export type GlobalAppearance = {
   cardShadow: boolean;
   density: "comfortable" | "compact";
   contentMaxWidthPx: number;
-  /** Card chrome */
+  /** Card chrome — `.glass-card` / shadcn Card */
   cardBorderWidthPx: number;
   cardBorderOpacity: number;
   cardPaddingPx: number;
   cardHoverHighlight: boolean;
+  /** Empty = use theme foreground / dark white */
+  cardForegroundHsl: string;
+  /** Empty = use global borderHsl */
+  cardBorderHsl: string;
+  /** Card corner radius (independent from global --radius) */
+  cardRadiusRem: number;
+  /** Card fill opacity 0–1 */
+  cardBgOpacity: number;
+  cardShadowBlurPx: number;
+  cardShadowOffsetYPx: number;
+  cardShadowOpacity: number;
+  /** HSL token for shadow tint */
+  cardShadowColorHsl: string;
+  cardBackdropBlurPx: number;
+  cardHoverBorderOpacity: number;
+  cardHoverShadowBlurPx: number;
+  cardHoverShadowOpacity: number;
+  cardHoverLiftPx: number;
+  cardHoverScale: number;
+  cardTransitionMs: number;
+  /** Gap for stacked / grid card groups using `.app-card-gap` */
+  cardGapPx: number;
   /** Page shell spacing */
   pagePaddingPx: number;
   sectionGapPx: number;
   /** Sidebar labels */
   sidebarLabels: SidebarLabels;
-  /**
-   * Site-wide motion master (Website UI).
-   * When enabled, remaps all feature duration/easing tokens to these values so local sections cannot override.
-   * GPU-safe only (transform/opacity/colors) — no width/height layout animation.
-   */
-  motionEnabled: boolean;
-  motionDurationMs: number;
-  motionEasing: "linear" | "ease" | "ease-out" | "ease-in-out";
-  /** Buttons / links / cards hover+press (transform only) */
-  motionInteractive: boolean;
-  motionHoverLiftPx: number;
-  motionHoverScale: number;
-  motionPressScale: number;
 };
 
 export type ConceptDetailsAppearance = {
@@ -775,16 +784,25 @@ function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppeara
     cardBorderOpacity: 0.9,
     cardPaddingPx: 24,
     cardHoverHighlight: true,
+    cardForegroundHsl: "",
+    cardBorderHsl: "",
+    cardRadiusRem: 0.625,
+    cardBgOpacity: 1,
+    cardShadowBlurPx: 6,
+    cardShadowOffsetYPx: 1,
+    cardShadowOpacity: 0.1,
+    cardShadowColorHsl: "222 47% 11%",
+    cardBackdropBlurPx: 4,
+    cardHoverBorderOpacity: 0.28,
+    cardHoverShadowBlurPx: 12,
+    cardHoverShadowOpacity: 0.1,
+    cardHoverLiftPx: 0,
+    cardHoverScale: 1,
+    cardTransitionMs: 0,
+    cardGapPx: 16,
     pagePaddingPx: 24,
     sectionGapPx: 16,
     sidebarLabels: defaultSidebarLabels(),
-    motionEnabled: true,
-    motionDurationMs: 180,
-    motionEasing: "ease-out",
-    motionInteractive: true,
-    motionHoverLiftPx: 0,
-    motionHoverScale: 1,
-    motionPressScale: 0.98,
     ...overrides,
   };
 }
@@ -1685,26 +1703,41 @@ export function mergeLandingFaq(base: LandingFaqAppearance, patch: unknown): Lan
 function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
   const p = (patch && typeof patch === "object" ? patch : {}) as Partial<DeviceAppearance>;
   const pg = (p.global && typeof p.global === "object" ? p.global : {}) as Partial<GlobalAppearance>;
-  const easing =
-    pg.motionEasing === "linear" ||
-    pg.motionEasing === "ease" ||
-    pg.motionEasing === "ease-out" ||
-    pg.motionEasing === "ease-in-out"
-      ? pg.motionEasing
-      : undefined;
   const clamp = (v: unknown, fallback: number, min: number, max: number) => {
     if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
     return Math.min(max, Math.max(min, v));
   };
+  // Strip legacy site-wide motion fields if present in saved JSON (no longer applied)
+  const {
+    motionEnabled: _me,
+    motionDurationMs: _md,
+    motionEasing: _mez,
+    motionInteractive: _mi,
+    motionHoverLiftPx: _ml,
+    motionHoverScale: _ms,
+    motionPressScale: _mp,
+    ...pgSafe
+  } = pg as Partial<GlobalAppearance> & Record<string, unknown>;
   return {
     global: {
       ...base.global,
-      ...pg,
-      ...(easing ? { motionEasing: easing } : {}),
-      motionDurationMs: clamp(pg.motionDurationMs, base.global.motionDurationMs, 0, 600),
-      motionHoverLiftPx: clamp(pg.motionHoverLiftPx, base.global.motionHoverLiftPx, 0, 12),
-      motionHoverScale: clamp(pg.motionHoverScale, base.global.motionHoverScale, 1, 1.15),
-      motionPressScale: clamp(pg.motionPressScale, base.global.motionPressScale, 0.9, 1),
+      ...pgSafe,
+      cardBorderWidthPx: clamp(pg.cardBorderWidthPx, base.global.cardBorderWidthPx, 0, 8),
+      cardBorderOpacity: clamp(pg.cardBorderOpacity, base.global.cardBorderOpacity, 0, 1),
+      cardPaddingPx: clamp(pg.cardPaddingPx, base.global.cardPaddingPx, 0, 64),
+      cardRadiusRem: clamp(pg.cardRadiusRem, base.global.cardRadiusRem, 0, 2),
+      cardBgOpacity: clamp(pg.cardBgOpacity, base.global.cardBgOpacity, 0, 1),
+      cardShadowBlurPx: clamp(pg.cardShadowBlurPx, base.global.cardShadowBlurPx, 0, 48),
+      cardShadowOffsetYPx: clamp(pg.cardShadowOffsetYPx, base.global.cardShadowOffsetYPx, 0, 24),
+      cardShadowOpacity: clamp(pg.cardShadowOpacity, base.global.cardShadowOpacity, 0, 1),
+      cardBackdropBlurPx: clamp(pg.cardBackdropBlurPx, base.global.cardBackdropBlurPx, 0, 24),
+      cardHoverBorderOpacity: clamp(pg.cardHoverBorderOpacity, base.global.cardHoverBorderOpacity, 0, 1),
+      cardHoverShadowBlurPx: clamp(pg.cardHoverShadowBlurPx, base.global.cardHoverShadowBlurPx, 0, 48),
+      cardHoverShadowOpacity: clamp(pg.cardHoverShadowOpacity, base.global.cardHoverShadowOpacity, 0, 1),
+      cardHoverLiftPx: clamp(pg.cardHoverLiftPx, base.global.cardHoverLiftPx, 0, 16),
+      cardHoverScale: clamp(pg.cardHoverScale, base.global.cardHoverScale, 1, 1.08),
+      cardTransitionMs: clamp(pg.cardTransitionMs, base.global.cardTransitionMs, 0, 600),
+      cardGapPx: clamp(pg.cardGapPx, base.global.cardGapPx, 0, 48),
       sidebarLabels: {
         ...base.global.sidebarLabels,
         ...((pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}) as Partial<SidebarLabels>),
@@ -2002,9 +2035,15 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--background", bgResolved);
   root.style.setProperty("--foreground", fg);
   root.style.setProperty("--card", card);
-  root.style.setProperty("--card-foreground", isDark ? DARK_CARD_FG : fg);
+  const cardFgToken =
+    typeof g.cardForegroundHsl === "string" && g.cardForegroundHsl.trim()
+      ? g.cardForegroundHsl.trim()
+      : isDark
+        ? DARK_CARD_FG
+        : fg;
+  root.style.setProperty("--card-foreground", cardFgToken);
   root.style.setProperty("--popover", card);
-  root.style.setProperty("--popover-foreground", isDark ? DARK_CARD_FG : fg);
+  root.style.setProperty("--popover-foreground", cardFgToken);
   root.style.setProperty("--secondary-foreground", isDark ? DARK_FG : fg);
   root.style.setProperty("--border", border);
   root.style.setProperty("--input", border);
@@ -2075,6 +2114,29 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--ui-card-border-width", `${g.cardBorderWidthPx}px`);
   root.style.setProperty("--ui-card-border-opacity", String(g.cardBorderOpacity));
   root.style.setProperty("--ui-card-padding", `${g.cardPaddingPx}px`);
+  root.style.setProperty("--ui-card-radius", `${g.cardRadiusRem}rem`);
+  root.style.setProperty("--ui-card-bg-opacity", String(g.cardBgOpacity ?? 1));
+  root.style.setProperty(
+    "--ui-card-border-color",
+    typeof g.cardBorderHsl === "string" && g.cardBorderHsl.trim() ? g.cardBorderHsl.trim() : border,
+  );
+  root.style.setProperty("--ui-card-shadow-blur", `${g.cardShadowBlurPx ?? 6}px`);
+  root.style.setProperty("--ui-card-shadow-y", `${g.cardShadowOffsetYPx ?? 1}px`);
+  root.style.setProperty("--ui-card-shadow-opacity", String(g.cardShadowOpacity ?? 0.1));
+  root.style.setProperty(
+    "--ui-card-shadow-color",
+    typeof g.cardShadowColorHsl === "string" && g.cardShadowColorHsl.trim()
+      ? g.cardShadowColorHsl.trim()
+      : "222 47% 11%",
+  );
+  root.style.setProperty("--ui-card-backdrop-blur", `${g.cardBackdropBlurPx ?? 4}px`);
+  root.style.setProperty("--ui-card-hover-border-opacity", String(g.cardHoverBorderOpacity ?? 0.28));
+  root.style.setProperty("--ui-card-hover-shadow-blur", `${g.cardHoverShadowBlurPx ?? 12}px`);
+  root.style.setProperty("--ui-card-hover-shadow-opacity", String(g.cardHoverShadowOpacity ?? 0.1));
+  root.style.setProperty("--ui-card-hover-lift", `${g.cardHoverLiftPx ?? 0}px`);
+  root.style.setProperty("--ui-card-hover-scale", String(g.cardHoverScale ?? 1));
+  root.style.setProperty("--ui-card-transition", `${g.cardTransitionMs ?? 200}ms`);
+  root.style.setProperty("--ui-card-gap", `${g.cardGapPx ?? 16}px`);
   root.style.setProperty("--ui-page-padding", `${g.pagePaddingPx}px`);
   root.style.setProperty("--ui-section-gap", `${g.sectionGapPx}px`);
 
@@ -2185,22 +2247,10 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.dataset.uiDevice = device;
   root.dataset.smoothScroll = p.smoothScroll ? "1" : "0";
   root.dataset.reduceMotion = p.reduceMotion ? "1" : "0";
-
-  // Site-wide motion master (Website UI) — remaps feature tokens via CSS !important
-  const motionOn = g.motionEnabled && !p.reduceMotion;
-  const motionMs = motionOn ? Math.min(600, Math.max(0, g.motionDurationMs ?? 180)) : 0;
-  const motionEasing =
-    g.motionEasing === "linear" || g.motionEasing === "ease" || g.motionEasing === "ease-in-out"
-      ? g.motionEasing
-      : "ease-out";
-  root.style.setProperty("--ui-motion-duration", `${motionMs}ms`);
-  root.style.setProperty("--ui-motion-duration-sec", `${motionMs / 1000}s`);
-  root.style.setProperty("--ui-motion-easing", motionEasing);
-  root.style.setProperty("--ui-motion-hover-lift", `${Math.max(0, g.motionHoverLiftPx ?? 0)}px`);
-  root.style.setProperty("--ui-motion-hover-scale", String(g.motionHoverScale ?? 1));
-  root.style.setProperty("--ui-motion-press-scale", String(g.motionPressScale ?? 0.98));
-  root.dataset.uiMotion = motionOn ? "1" : "0";
-  root.dataset.uiMotionInteractive = motionOn && g.motionInteractive ? "1" : "0";
+  const cardAnimMs = Math.max(0, g.cardTransitionMs ?? 0);
+  root.dataset.cardAnim = !p.reduceMotion && cardAnimMs > 0 ? "1" : "0";
+  root.dataset.cardHoverMotion =
+    !p.reduceMotion && ((g.cardHoverLiftPx ?? 0) > 0 || (g.cardHoverScale ?? 1) !== 1) ? "1" : "0";
 
   const pp = theme.progressPlan;
 

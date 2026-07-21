@@ -144,6 +144,9 @@ const GLOBAL_COLOR_KEYS = [
   "cardHsl",
   "borderHsl",
   "mutedForegroundHsl",
+  "cardForegroundHsl",
+  "cardBorderHsl",
+  "cardShadowColorHsl",
 ] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
 
 const GLOBAL_LAYOUT_KEYS = [
@@ -156,6 +159,19 @@ const GLOBAL_LAYOUT_KEYS = [
   "cardHoverHighlight",
   "cardShadow",
   "cardBackdropBlur",
+  "cardRadiusRem",
+  "cardBgOpacity",
+  "cardShadowBlurPx",
+  "cardShadowOffsetYPx",
+  "cardShadowOpacity",
+  "cardBackdropBlurPx",
+  "cardHoverBorderOpacity",
+  "cardHoverShadowBlurPx",
+  "cardHoverShadowOpacity",
+  "cardHoverLiftPx",
+  "cardHoverScale",
+  "cardTransitionMs",
+  "cardGapPx",
 ] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
 
 const SIDEBAR_LABEL_FIELDS = [
@@ -836,7 +852,7 @@ export default function AdminAppearance() {
 
             <div className="space-y-3 rounded-lg border p-4">
               <div className="flex flex-wrap items-end justify-between gap-2">
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Cards &amp; layout</p>
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Cards</p>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => applyLayoutTo(["mobile"])}>
                     Set to Phone
@@ -857,32 +873,196 @@ export default function AdminAppearance() {
                   </Button>
                 </div>
               </div>
+              <p className="text-[11px] text-muted-foreground">
+                `.glass-card` / shadcn Card — পুরো সাইটের কার্ড chrome। Device অনুযায়ী আলাদা সেট করা যায়।
+              </p>
+
+              <p className="text-[11px] font-medium text-muted-foreground">Colors &amp; surface</p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ThemeColorField
+                  label="Card background"
+                  value={g.cardHsl}
+                  onChange={(v) => updateGlobal("cardHsl", v)}
+                  hint="`--card` fill"
+                />
+                <ThemeColorField
+                  label="Card text"
+                  value={g.cardForegroundHsl || g.foregroundHsl}
+                  onChange={(v) => updateGlobal("cardForegroundHsl", v)}
+                  hint="খালি রাখলে theme foreground / dark white"
+                />
+                <ThemeColorField
+                  label="Card border color"
+                  value={g.cardBorderHsl || g.borderHsl}
+                  onChange={(v) => updateGlobal("cardBorderHsl", v)}
+                  hint="খালি = global Border color"
+                />
                 <NumberField
-                  label="Card border width (px)"
+                  label="Background opacity"
+                  value={g.cardBgOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateGlobal("cardBgOpacity", n)}
+                />
+                <NumberField
+                  label="Border width (px)"
                   value={g.cardBorderWidthPx}
                   min={0}
                   max={4}
                   step={0.5}
-                  hint="0 = no border (useful on mobile). Switch device above to set per layout."
+                  hint="0 = no border"
                   onChange={(n) => updateGlobal("cardBorderWidthPx", n)}
                 />
                 <NumberField
-                  label="Card border opacity"
+                  label="Border opacity"
                   value={g.cardBorderOpacity}
                   min={0}
                   max={1}
                   step={0.05}
-                  hint="0 = invisible, 1 = solid"
                   onChange={(n) => updateGlobal("cardBorderOpacity", n)}
                 />
                 <NumberField
-                  label="Card padding (px)"
+                  label="Corner radius (rem)"
+                  value={g.cardRadiusRem}
+                  min={0}
+                  max={2}
+                  step={0.125}
+                  hint="Card-only — global radius থেকে আলাদা"
+                  onChange={(n) => updateGlobal("cardRadiusRem", n)}
+                />
+                <NumberField
+                  label="Padding (px)"
                   value={g.cardPaddingPx}
-                  min={8}
+                  min={0}
                   max={48}
                   onChange={(n) => updateGlobal("cardPaddingPx", n)}
+                  hint="filter-card / suggestion-card / CardHeader"
                 />
+                <NumberField
+                  label="Card gap (px)"
+                  value={g.cardGapPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateGlobal("cardGapPx", n)}
+                  hint="`.app-card-gap` stacks"
+                />
+                <NumberField
+                  label="Transition (ms)"
+                  value={g.cardTransitionMs}
+                  min={0}
+                  max={600}
+                  step={20}
+                  onChange={(n) => updateGlobal("cardTransitionMs", n)}
+                  hint="0 = instant (recommended, no lag)। Hover lift/scale only animates when &gt; 0"
+                />
+              </div>
+
+              <p className="text-[11px] font-medium text-muted-foreground">Shadow</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Enable shadow"
+                  checked={g.cardShadow}
+                  onChange={(v) => updateGlobal("cardShadow", v)}
+                />
+                <ThemeColorField
+                  label="Shadow color"
+                  value={g.cardShadowColorHsl}
+                  onChange={(v) => updateGlobal("cardShadowColorHsl", v)}
+                />
+                <NumberField
+                  label="Shadow blur (px)"
+                  value={g.cardShadowBlurPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateGlobal("cardShadowBlurPx", n)}
+                />
+                <NumberField
+                  label="Shadow offset Y (px)"
+                  value={g.cardShadowOffsetYPx}
+                  min={0}
+                  max={24}
+                  onChange={(n) => updateGlobal("cardShadowOffsetYPx", n)}
+                />
+                <NumberField
+                  label="Shadow opacity"
+                  value={g.cardShadowOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateGlobal("cardShadowOpacity", n)}
+                />
+              </div>
+
+              <p className="text-[11px] font-medium text-muted-foreground">Backdrop blur</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Enable backdrop blur"
+                  checked={g.cardBackdropBlur}
+                  onChange={(v) => updateGlobal("cardBackdropBlur", v)}
+                  hint="Can cause scroll lag on mobile"
+                />
+                <NumberField
+                  label="Blur amount (px)"
+                  value={g.cardBackdropBlurPx}
+                  min={0}
+                  max={24}
+                  onChange={(n) => updateGlobal("cardBackdropBlurPx", n)}
+                />
+              </div>
+
+              <p className="text-[11px] font-medium text-muted-foreground">Hover</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Hover highlight"
+                  checked={g.cardHoverHighlight}
+                  onChange={(v) => updateGlobal("cardHoverHighlight", v)}
+                  hint="Primary-tinted border + lift/scale"
+                />
+                <NumberField
+                  label="Hover border opacity"
+                  value={g.cardHoverBorderOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateGlobal("cardHoverBorderOpacity", n)}
+                />
+                <NumberField
+                  label="Hover shadow blur (px)"
+                  value={g.cardHoverShadowBlurPx}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateGlobal("cardHoverShadowBlurPx", n)}
+                />
+                <NumberField
+                  label="Hover shadow opacity"
+                  value={g.cardHoverShadowOpacity}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  onChange={(n) => updateGlobal("cardHoverShadowOpacity", n)}
+                />
+                <NumberField
+                  label="Hover lift (px)"
+                  value={g.cardHoverLiftPx}
+                  min={0}
+                  max={16}
+                  onChange={(n) => updateGlobal("cardHoverLiftPx", n)}
+                  hint="0 = no lift"
+                />
+                <NumberField
+                  label="Hover scale"
+                  value={g.cardHoverScale}
+                  min={1}
+                  max={1.08}
+                  step={0.01}
+                  onChange={(n) => updateGlobal("cardHoverScale", n)}
+                  hint="1 = no scale"
+                />
+              </div>
+
+              <p className="text-[11px] font-medium text-muted-foreground">Page layout (with card set-to)</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <NumberField
                   label="Page padding (px)"
                   value={g.pagePaddingPx}
@@ -898,16 +1078,20 @@ export default function AdminAppearance() {
                   onChange={(n) => updateGlobal("sectionGapPx", n)}
                 />
               </div>
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="glass-card sm:col-span-2 lg:col-span-1">
-                  <div className="space-y-1" style={{ padding: "var(--ui-density-card-padding, var(--ui-card-padding, 1rem))" }}>
+                  <div
+                    className="space-y-1"
+                    style={{ padding: "var(--ui-density-card-padding, var(--ui-card-padding, 1rem))" }}
+                  >
                     <p className="text-sm font-semibold">Card preview</p>
-                    <p className="text-xs text-muted-foreground">Border, padding, radius from current draft.</p>
+                    <p className="text-xs text-muted-foreground">Hover to preview lift / border / shadow.</p>
                   </div>
                 </div>
-                <div className="app-section-stack sm:col-span-2">
-                  <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">Section one</div>
-                  <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">Section two (gap preview)</div>
+                <div className="app-section-stack app-card-gap flex flex-col sm:col-span-2">
+                  <div className="glass-card px-3 py-2 text-xs">Gap preview card A</div>
+                  <div className="glass-card px-3 py-2 text-xs">Gap preview card B</div>
                 </div>
               </div>
             </div>
@@ -943,96 +1127,13 @@ export default function AdminAppearance() {
               <ThemeColorField label="Accent" value={g.accentHsl} onChange={(v) => updateGlobal("accentHsl", v)} hint="গ্রেডিয়েন্ট, হাইলাইট" />
               <ThemeColorField label="Background" value={g.backgroundHsl} onChange={(v) => updateGlobal("backgroundHsl", v)} hint="পেজ ব্যাকগ্রাউন্ড" />
               <ThemeColorField label="Foreground" value={g.foregroundHsl} onChange={(v) => updateGlobal("foregroundHsl", v)} hint="মূল টেক্সট" />
-              <ThemeColorField label="Card" value={g.cardHsl} onChange={(v) => updateGlobal("cardHsl", v)} hint="glass-card ব্যাকগ্রাউন্ড" />
-              <ThemeColorField label="Border" value={g.borderHsl} onChange={(v) => updateGlobal("borderHsl", v)} hint="কার্ড/ইনপুট বর্ডার" />
+              <ThemeColorField label="Border" value={g.borderHsl} onChange={(v) => updateGlobal("borderHsl", v)} hint="ইনপুট / general border" />
               <ThemeColorField label="Muted foreground" value={g.mutedForegroundHsl} onChange={(v) => updateGlobal("mutedForegroundHsl", v)} hint="hint, secondary text" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <BoolField label="Page title gradient" checked={g.pageTitleGradient} onChange={(v) => updateGlobal("pageTitleGradient", v)} />
               <BoolField label="Mesh background" checked={g.meshBackground} onChange={(v) => updateGlobal("meshBackground", v)} />
-              <BoolField label="Card backdrop blur" checked={g.cardBackdropBlur} onChange={(v) => updateGlobal("cardBackdropBlur", v)} hint="Can cause scroll lag" />
               <BoolField label="Sticky bar backdrop blur" checked={g.stickyBackdropBlur} onChange={(v) => updateGlobal("stickyBackdropBlur", v)} />
-              <BoolField label="Card shadow" checked={g.cardShadow} onChange={(v) => updateGlobal("cardShadow", v)} />
-              <BoolField
-                label="Card hover highlight"
-                checked={g.cardHoverHighlight}
-                onChange={(v) => updateGlobal("cardHoverHighlight", v)}
-                hint="Primary-tinted border on hover"
-              />
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-dashed bg-muted/10 p-4">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Global motion</p>
-              <p className="text-[11px] text-muted-foreground">
-                পুরো ওয়েবসাইটের master animation। Duration/easing sidebar, featured card, why carousel ইত্যাদি
-                সব token-এ remap হয় — local section override হয় না। শুধু opacity/transform/colors (GPU) — width
-                animate নেই। Performance → Reduce motion চালু থাকলে এটাও বন্ধ।
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <BoolField
-                  label="Enable global motion"
-                  checked={g.motionEnabled}
-                  onChange={(v) => updateGlobal("motionEnabled", v)}
-                  hint="Off = সব transition instant (0ms)"
-                />
-                <NumberField
-                  label="Duration (ms)"
-                  value={g.motionDurationMs}
-                  min={0}
-                  max={600}
-                  step={20}
-                  onChange={(n) => updateGlobal("motionDurationMs", n)}
-                  hint="150–220 recommended"
-                />
-                <Field label="Easing">
-                  <Select
-                    value={g.motionEasing}
-                    onValueChange={(v) => updateGlobal("motionEasing", v as typeof g.motionEasing)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ease-out">Ease out</SelectItem>
-                      <SelectItem value="ease">Ease</SelectItem>
-                      <SelectItem value="ease-in-out">Ease in-out</SelectItem>
-                      <SelectItem value="linear">Linear</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <BoolField
-                  label="Interactive hover / press"
-                  checked={g.motionInteractive}
-                  onChange={(v) => updateGlobal("motionInteractive", v)}
-                  hint="Buttons, links, cards — transform only"
-                />
-                <NumberField
-                  label="Hover lift (px)"
-                  value={g.motionHoverLiftPx}
-                  min={0}
-                  max={12}
-                  onChange={(n) => updateGlobal("motionHoverLiftPx", n)}
-                  hint="0 = no lift"
-                />
-                <NumberField
-                  label="Hover scale"
-                  value={g.motionHoverScale}
-                  min={1}
-                  max={1.15}
-                  step={0.01}
-                  onChange={(n) => updateGlobal("motionHoverScale", n)}
-                  hint="1 = no grow"
-                />
-                <NumberField
-                  label="Press scale"
-                  value={g.motionPressScale}
-                  min={0.9}
-                  max={1}
-                  step={0.01}
-                  onChange={(n) => updateGlobal("motionPressScale", n)}
-                  hint="Click shrink"
-                />
-              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border p-4">
@@ -2955,7 +3056,12 @@ export default function AdminAppearance() {
               />
             </div>
             <BoolField label="Smooth scroll" checked={p.smoothScroll} onChange={(v) => updatePerf("smoothScroll", v)} hint="Shared across all devices — often laggy" />
-            <BoolField label="Reduce motion" checked={p.reduceMotion} onChange={(v) => updatePerf("reduceMotion", v)} />
+            <BoolField
+              label="Reduce motion"
+              checked={p.reduceMotion}
+              onChange={(v) => updatePerf("reduceMotion", v)}
+              hint="সব transition/animation বন্ধ — lag থাকলে চালু করুন"
+            />
             <AppearancePreviewPanel title="Live preview · Performance">
               <PerformanceLivePreview smoothScroll={p.smoothScroll} reduceMotion={p.reduceMotion} />
             </AppearancePreviewPanel>

@@ -27,8 +27,9 @@ export function AppShellHeader({ title, leftSlot }: { title: string; leftSlot?: 
     let lastY = window.scrollY;
     const onScroll = () => {
       const y = window.scrollY;
-      setVisible(y < 8 || y < lastY);
+      const next = y < 8 || y < lastY;
       lastY = y;
+      setVisible((prev) => (prev === next ? prev : next));
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);

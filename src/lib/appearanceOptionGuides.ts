@@ -14,12 +14,12 @@ export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
     body: "কোথায়: `--radius` → বাটন, input, glass-card। max width → main content column। Density → card/page padding ও gap (comfortable vs compact)।",
   },
   {
-    title: "Card border width / opacity / padding",
-    body: "কোথায়: `.glass-card`, `.filter-card` — admin list, student cards। opacity 0 = বর্ডার অদৃশ্য (mobile-এ আলাদা সেট করা যায়)।",
+    title: "Cards (full chrome)",
+    body: "কোথায়: Website UI → Cards — `.glass-card` / shadcn Card। Background, text, border, radius, padding, gap, shadow blur/offset/opacity/color, backdrop blur, hover border/shadow/lift/scale, transition। Phone/Tablet/Computer আলাদা + Set to all।",
   },
   {
     title: "Page padding / Section gap",
-    body: "কোথায়: `.app-section-stack`, page shell margins — admin/student page layout spacing।",
+    body: "কোথায়: `.app-section-stack`, page shell margins — Cards section-এর সাথে Set to device।",
   },
   {
     title: "Set to Phone / Tablet / Computer / all",
@@ -27,7 +27,7 @@ export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
   },
   {
     title: "Theme colors (Primary, Accent, Background…)",
-    body: "রঙ picker দিয়ে সিলেক্ট করুন (#hex দেখায়, ভিতরে HSL token সেভ)। কোথায়: `--primary` → বাটন, ring, glow; `--background` → page; `--card` → glass-card; `--border` → borders। Sidebar/header-এর আলাদা override থাকলে সেখানে priority বেশি।",
+    body: "রঙ picker দিয়ে সিলেক্ট করুন (#hex দেখায়, ভিতরে HSL token সেভ)। কোথায়: `--primary` → বাটন, ring, glow; `--background` → page; `--card` → Cards section; `--border` → borders। Sidebar/header-এর আলাদা override থাকলে সেখানে priority বেশি।",
   },
   {
     title: "Page title gradient",
@@ -37,17 +37,17 @@ export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
     title: "Mesh background",
     body: "কোথায়: `html[data-mesh-bg]` — page shell soft gradient mesh।",
   },
-    {
-    title: "Global motion",
-    body: "কোথায়: পুরো সাইট — `html[data-ui-motion]` + `--ui-motion-*`। Duration/easing sidebar, featured, why carousel token-এ !important remap → local section override হয় না। Interactive = button/link/card hover-press (transform only, lag-free)। Reduce motion চালু = বন্ধ।",
+  {
+    title: "Animations (no global override)",
+    body: "সাইট-wide Global motion সরানো হয়েছে — আর !important remap নেই। Animation শুধু যেখানে দরকার: Sidebar (menu/collapse), Landing Featured/Why, Cards (transition ms — ডিফল্ট 0), Performance → Reduce motion।",
   },
   {
     title: "Card backdrop blur / Sticky bar blur",
-    body: "কোথায়: `.glass-card` blur; `.sticky-filter-card` (filter bars) blur। Mobile scroll lag হতে পারে। Header blur → Header style section (আলাদা)।",
+    body: "Card blur → Website UI → Cards (`--ui-card-backdrop-blur`)। Sticky bar blur → Theme colors নিচে। Mobile scroll lag হতে পারে। Header blur → Header section।",
   },
   {
-    title: "Card shadow / Card hover highlight",
-    body: "কোথায়: `.glass-card` shadow ও hover border tint।",
+    title: "Card shadow / hover",
+    body: "কোথায়: Website UI → Cards — shadow blur/offset/opacity/color এবং hover border/lift/scale সব Appearance থেকে। Transition 0 = lag-free।",
   },
   {
     title: "Sidebar style — colors",
@@ -257,8 +257,11 @@ export const GUIDE_HEADING_SLIDES: AppearanceGuideItem[] = [
 ];
 
 export const GUIDE_PERFORMANCE: AppearanceGuideItem[] = [
-  { title: "Smooth scroll", body: "কোথায়: `html` scroll-behavior — all devices shared; may affect scroll perf।" },
-  { title: "Reduce motion", body: "কোথায়: `data-reduce-motion` — limits animations site-wide।" },
+  { title: "Smooth scroll", body: "কোথায়: `html` scroll-behavior — shared; lag হলে Off রাখুন।" },
+  {
+    title: "Reduce motion",
+    body: "কোথায়: `html[data-reduce-motion=1]` — সব animation/transition instant। Global motion আর নেই; Sidebar/Featured/Cards নিজের অপশন দিয়ে চলে।",
+  },
 ];
 
 export const GUIDE_RICH_EDITOR: AppearanceGuideItem[] = [

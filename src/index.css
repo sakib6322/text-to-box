@@ -114,63 +114,14 @@
     scroll-behavior: smooth;
   }
 
+  /* Performance → Reduce motion — no site-wide Global motion overrides anymore */
   html[data-reduce-motion="1"] *,
   html[data-reduce-motion="1"] *::before,
   html[data-reduce-motion="1"] *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
-  }
-
-  /*
-   * Site-wide motion (Website UI master).
-   * Remaps feature duration/easing tokens so local Appearance sections cannot override.
-   * Interactive hover/press = transform only (no width/height → no layout lag).
-   */
-  html {
-    --ui-motion-duration: 180ms;
-    --ui-motion-duration-sec: 0.18s;
-    --ui-motion-easing: ease-out;
-    --ui-motion-hover-lift: 0px;
-    --ui-motion-hover-scale: 1;
-    --ui-motion-press-scale: 0.98;
-  }
-
-  html[data-ui-motion="1"],
-  html[data-ui-motion="0"] {
-    --sb-menu-transition-duration: var(--ui-motion-duration) !important;
-    --sb-collapse-duration: var(--ui-motion-duration) !important;
-    --sb-collapse-easing: var(--ui-motion-easing) !important;
-    --pg-featured-transition-sec: var(--ui-motion-duration-sec) !important;
-    --pg-featured-easing: var(--ui-motion-easing) !important;
-    --pg-featured-hover-duration: var(--ui-motion-duration) !important;
-    --pg-why-transition-sec: var(--ui-motion-duration-sec) !important;
-  }
-
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] button:not(:disabled):not([data-sidebar="rail"]),
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] a,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] [role="button"],
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] .glass-card,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] .filter-card {
-    transition:
-      transform var(--ui-motion-duration) var(--ui-motion-easing),
-      background-color var(--ui-motion-duration) var(--ui-motion-easing),
-      color var(--ui-motion-duration) var(--ui-motion-easing),
-      border-color var(--ui-motion-duration) var(--ui-motion-easing),
-      box-shadow var(--ui-motion-duration) var(--ui-motion-easing),
-      opacity var(--ui-motion-duration) var(--ui-motion-easing) !important;
-  }
-
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] button:not(:disabled):not([data-sidebar="rail"]):hover,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] a:hover,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] [role="button"]:hover {
-    transform: translate3d(0, calc(var(--ui-motion-hover-lift) * -1), 0) scale(var(--ui-motion-hover-scale));
-  }
-
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] button:not(:disabled):not([data-sidebar="rail"]):active,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] a:active,
-  html[data-ui-motion="1"][data-ui-motion-interactive="1"] [role="button"]:active {
-    transform: translate3d(0, 0, 0) scale(var(--ui-motion-press-scale));
+    scroll-behavior: auto !important;
   }
 }
 
@@ -285,12 +236,28 @@
   }
 
   .glass-card {
-    @apply shadow-sm transition-colors duration-200;
     border-style: solid;
-    border-radius: var(--radius, 0.625rem);
+    border-radius: var(--ui-card-radius, var(--radius, 0.625rem));
     border-width: var(--ui-card-border-width, 1px);
-    background: hsl(var(--card));
-    border-color: hsl(var(--border) / var(--ui-card-border-opacity, 0.9));
+    background: hsl(var(--card) / var(--ui-card-bg-opacity, 1));
+    border-color: hsl(var(--ui-card-border-color, var(--border)) / var(--ui-card-border-opacity, 0.9));
+    color: hsl(var(--card-foreground));
+    box-shadow: 0 var(--ui-card-shadow-y, 1px) var(--ui-card-shadow-blur, 6px)
+      hsl(var(--ui-card-shadow-color, 222 47% 11%) / var(--ui-card-shadow-opacity, 0.1));
+    transition: none;
+  }
+
+  html[data-card-anim="1"] .glass-card {
+    transition:
+      border-color var(--ui-card-transition, 0ms) ease,
+      box-shadow var(--ui-card-transition, 0ms) ease;
+  }
+
+  html[data-card-anim="1"][data-card-hover-motion="1"] .glass-card {
+    transition:
+      transform var(--ui-card-transition, 0ms) ease,
+      border-color var(--ui-card-transition, 0ms) ease,
+      box-shadow var(--ui-card-transition, 0ms) ease;
   }
 
   html[data-card-shadow="0"] .glass-card {
@@ -298,22 +265,29 @@
   }
 
   html[data-card-blur="1"] .glass-card {
-    backdrop-filter: blur(4px);
-    background: hsl(var(--card) / 0.9);
+    backdrop-filter: blur(var(--ui-card-backdrop-blur, 4px));
+    background: hsl(var(--card) / min(0.92, var(--ui-card-bg-opacity, 1)));
   }
 
   html[data-card-hover="1"] .glass-card:hover,
   html:not([data-card-hover]) .glass-card:hover {
-    border-color: hsl(var(--primary) / 0.28);
+    border-color: hsl(var(--primary) / var(--ui-card-hover-border-opacity, 0.28));
+  }
+
+  html[data-card-hover-motion="1"] .glass-card:hover {
+    transform: translate3d(0, calc(var(--ui-card-hover-lift, 0px) * -1), 0)
+      scale(var(--ui-card-hover-scale, 1));
   }
 
   html[data-card-hover="0"] .glass-card:hover {
-    border-color: hsl(var(--border) / var(--ui-card-border-opacity, 0.9));
+    border-color: hsl(var(--ui-card-border-color, var(--border)) / var(--ui-card-border-opacity, 0.9));
+    transform: none;
   }
 
   html[data-card-shadow="1"] .glass-card:hover,
   html:not([data-card-shadow]) .glass-card:hover {
-    box-shadow: 0 2px 12px -4px hsl(var(--primary) / 0.1);
+    box-shadow: 0 var(--ui-card-shadow-y, 1px) var(--ui-card-hover-shadow-blur, 12px)
+      hsl(var(--ui-card-shadow-color, 222 47% 11%) / var(--ui-card-hover-shadow-opacity, 0.1));
   }
 
   html[data-card-shadow="0"] .glass-card:hover {
@@ -323,6 +297,10 @@
   .filter-card {
     @apply glass-card;
     padding: var(--ui-density-card-padding, var(--ui-card-padding, 1rem));
+  }
+
+  .app-card-gap {
+    gap: var(--ui-card-gap, 16px);
   }
 
   .sticky-filter-card {
@@ -518,7 +496,9 @@
   }
 
   html[data-sb-collapse-transition="1"][data-sb-rail-transition="1"] [data-sidebar="rail"] {
-    transition: all var(--sb-collapse-duration, 200ms) var(--sb-collapse-easing, linear);
+    transition:
+      transform var(--sb-collapse-duration, 200ms) var(--sb-collapse-easing, linear),
+      opacity var(--sb-collapse-duration, 200ms) var(--sb-collapse-easing, linear);
   }
 }
 
@@ -1251,7 +1231,6 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   transition:
     transform var(--pg-featured-hover-duration, 250ms) ease,
     background var(--pg-featured-hover-duration, 250ms) ease;
-  will-change: transform;
 }
 
 .pg-hero-stage.has-tilt .pg-hero-card {
@@ -1297,7 +1276,6 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   animation-fill-mode: both;
   backface-visibility: hidden;
   transform: translateZ(0);
-  will-change: opacity, transform;
 }
 
 .pg-hero-slide-none {
@@ -1657,7 +1635,6 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
 
 .pg-why-track {
   display: flex;
-  will-change: transform;
 }
 
 .pg-why-card {
