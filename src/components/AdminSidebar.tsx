@@ -195,6 +195,7 @@ export function AdminSidebar() {
     ? filterNavItems([...adminUserItems, ...adminItems])
     : filterNavItems(userItems);
   const sidebarLabels = resolveDeviceTheme(appearance, activeDevice).global.sidebarLabels;
+  const sidebarStyle = resolveDeviceTheme(appearance, activeDevice).global.sidebar;
   const isActive = (to?: string) =>
     to ? location.pathname === to || location.pathname.startsWith(`${to}/`) : false;
   const labelFor = (key: keyof SidebarLabels | undefined, fallback: string) => (key ? sidebarLabels[key] || fallback : fallback);
@@ -207,9 +208,13 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="icon" variant="sidebar" className="border-r border-sidebar-border">
       <SidebarContent>
-        <div className="sidebar-brand border-b border-sidebar-border">
-          <p className="sidebar-brand-title">PG Diary</p>
-          <p className="text-[10px] text-sidebar-foreground/60 mt-0.5">Question Bank</p>
+        <div
+          className={cn("sidebar-brand", sidebarStyle.brandShowBorder && "border-b border-sidebar-border")}
+        >
+          <p className="sidebar-brand-title">{sidebarStyle.brandTitle}</p>
+          {sidebarStyle.brandSubtitle.trim() ? (
+            <p className="sidebar-brand-subtitle">{sidebarStyle.brandSubtitle}</p>
+          ) : null}
         </div>
         <SidebarGroup>
           <SidebarGroupContent>

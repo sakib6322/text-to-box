@@ -1,158 +1,232 @@
 export type AppearanceGuideItem = { title: string; body: string };
 
 export const GUIDE_WEBSITE_UI: AppearanceGuideItem[] = [
-  { title: "Font family / Base font size / Line height", body: "পুরো অ্যাপের ডিফল্ট টাইপোগ্রাফি। ছাত্র/অ্যাডমিন পেজের বেস টেক্সট সাইজ ও লাইন স্পেসিং।" },
-  { title: "Border radius / Content max width / Density", body: "কার্ড ও বাটনের কোণার গোলত্ব, কন্টেন্টের সর্বোচ্চ প্রস্থ, এবং comfortable/compact ঘনত্ব।" },
-  { title: "Card border width / opacity", body: "কার্ড বর্ডারের পুরুত্ব ও স্বচ্ছতা। মোবাইলে 0 দিলে বর্ডার উধাও — device আলাদা করে সেট করা যায়।" },
-  { title: "Card / Page padding / Section gap", body: "কার্ডের ভিতরের ফাঁকা জায়গা, পেজ মার্জিন, এবং সেকশনগুলোর মধ্যে ফাঁক।" },
-  { title: "Set to Phone / Tablet / Computer / all", body: "বর্তমান ডিভাইসের লেআউট/রঙ/লেবেল অন্য ডিভাইসে কপি করে। Save না করলে শুধু ড্রাফট।" },
-  { title: "Colors (Primary, Accent, …)", body: "থিমের মূল রঙ — HSL মান `hsl()` ছাড়া (যেমন `222 47% 11%`)। বাটন, লিংক, ব্যাকগ্রাউন্ড ইত্যাদিতে লাগে।" },
-  { title: "Sidebar background / foreground", body: "বাম সাইডবারের ব্যাকগ্রাউন্ড ও টেক্সট রঙ।" },
-  { title: "Page title gradient / Mesh background", body: "পেজ টাইটেলে গ্রেডিয়েন্ট এবং পেজ ব্যাকগ্রাউন্ডে soft mesh ইফেক্ট চালু/বন্ধ।" },
-  { title: "Card backdrop blur / Sticky bar blur", body: "কার্ড ও sticky হেডারে ব্লার। মোবাইলে স্ক্রল ল্যাগ বাড়াতে পারে — সাবধানে।" },
-  { title: "Card shadow / Card hover highlight", body: "কার্ডের ছায়া এবং হোভারে প্রাইমারি-টিন্টেড বর্ডার।" },
-  { title: "Sidebar page names", body: "সাইডবারের প্রতিটি মেনু আইটেমের প্রদর্শন নাম (Home, Settings, Appearance ইত্যাদি)।" },
+  {
+    title: "Font family",
+    body: "কোথায়: পুরো অ্যাপ (student + admin) — body text, sidebar, header, ফর্ম। Save-এর পর reload/নতুন পেজে দেখবেন।",
+  },
+  {
+    title: "Base font size / Line height",
+    body: "কোথায়: `:root` font-size — সব general text। Concept detail typography আলাদা tab-এ।",
+  },
+  {
+    title: "Border radius / Content max width / Density",
+    body: "কোথায়: `--radius` → বাটন, input, glass-card। max width → main content column। Density → card/page padding ও gap (comfortable vs compact)।",
+  },
+  {
+    title: "Card border width / opacity / padding",
+    body: "কোথায়: `.glass-card`, `.filter-card` — admin list, student cards। opacity 0 = বর্ডার অদৃশ্য (mobile-এ আলাদা সেট করা যায়)।",
+  },
+  {
+    title: "Page padding / Section gap",
+    body: "কোথায়: `.app-section-stack`, page shell margins — admin/student page layout spacing।",
+  },
+  {
+    title: "Set to Phone / Tablet / Computer / all",
+    body: "বর্তমান edit device-এর theme colors/layout/labels অন্য device-এ কপি। Save না করলে শুধু draft — live site-এ যায় Save-এর পর।",
+  },
+  {
+    title: "Theme colors (Primary, Accent, Background…)",
+    body: "রঙ picker দিয়ে সিলেক্ট করুন (#hex দেখায়, ভিতরে HSL token সেভ)। কোথায়: `--primary` → বাটন, ring, glow; `--background` → page; `--card` → glass-card; `--border` → borders। Sidebar/header-এর আলাদা override থাকলে সেখানে priority বেশি।",
+  },
+  {
+    title: "Page title gradient",
+    body: "কোথায়: `.page-title` class — admin page headings (gradient primary→accent)। বন্ধ = solid foreground।",
+  },
+  {
+    title: "Mesh background",
+    body: "কোথায়: `html[data-mesh-bg]` — page shell soft gradient mesh।",
+  },
+  {
+    title: "Card backdrop blur / Sticky bar blur",
+    body: "কোথায়: `.glass-card` blur; `.sticky-filter-card` (filter bars) blur। Mobile scroll lag হতে পারে। Header blur → Header style section (আলাদা)।",
+  },
+  {
+    title: "Card shadow / Card hover highlight",
+    body: "কোথায়: `.glass-card` shadow ও hover border tint।",
+  },
+  {
+    title: "Sidebar style — colors",
+    body: "কোথায়: `AdminSidebar` + shadcn Sidebar — `--sidebar-*` tokens। Background/foreground/menu hover/active/brand title। Global theme color override করে না (sidebar নিজস্ব)।",
+  },
+  {
+    title: "Sidebar style — width / brand / menu",
+    body: "কোথায়: `--sidebar-width` desktop expanded; icon mode width; mobile sheet `--sb-width-mobile`; brand title/subtitle `AdminSidebar` top; menu font/height/padding/radius `[data-sidebar=menu-button]` ও submenu `[data-sidebar=menu-sub-button]`।",
+  },
+  {
+    title: "Sidebar page names",
+    body: "কোথায়: `AdminSidebar` nav labels — Home, Settings, Question bank, ইত্যাদি। Route/path বদলায় না, শুধু display text।",
+  },
+  {
+    title: "Header style — colors",
+    body: "কোথায়: `AppShellHeader` — top sticky bar (page title, search, bell)। `--hdr-*` CSS vars। Sidebar/theme color থেকে আলাদা; header section দিয়ে override।",
+  },
+  {
+    title: "Header style — layout / behavior",
+    body: "Height, title size/weight, search box size/radius, padding। Hide on scroll down → scroll down-এ header slide up। Backdrop blur → header-এ glass effect (`data-hdr-blur`)।",
+  },
 ];
 
 export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
-  { title: "Font / Body size / Line height / Paragraph spacing", body: "Concept detail (শিক্ষার্থী পড়ার ভিউ) টেক্সটের ফন্ট, সাইজ, লাইন হাইট ও প্যারাগ্রাফ ফাঁক।" },
-  { title: "Bold weight / H1–H3 size", body: "বোল্ড কত শক্ত দেখাবে এবং হেডিং লেভেলের ফন্ট সাইজ।" },
-  { title: "Bullet size / List indent", body: "তালিকার বুলেট সাইজ ও বাম ইনডেন্ট।" },
-  { title: "Paragraph / Heading / Link / Bullet colors", body: "বডি, H1–H3, লিংক ও বুলেটের রঙ।" },
-  { title: "Table colors & sizing", body: "টেবিল হেডার ব্যাকগ্রাউন্ড/টেক্সট, বর্ডার, জোড় সারি, ফন্ট সাইজ ও সেল প্যাডিং।" },
-  { title: "Code background / Blockquote border", body: "ইনলাইন কোডের ব্যাকগ্রাউন্ড এবং ব্লককোটের বাম বর্ডার রঙ।" },
-  { title: "Show key points on details", body: "Concept details page-এ body-র নিচে key points list দেখাবে কি না। Count/board বেশি থাকলে আগে থাকে।" },
-  { title: "Student action buttons", body: "Details, Questions, Study, Practice, Study & Practice — কোন বাটন student/user দেখবে তা চালু/বন্ধ।" },
+  {
+    title: "Font / Body size / Line height / Paragraph spacing",
+    body: "কোথায়: Concept detail read view — `ConceptDetailPage`, `ConceptLearn` Step 1, `ConceptDetailsDialog`, `--cd-*` vars। Editor (CKEditor) typography নয়।",
+  },
+  {
+    title: "Bold weight / H1–H3 size",
+    body: "কোথায়: `.concept-detail-body` headings ও `<strong>` weight।",
+  },
+  {
+    title: "Bullet size / List indent",
+    body: "কোথায়: concept body `<ul>/<ol>` lists।",
+  },
+  {
+    title: "Paragraph / Heading / Link / Bullet colors",
+    body: "রঙ picker (#hex)। কোথায়: `.concept-detail-body` text, h1–h3, a, li markers।",
+  },
+  {
+    title: "Table colors & sizing",
+    body: "কোথায়: concept detail HTML tables — header row, borders, even rows, cell padding।",
+  },
+  {
+    title: "Code background / Blockquote border",
+    body: "কোথায়: `<code>` inline ও `<blockquote>` left border in concept body।",
+  },
+  {
+    title: "Show key points on details",
+    body: "কোথায়: `ConceptDetailPage` — body-র নিচে sorted key points list। Count/board বেশি = আগে।",
+  },
+  {
+    title: "Student action buttons",
+    body: "Details → concept header; Questions/Study/Practice → details + learn header; Study & Practice → My Suggestions card; Study → Practice setup back link। বন্ধ = বাটন render হয় না।",
+  },
 ];
 
 export const GUIDE_STORY: AppearanceGuideItem[] = [
-  { title: "Button label / Empty message", body: "Story বাটনের লেখা এবং স্টোরি খালি থাকলে যে মেসেজ দেখায়।" },
-  { title: "Dialog max width", body: "Story প্যানেল/ডায়ালগ কত চওড়া হবে (md → full)।" },
-  { title: "Show button icon", body: "বাটনের পাশে বই আইকন দেখাবে কি না।" },
-  { title: "Font / sizes / radius / padding", body: "স্টোরি কন্টেন্টের টাইপোগ্রাফি, বর্ডার রেডিয়াস ও ভিতরের প্যাডিং।" },
-  { title: "Title / Body / Heading / Link colors", body: "স্টোরি টাইটেল, বডি, হেডিং ও লিংকের রঙ।" },
-  { title: "Background / Panel / Accent / Border", body: "প্যানেলের ব্যাকগ্রাউন্ড, অ্যাকসেন্ট ডট ও বর্ডার রঙ।" },
-  { title: "Set to Phone / Tablet / …", body: "এই ডিভাইসের Story ডিজাইন অন্য ডিভাইসে কপি।" },
+  { title: "Button label / Empty message", body: "কোথায়: concept pages-এ Story button text; story খালি থাকলে dialog message।" },
+  { title: "Dialog max width", body: "কোথায়: Story panel/dialog — `data-sbl-dialog-width` (sm/md/lg/full)।" },
+  { title: "Show button icon", body: "কোথায়: Story CTA button-এ book icon।" },
+  { title: "Font / sizes / radius / padding", body: "কোথায়: story reader content panel — `--sbl-*` typography ও padding।" },
+  { title: "Title / Body / Heading / Link colors", body: "রঙ picker। কোথায়: story dialog/panel text elements।" },
+  { title: "Background / Panel / Accent / Border", body: "কোথায়: story panel shell, accent dots, borders।" },
+  { title: "Set to Phone / Tablet / …", body: "Story design device间 copy — Save পর্যন্ত draft।" },
 ];
 
 export const GUIDE_QUESTIONS: AppearanceGuideItem[] = [
-  { title: "Use sidebar label as title / Custom page title", body: "পেজ টাইটেল সাইডবার লেবেল থেকে নেবে, নাকি নিচের কাস্টম টাইটেল ব্যবহার করবে।" },
-  { title: "Empty message / Result badge / Sticky filters", body: "প্রশ্ন না থাকলে মেসেজ, ফলাফল কাউন্ট ব্যাজ, এবং ফিল্টার বার স্ক্রলে আটকে থাকবে কি না।" },
-  { title: "List max width / Card gap", body: "প্রশ্ন তালিকার প্রস্থ ও কার্ডগুলোর ফাঁক।" },
-  { title: "Paper shell (padding, radius, shadow, colors)", body: "প্রশ্নপত্র কার্ডের চেহারা — প্যাডিং, কোণা, ছায়া, ব্যাকগ্রাউন্ড ও বর্ডার।" },
-  { title: "Header · taxonomy · badges", body: "পেপার হেডার, সাবজেক্ট/ট্যাক্সোনমি লাইন এবং T/F বা অপশন ব্যাজের রঙ/বর্ডার।" },
-  { title: "Stem / Options / Explanations", body: "প্রশ্ন স্টেম, অপশন/স্টেটমেন্ট এবং Explanation ব্লকের ফন্ট, রঙ ও লেবেল।" },
-  { title: "Live paper preview", body: "নিচের নমুনা পেপারে উপরের সেটিংস লাইভ দেখায় — Save করার আগে যাচাই।" },
+  { title: "Use sidebar label as title / Custom page title", body: "কোথায়: All Questions admin page `<h1>` — sidebar label বা custom string।" },
+  { title: "Empty message / Result badge / Sticky filters", body: "কোথায়: question list page — no results text, count badge, filter bar sticky top।" },
+  { title: "List max width / Card gap", body: "কোথায়: question cards container width ও spacing।" },
+  { title: "Paper shell (padding, radius, shadow, colors)", body: "কোথায়: each question paper card — `--aq-paper-*`।" },
+  { title: "Header · taxonomy · badges", body: "কোথায়: paper top — subject line, T/F badges, mode/board chips colors।" },
+  { title: "Stem / Options / Explanations", body: "কোথায়: question stem text, MCQ options/statements, explanation block labels/fonts/colors।" },
+  { title: "Live paper preview", body: "Tab-এর নিচে sample paper — Save-এর আগে verify।" },
 ];
 
 export const GUIDE_LANDING_COLORS: AppearanceGuideItem[] = [
-  { title: "Hero background color 1–3", body: "Hero সেকশনের গ্রেডিয়েন্ট তিন রঙ থেকে তৈরি। ব্যাকগ্রাউন্ড ফিক্সড থাকে, কন্টেন্ট স্ক্রল করে।" },
-  { title: "Courses / About / FAQ / Footer section bg", body: "প্রতিটি সেকশনের আলাদা sticky ব্যাকগ্রাউন্ড — hex, rgba বা CSS gradient।" },
-  { title: "Text / Muted / Accent", body: "ল্যান্ডিংয়ের মূল টেক্সট, মিউটেড টেক্সট ও অ্যাকসেন্ট রঙ।" },
-  { title: "Course card / Routine / FAQ card bg", body: "কোর্স কার্ড, রুটিন প্যানেল ও FAQ কার্ডের ব্যাকগ্রাউন্ড/বর্ডার।" },
+  { title: "Hero background color 1–3", body: "কোথায়: public `/` landing hero gradient (`CourseLanding`) — fixed background layer।" },
+  { title: "Courses / About / FAQ / Footer section bg", body: "কোথায়: respective landing sections sticky backgrounds — hex/rgba/gradient string।" },
+  { title: "Text / Muted / Accent", body: "কোথায়: landing global text colors — nav, hero, sections।" },
+  { title: "Course card / Routine / FAQ card bg", body: "কোথায়: course grid cards, routine panel, FAQ accordion items।" },
 ];
 
 export const GUIDE_LANDING_NAV: AppearanceGuideItem[] = [
-  { title: "Brand name", body: "Header ও Hero-তে দেখানো ব্র্যান্ড/প্রোডাক্ট নাম।" },
-  { title: "Nav · Courses / About / FAQ", body: "উপরের নেভ মেনু লিংকের লেখা — সংশ্লিষ্ট সেকশনে নিয়ে যায়।" },
-  { title: "Login / Register button", body: "লগইন না থাকলে ডানদিকের CTA টেক্সট।" },
-  { title: "Go to app button", body: "লগইন থাকলে একই জায়গার CTA — অ্যাপে প্রবেশ।" },
+  { title: "Brand name", body: "কোথায়: landing header logo text + hero brand line।" },
+  { title: "Nav · Courses / About / FAQ", body: "কোথায়: top nav anchor links → scroll to section ids।" },
+  { title: "Login / Register button", body: "কোথায়: logged-out header CTA → `/login`।" },
+  { title: "Go to app button", body: "কোথায়: logged-in header CTA → app entry route।" },
 ];
 
 export const GUIDE_LANDING_HERO: AppearanceGuideItem[] = [
-  { title: "Eyebrow / Headline / Supporting text", body: "Hero-এর ছোট উপরে লেখা, বড় শিরোনাম এবং সাপোর্টিং প্যারাগ্রাফ।" },
-  { title: "Explore CTA / Featured label", body: "Explore বাটনের লেখা এবং Featured ট্র্যাক লেবেল।" },
-  { title: "Fallback course title / description", body: "কোর্স ডেটা না থাকলে Hero-তে যে নমুনা টাইটেল/বর্ণনা দেখায়।" },
-  { title: "Fixed hero overlay", body: "Hero-এর উপর ফিক্সড রঙের ওভারলে — প্রস্থ/উচ্চতা/টপ অফসেট (%) দিয়ে নিয়ন্ত্রণ।" },
+  { title: "Eyebrow / Headline / Supporting text", body: "কোথায়: hero section copy blocks।" },
+  { title: "Explore CTA / Featured label", body: "কোথায়: hero primary button + featured carousel label।" },
+  { title: "Fallback course title / description", body: "কোথায়: hero when no featured course API data।" },
+  { title: "Fixed hero overlay", body: "কোথায়: hero decorative overlay div — position/size %।" },
 ];
 
 export const GUIDE_LANDING_FEATURED: AppearanceGuideItem[] = [
-  { title: "Autoplay / Interval / Transition", body: "ফিচার্ড স্লাইড অটো ঘুরবে কি না, কত সেকেন্ড পর, এবং fade/slide/scale অ্যানিমেশন।" },
-  { title: "Max slides", body: "ফিচার্ড কার্ডে সর্বোচ্চ কতগুলো কোর্স স্লাইড দেখাবে।" },
-  { title: "Shine / 3D tilt / Hover lift", body: "চকচকে shine, 3D tilt ও হোভার লিফট — মোবাইলে ল্যাগ করতে পারে, ডিফল্টে সাবধানে ব্যবহার করুন।" },
+  { title: "Autoplay / Interval / Transition", body: "কোথায়: `WhyCarousel`/featured slides on landing — timing & animation।" },
+  { title: "Max slides", body: "কোথায়: featured course carousel item cap।" },
+  { title: "Shine / 3D tilt / Hover lift", body: "কোথায়: featured card CSS effects — mobile perf সতর্কতা।" },
 ];
 
 export const GUIDE_LANDING_COURSES: AppearanceGuideItem[] = [
-  { title: "Section title / subtitle", body: "Courses সেকশনের শিরোনাম ও সাবটাইটেল।" },
-  { title: "Routine / Enroll labels", body: "রুটিন বোতাম ও এনরোল/CTA লেবেলের টেক্সট।" },
+  { title: "Section title / subtitle", body: "কোথায়: `#courses` section heading।" },
+  { title: "Routine / Enroll labels", body: "কোথায়: course card buttons — routine modal, enroll CTA text।" },
 ];
 
 export const GUIDE_LANDING_ABOUT: AppearanceGuideItem[] = [
-  { title: "About title / body", body: "Why/About সেকশনের শিরোনাম ও বর্ণনা।" },
-  { title: "Why cards carousel", body: "কার্ডগুলোর অটোপ্লে, ইন্টারভাল এবং প্রতিটি কার্ডের টাইটেল/বডি — ল্যান্ডিংয়ের “কেন এই কোর্স” ক্যারousel।" },
+  { title: "About title / body", body: "কোথায়: About/Why section intro text।" },
+  { title: "Why cards carousel", body: "কোথায়: `.pg-why-*` carousel — card title/body, autoplay interval।" },
 ];
 
 export const GUIDE_LANDING_FAQ: AppearanceGuideItem[] = [
-  { title: "FAQ title / subtitle", body: "FAQ সেকশনের হেডিং।" },
-  { title: "Questions list", body: "প্রশ্ন–উত্তর জোড়া যোগ/সম্পাদনা/মুছে ফেলা। পাবলিক ল্যান্ডিংয়ে অ্যাকর্ডিয়ন হিসেবে দেখায়।" },
+  { title: "FAQ title / subtitle", body: "কোথায়: FAQ section header on landing।" },
+  { title: "Questions list", body: "কোথায়: public landing FAQ accordion items (Q/A pairs)।" },
 ];
 
 export const GUIDE_LANDING_FOOTER: AppearanceGuideItem[] = [
-  { title: "Footer brand / tagline / copyright", body: "ফুটারের ব্র্যান্ড লাইন, ট্যাগলাইন ও কপিরাইট টেক্সট।" },
-  { title: "FAB label", body: "মোবাইল ফ্লোটিং অ্যাকশন বাটনের লেখা (যদি চালু থাকে)।" },
+  { title: "Footer brand / tagline / copyright", body: "কোথায়: landing page footer block।" },
+  { title: "FAB label", body: "কোথায়: mobile floating action button text (if enabled)।" },
 ];
 
 export const GUIDE_PROGRESS_STEPS: AppearanceGuideItem[] = [
-  { title: "Step bar title", body: "কনসেপ্ট লার্ন পেজের ৪-স্টেপ বারের উপরে দেখানো টাইটেল।" },
-  { title: "Prefer Bengali step labels", body: "চালু থাকলে step.labelBn দেখাবে; না হলে ইংরেজি label।" },
-  { title: "Step 1–4 English / Bengali labels", body: "প্রতিটি ধাপের নাম (Concept Learning, Key Points, …) দুই ভাষায়।" },
+  { title: "Step bar title", body: "কোথায়: `ConceptLearn` 4-step progress bar heading।" },
+  { title: "Prefer Bengali step labels", body: "কোথায়: step bar — `labelBn` vs English `label`।" },
+  { title: "Step 1–4 English / Bengali labels", body: "কোথায়: each step name in concept learn flow UI।" },
 ];
 
 export const GUIDE_PROGRESS_COPY: AppearanceGuideItem[] = [
-  { title: "Study progress title / subtitle", body: "My progress পেজের শিরোনাম ও সাবটাইটেল।" },
-  { title: "Course complete / Progress % suffix", body: "কোর্স শেষ ব্যাজ এবং “42% complete”-এর মতো সাফিক্স।" },
-  { title: "Exam Night / Final mock / Review mistakes", body: "প্রোফাইল/প্রগ্রেস কার্ডের টাইটেল, সাবটাইটেল ও বাটন টেক্সট।" },
-  { title: "Concept practice intro / Step complete buttons", body: "প্র্যাকটিস ইন্ট্রো এবং Step 1/2 সম্পন্ন বাটনের লেখা।" },
-  { title: "Locked steps message", body: "আগের ধাপ শেষ না হলে যে সতর্কবার্তা দেখায়।" },
+  { title: "Study progress title / subtitle", body: "কোথায়: `/study/progress` (My progress) page header।" },
+  { title: "Course complete / Progress % suffix", body: "কোথায়: course cards — completion badge & percentage text।" },
+  { title: "Exam Night / Final mock / Review mistakes", body: "কোথায়: profile/progress page feature cards — titles, subtitles, buttons।" },
+  { title: "Concept practice intro / Step complete buttons", body: "কোথায়: practice setup intro; Step 1/2 complete button labels in learn flow।" },
+  { title: "Locked steps message", body: "কোথায়: learn flow when user tries locked step।" },
 ];
 
 export const GUIDE_PROGRESS_FEATURES: AppearanceGuideItem[] = [
-  { title: "Progress Plan enabled", body: "পুরো প্রগ্রেস প্ল্যান ফিচার চালু/বন্ধ।" },
-  { title: "Show concept step bar / % on browse", body: "কনসেপ্ট পেজে স্টেপ বার এবং কোর্স ব্রাউজে % দেখাবে কি না।" },
-  { title: "Exam Night / Final Mock / Review Mistakes cards", body: "প্রোফাইলে সংশ্লিষ্ট কার্ড দেখাবে কি না।" },
-  { title: "Default pass %", body: "অ্যাডমিন সেটে pass_percent না থাকলে ব্যবহৃত পাস মার্ক।" },
-  { title: "Exam Night unlock (hours)", body: "ফাইনাল মক-এর কত ঘণ্টা আগে Exam Night আনলক হবে।" },
+  { title: "Progress Plan enabled", body: "কোথায়: global progress plan UI on/off (`data-progress-plan-enabled`)।" },
+  { title: "Show concept step bar / % on browse", body: "কোথায়: concept learn header bar; course browse progress % badges।" },
+  { title: "Exam Night / Final Mock / Review Mistakes cards", body: "কোথায়: profile page — show/hide each card type।" },
+  { title: "Default pass %", body: "কোথায়: fallback when admin set lacks pass_percent threshold।" },
+  { title: "Exam Night unlock (hours)", body: "কোথায়: hours before final mock when Exam Night card unlocks।" },
 ];
 
 export const GUIDE_PROGRESS_COLORS: AppearanceGuideItem[] = [
-  { title: "Progress bar / Complete badge", body: "প্রগ্রেস বার ও “complete” ব্যাজের রঙ।" },
-  { title: "Exam Night / Final mock card colors", body: "কার্ড ব্যাকগ্রাউন্ড, বর্ডার ও আইকন রঙ।" },
-  { title: "Mistake accent", body: "Review mistakes হাইলাইট অ্যাকসেন্ট রঙ।" },
+  { title: "Progress bar / Complete badge", body: "রং picker। কোথায়: `--pg-progress-bar`, `--pg-complete-badge` — My progress bars, course complete chips।" },
+  { title: "Exam Night / Final mock card colors", body: "কোথায়: profile feature cards bg/border/icon (`--pg-exam-night-*`, `--pg-final-mock-*`)।" },
+  { title: "Mistake accent", body: "কোথায়: Review mistakes highlights — `--pg-mistake-accent`।" },
 ];
 
 export const GUIDE_HEADING_SLIDES: AppearanceGuideItem[] = [
-  { title: "Enable on Concept details", body: "কনসেপ্ট ডিটেইলস পড়ার ভিউতে (Learn Step 1, ডায়ালগ, পেজ) heading অনুযায়ী স্লাইড চালু।" },
-  { title: "Enable on Story-based learning", body: "স্টোরি রিড/প্রিভিউতে একই স্লাইড UI চালু।" },
-  { title: "Split H1–H6", body: "কোন হেডিং লেভেলে নতুন স্লাইড শুরু হবে। একাধিক লেভেল একসাথে চালু করা যায়। ডিফল্ট শুধু H1।" },
-  { title: "Content before first heading", body: "প্রথম স্প্লিট হেডিংয়ের আগের কন্টেন্ট আলাদা Intro স্লাইড হবে, নাকি প্রথম স্লাইডে মিলবে।" },
-  { title: "Show Next after scroll %", body: "স্ক্রল কত % হলে Next দেখাবে (যেমন 85)।" },
-  { title: "Min chars per slide", body: "খুব ছোট স্লাইড আগেরটার সাথে মার্জ — 0 মানে বন্ধ।" },
-  { title: "Scroll mode (Page / Nested)", body: "Page = পেজের সাথে স্ক্রল; Next দেখার পরও নিচে (Complete ইত্যাদি) যেতে পারেন — Concept Learn-এ সুপারিশকৃত। Nested = স্লাইডের ভিতরে আলাদা স্ক্রল বক্স — মোবাইলে আটকে যেতে পারে।" },
-  { title: "Trap scroll inside nested box", body: "শুধু Nested মোডে। চালু থাকলে স্ক্রল বক্সের কিনারায় পেজে স্ক্রল যাবে না (আটকে থাকে)। বন্ধ রাখলে চেইন হতে পারে।" },
-  { title: "Require scroll to end before Next", body: "চালু থাকলে নিচে না গেলে Next দেখাবে না।" },
-  { title: "Show next heading below button (card)", body: "Next বাটনে heading না — বাটনের নিচের কার্ডে পরের স্লাইডের heading।" },
-  { title: "Show Previous / Show slide counter", body: "Previous বাটন এবং “1 / N” কাউন্টার দেখাবে কি না।" },
-  { title: "Sticky Next bar", body: "Nested মোডে Next বার স্ক্রল বক্সের নিচে ওভারলে থাকে। Page মোডে সাধারণত ফ্লোতে থাকে।" },
-  { title: "Next / Previous / Counter / Last slide labels", body: "বাটন ও কাউন্টার টেক্সট। Heading card template-এ `{heading}` ব্যবহার করুন।" },
-  { title: "Next bar background / text color", body: "Next বারের ব্যাকগ্রাউন্ড ও টেক্সট রঙ (CSS color)।" },
-  { title: "Live preview", body: "নমুনা HTML দিয়ে স্লাইড আচরণ এখানেই টেস্ট — Save করার আগে দেখুন।" },
+  { title: "Enable on Concept details", body: "কোথায়: Concept read views with `HeadingSlideReader` — Learn Step 1, details page, dialog।" },
+  { title: "Enable on Story-based learning", body: "কোথায়: story reader/preview same slide UI।" },
+  { title: "Split H1–H6", body: "কোথায়: which heading levels start a new slide (Word paste H1 default)।" },
+  { title: "Content before first heading", body: "কোথায়: intro slide vs merge into first content slide।" },
+  { title: "Show Next after scroll %", body: "কোথায়: scroll threshold before Next button appears।" },
+  { title: "Min chars per slide", body: "কোথায়: tiny slides merged into previous (0 = off)।" },
+  { title: "Scroll mode (Page / Nested)", body: "Page: whole page scrolls (Concept Learn recommended)। Nested: inner scroll box — mobile trap risk।" },
+  { title: "Trap scroll inside nested box", body: "Nested only — scroll chaining to page on/off at box edge।" },
+  { title: "Require scroll to end before Next", body: "কোথায়: must reach slide bottom before Next shows।" },
+  { title: "Show next heading below button (card)", body: "কোথায়: heading preview card under Next button (`{heading}` template)।" },
+  { title: "Show Previous / Show slide counter", body: "কোথায়: Previous button & `1 / N` counter in slide reader।" },
+  { title: "Sticky Next bar", body: "Nested mode — Next bar overlays scroll box footer।" },
+  { title: "Next / Previous / Counter / Last slide labels", body: "কোথায়: button & counter text in `HeadingSlideReader`।" },
+  { title: "Next bar background / text color", body: "রঙ picker। কোথায়: `--hs-next-bar-bg/fg` sticky Next bar।" },
+  { title: "Live preview", body: "Sample HTML slide behavior before Save।" },
 ];
 
 export const GUIDE_PERFORMANCE: AppearanceGuideItem[] = [
-  { title: "Smooth scroll", body: "পেজ স্মুথ স্ক্রল। সব ডিভাইসে শেয়ারড — অনেক সময় ল্যাগ বাড়ায়।" },
-  { title: "Reduce motion", body: "অ্যানিমেশন কমায় (অ্যাক্সেসিবিলিটি / পারফরম্যান্স)।" },
+  { title: "Smooth scroll", body: "কোথায়: `html` scroll-behavior — all devices shared; may affect scroll perf।" },
+  { title: "Reduce motion", body: "কোথায়: `data-reduce-motion` — limits animations site-wide।" },
 ];
 
 export const GUIDE_RICH_EDITOR: AppearanceGuideItem[] = [
-  { title: "Image lazy loading", body: "Concept details, Story, slides ইত্যাদিতে image viewport-এ আসলে load হবে — page speed ভালো থাকে।" },
-  { title: "Direct image upload", body: "CKEditor-এ image upload বাটন। বন্ধ থাকলে Google Drive link বা URL ব্যবহার করুন — database ছোট থাকে।" },
-  { title: "Image compression", body: "Upload-এর আগে JPEG compress/resize — base64 size কমায়। শুধু direct upload চালু থাকলে কাজ করে।" },
-  { title: "Max width / quality", body: "Compression চালু থাকলে image কত px পর্যন্ত resize ও JPEG quality (0.5–1)।" },
-  { title: "Google Drive embeds", body: "Drive share link paste করলে automatic image embed + lazy load।" },
-  { title: "Toolbar wrap", body: "Editor toolbar এখন একাধিক লাইনে wrap হয় — সব icon দেখা যায়।" },
+  { title: "Image lazy loading", body: "কোথায়: read views — `RichHtmlContent` img loading=lazy when near viewport।" },
+  { title: "Direct image upload", body: "কোথায়: CKEditor toolbar upload — embeds base64 in saved HTML।" },
+  { title: "Image compression", body: "কোথায়: upload pipeline resize/JPEG before embed (needs direct upload on)।" },
+  { title: "Google Drive link → image", body: "কোথায়: paste Drive/public URL in Image dropdown → `/api/gdrive-image` proxy in HTML।" },
 ];
 
 export const GUIDE_PREVIEW: AppearanceGuideItem[] = [
-  { title: "Live preview panel", body: "বর্তমান ভিউপোর্ট ডিভাইসের থিম দিয়ে নমুনা UI দেখায়। উপরে যে ডিভাইস এডিট করছেন সেটা আলাদা হতে পারে।" },
-  { title: "Load defaults into draft", body: "সব অপশন ডিফল্টে রিসেট করে ড্রাফটে — ডাটাবেজে যায় না যতক্ষণ Save না করেন।" },
+  { title: "Combined preview tab", body: "Website + Concept + Story sample একসাথে — Save-এর আগে quick check। Device tab (Phone/Tablet/Computer) বদলালে draft theme সেই device-এর জন্য apply হয় preview-তে।" },
 ];

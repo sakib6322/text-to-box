@@ -4,11 +4,14 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { HeadingSlideReader } from "@/components/HeadingSlideReader";
+import { cn } from "@/lib/utils";
 import {
   heroSectionBackground,
   landingPageStyleVars,
   progressStepLabel,
   type GlobalAppearance,
+  type SidebarAppearance,
+  type HeaderAppearance,
   type ConceptStudentUiAppearance,
   type HeadingSlidesAppearance,
   type LandingFaqAppearance,
@@ -40,10 +43,69 @@ export function AppearancePreviewPanel({
   );
 }
 
-export function GlobalWebsiteLivePreview({ g }: { g: GlobalAppearance }) {
+export function GlobalWebsiteLivePreview({
+  g,
+  sb,
+  hdr,
+}: {
+  g: GlobalAppearance;
+  sb?: SidebarAppearance;
+  hdr?: HeaderAppearance;
+}) {
   const labels = g.sidebarLabels;
+  const sidebar = sb ?? g.sidebar;
+  const header = hdr ?? g.header;
   return (
     <div className="space-y-4">
+      <div
+        className="overflow-hidden rounded-lg border text-xs"
+        style={{
+          background: `hsl(${header.backgroundHsl})`,
+          borderColor: `hsl(${header.borderHsl})`,
+          color: `hsl(${header.foregroundHsl})`,
+        }}
+      >
+        <div
+          className="flex items-center gap-2 border-b"
+          style={{
+            height: `${header.heightPx}px`,
+            paddingLeft: `${header.paddingHorizontalPx}px`,
+            paddingRight: `${header.paddingHorizontalPx}px`,
+            borderColor: `hsl(${header.borderHsl})`,
+          }}
+        >
+          <span
+            style={{
+              fontSize: `${header.titleFontSizePx}px`,
+              fontWeight: header.titleFontWeight,
+              color: `hsl(${header.titleColorHsl})`,
+            }}
+          >
+            Page title
+          </span>
+          <span
+            className="ml-auto flex-1 max-w-[8rem] rounded border px-2 py-1 text-[10px] opacity-70"
+            style={{
+              height: `${header.searchHeightPx}px`,
+              borderRadius: `${header.searchRadiusRem}rem`,
+              background: `hsl(${header.searchBackgroundHsl})`,
+              borderColor: `hsl(${header.searchBorderHsl})`,
+            }}
+          >
+            Search…
+          </span>
+          <span
+            className="relative inline-flex h-6 w-6 items-center justify-center rounded"
+            style={{ color: `hsl(${header.iconColorHsl})`, background: `hsl(${header.iconHoverBgHsl} / 0.3)` }}
+          >
+            •
+            <span
+              className="absolute right-0 top-0 h-1.5 w-1.5 rounded-full"
+              style={{ background: `hsl(${header.notificationDotHsl})` }}
+            />
+          </span>
+        </div>
+      </div>
       <div className="space-y-2">
         <p className="page-title-static">Sample page title</p>
         <p className="text-sm text-muted-foreground">Base font, line height, and content max width from current draft.</p>
@@ -68,14 +130,53 @@ export function GlobalWebsiteLivePreview({ g }: { g: GlobalAppearance }) {
         <div className="rounded-md border px-3 py-2 text-xs text-muted-foreground">Section two (gap)</div>
       </div>
       <div
-        className="max-w-[12rem] rounded-lg border p-2 text-xs"
-        style={{ background: `hsl(${g.sidebarBgHsl})`, color: `hsl(${g.sidebarFgHsl})` }}
+        className="max-w-[14rem] overflow-hidden rounded-lg border text-xs"
+        style={{
+          background: `hsl(${sidebar.backgroundHsl})`,
+          color: `hsl(${sidebar.foregroundHsl})`,
+          borderColor: `hsl(${sidebar.borderHsl})`,
+        }}
       >
-        <p className="mb-1 font-semibold opacity-80">Sidebar labels</p>
-        <p>{labels.home}</p>
-        <p>{labels.suggestions}</p>
-        <p>{labels.mySuggestions}</p>
-        <p className="opacity-70">{labels.settings}</p>
+        <div
+          className={cn("px-3 py-2", sidebar.brandShowBorder && "border-b")}
+          style={{
+            padding: `${sidebar.brandPaddingPx}px`,
+            borderColor: `hsl(${sidebar.borderHsl})`,
+          }}
+        >
+          <p className="font-bold" style={{ fontSize: `${sidebar.brandTitleSizePx}px`, color: `hsl(${sidebar.primaryHsl})` }}>
+            {sidebar.brandTitle}
+          </p>
+          {sidebar.brandSubtitle.trim() ? (
+            <p style={{ fontSize: `${sidebar.brandSubtitleSizePx}px`, opacity: sidebar.mutedOpacity }}>
+              {sidebar.brandSubtitle}
+            </p>
+          ) : null}
+        </div>
+        <div className="space-y-1 p-2">
+          {[labels.home, labels.suggestions, labels.settings].map((label) => (
+            <div
+              key={label}
+              className="flex items-center rounded-md"
+              style={{
+                minHeight: `${sidebar.menuItemHeightPx}px`,
+                padding: `${sidebar.menuItemPaddingPx}px`,
+                fontSize: `${sidebar.menuFontSizePx}px`,
+                borderRadius: `${sidebar.menuItemRadiusRem}rem`,
+                gap: `${sidebar.menuGapPx}px`,
+                background: label === labels.home ? `hsl(${sidebar.accentHsl})` : "transparent",
+                color: label === labels.home ? `hsl(${sidebar.accentForegroundHsl})` : undefined,
+                fontWeight: label === labels.home ? sidebar.activeFontWeight : 400,
+              }}
+            >
+              <span
+                className="rounded-sm bg-current/20"
+                style={{ width: sidebar.menuIconSizePx, height: sidebar.menuIconSizePx }}
+              />
+              <span className="truncate">{label}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

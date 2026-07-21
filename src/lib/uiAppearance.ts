@@ -31,6 +31,56 @@ export type SidebarLabels = {
   signOut: string;
 };
 
+/** App sidebar chrome — colors, layout, brand, menu item styling */
+export type SidebarAppearance = {
+  backgroundHsl: string;
+  foregroundHsl: string;
+  primaryHsl: string;
+  primaryForegroundHsl: string;
+  accentHsl: string;
+  accentForegroundHsl: string;
+  borderHsl: string;
+  ringHsl: string;
+  widthRem: number;
+  widthIconRem: number;
+  widthMobileRem: number;
+  brandTitle: string;
+  brandSubtitle: string;
+  brandTitleSizePx: number;
+  brandSubtitleSizePx: number;
+  brandPaddingPx: number;
+  brandShowBorder: boolean;
+  menuFontSizePx: number;
+  menuItemHeightPx: number;
+  menuItemPaddingPx: number;
+  menuItemRadiusRem: number;
+  menuIconSizePx: number;
+  menuGapPx: number;
+  activeFontWeight: number;
+  mutedOpacity: number;
+};
+
+/** Top app header bar — search, title, notifications */
+export type HeaderAppearance = {
+  backgroundHsl: string;
+  foregroundHsl: string;
+  borderHsl: string;
+  titleColorHsl: string;
+  searchBackgroundHsl: string;
+  searchBorderHsl: string;
+  iconColorHsl: string;
+  iconHoverBgHsl: string;
+  notificationDotHsl: string;
+  heightPx: number;
+  titleFontSizePx: number;
+  titleFontWeight: number;
+  searchHeightPx: number;
+  searchRadiusRem: number;
+  paddingHorizontalPx: number;
+  hideOnScrollDown: boolean;
+  backdropBlur: boolean;
+};
+
 export type GlobalAppearance = {
   fontFamily: string;
   baseFontSizePx: number;
@@ -43,8 +93,12 @@ export type GlobalAppearance = {
   cardHsl: string;
   borderHsl: string;
   mutedForegroundHsl: string;
-  sidebarBgHsl: string;
-  sidebarFgHsl: string;
+  /** @deprecated use global.sidebar — kept for legacy JSON migration only */
+  sidebarBgHsl?: string;
+  /** @deprecated use global.sidebar — kept for legacy JSON migration only */
+  sidebarFgHsl?: string;
+  sidebar: SidebarAppearance;
+  header: HeaderAppearance;
   pageTitleGradient: boolean;
   meshBackground: boolean;
   cardBackdropBlur: boolean;
@@ -457,6 +511,133 @@ function defaultSidebarLabels(overrides: Partial<SidebarLabels> = {}): SidebarLa
   };
 }
 
+function defaultSidebar(overrides: Partial<SidebarAppearance> = {}): SidebarAppearance {
+  return {
+    backgroundHsl: "222 47% 11%",
+    foregroundHsl: "210 25% 92%",
+    primaryHsl: "192 85% 48%",
+    primaryForegroundHsl: "0 0% 100%",
+    accentHsl: "222 35% 18%",
+    accentForegroundHsl: "210 25% 96%",
+    borderHsl: "222 30% 22%",
+    ringHsl: "192 85% 48%",
+    widthRem: 16,
+    widthIconRem: 3,
+    widthMobileRem: 18,
+    brandTitle: "PG Diary",
+    brandSubtitle: "Question Bank",
+    brandTitleSizePx: 14,
+    brandSubtitleSizePx: 10,
+    brandPaddingPx: 16,
+    brandShowBorder: true,
+    menuFontSizePx: 14,
+    menuItemHeightPx: 32,
+    menuItemPaddingPx: 8,
+    menuItemRadiusRem: 0.375,
+    menuIconSizePx: 16,
+    menuGapPx: 8,
+    activeFontWeight: 500,
+    mutedOpacity: 0.6,
+    ...overrides,
+  };
+}
+
+function mergeSidebar(
+  base: SidebarAppearance,
+  patch: unknown,
+  legacy?: { sidebarBgHsl?: string; sidebarFgHsl?: string },
+): SidebarAppearance {
+  const p = (patch && typeof patch === "object" ? patch : {}) as Partial<SidebarAppearance>;
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const num = (v: unknown, fallback: number, min: number, max: number) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  const merged: SidebarAppearance = {
+    backgroundHsl: str(p.backgroundHsl, base.backgroundHsl),
+    foregroundHsl: str(p.foregroundHsl, base.foregroundHsl),
+    primaryHsl: str(p.primaryHsl, base.primaryHsl),
+    primaryForegroundHsl: str(p.primaryForegroundHsl, base.primaryForegroundHsl),
+    accentHsl: str(p.accentHsl, base.accentHsl),
+    accentForegroundHsl: str(p.accentForegroundHsl, base.accentForegroundHsl),
+    borderHsl: str(p.borderHsl, base.borderHsl),
+    ringHsl: str(p.ringHsl, base.ringHsl),
+    widthRem: num(p.widthRem, base.widthRem, 12, 24),
+    widthIconRem: num(p.widthIconRem, base.widthIconRem, 2.5, 6),
+    widthMobileRem: num(p.widthMobileRem, base.widthMobileRem, 14, 24),
+    brandTitle: str(p.brandTitle, base.brandTitle),
+    brandSubtitle: str(p.brandSubtitle, base.brandSubtitle),
+    brandTitleSizePx: num(p.brandTitleSizePx, base.brandTitleSizePx, 10, 22),
+    brandSubtitleSizePx: num(p.brandSubtitleSizePx, base.brandSubtitleSizePx, 8, 16),
+    brandPaddingPx: num(p.brandPaddingPx, base.brandPaddingPx, 8, 32),
+    brandShowBorder: bool(p.brandShowBorder, base.brandShowBorder),
+    menuFontSizePx: num(p.menuFontSizePx, base.menuFontSizePx, 10, 18),
+    menuItemHeightPx: num(p.menuItemHeightPx, base.menuItemHeightPx, 28, 52),
+    menuItemPaddingPx: num(p.menuItemPaddingPx, base.menuItemPaddingPx, 0, 24),
+    menuItemRadiusRem: num(p.menuItemRadiusRem, base.menuItemRadiusRem, 0, 1),
+    menuIconSizePx: num(p.menuIconSizePx, base.menuIconSizePx, 12, 24),
+    menuGapPx: num(p.menuGapPx, base.menuGapPx, 4, 16),
+    activeFontWeight: num(p.activeFontWeight, base.activeFontWeight, 400, 800),
+    mutedOpacity: num(p.mutedOpacity, base.mutedOpacity, 0.2, 1),
+  };
+  if (legacy?.sidebarBgHsl) merged.backgroundHsl = legacy.sidebarBgHsl;
+  if (legacy?.sidebarFgHsl) merged.foregroundHsl = legacy.sidebarFgHsl;
+  return merged;
+}
+
+function defaultHeader(overrides: Partial<HeaderAppearance> = {}): HeaderAppearance {
+  return {
+    backgroundHsl: "210 40% 98%",
+    foregroundHsl: "222 47% 11%",
+    borderHsl: "214 28% 88%",
+    titleColorHsl: "192 85% 38%",
+    searchBackgroundHsl: "0 0% 100%",
+    searchBorderHsl: "214 28% 88%",
+    iconColorHsl: "222 47% 11%",
+    iconHoverBgHsl: "210 30% 94%",
+    notificationDotHsl: "0 72% 51%",
+    heightPx: 56,
+    titleFontSizePx: 14,
+    titleFontWeight: 500,
+    searchHeightPx: 36,
+    searchRadiusRem: 0.375,
+    paddingHorizontalPx: 16,
+    hideOnScrollDown: true,
+    backdropBlur: false,
+    ...overrides,
+  };
+}
+
+function mergeHeader(base: HeaderAppearance, patch: unknown): HeaderAppearance {
+  const p = (patch && typeof patch === "object" ? patch : {}) as Partial<HeaderAppearance>;
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);
+  const num = (v: unknown, fallback: number, min: number, max: number) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    backgroundHsl: str(p.backgroundHsl, base.backgroundHsl),
+    foregroundHsl: str(p.foregroundHsl, base.foregroundHsl),
+    borderHsl: str(p.borderHsl, base.borderHsl),
+    titleColorHsl: str(p.titleColorHsl, base.titleColorHsl),
+    searchBackgroundHsl: str(p.searchBackgroundHsl, base.searchBackgroundHsl),
+    searchBorderHsl: str(p.searchBorderHsl, base.searchBorderHsl),
+    iconColorHsl: str(p.iconColorHsl, base.iconColorHsl),
+    iconHoverBgHsl: str(p.iconHoverBgHsl, base.iconHoverBgHsl),
+    notificationDotHsl: str(p.notificationDotHsl, base.notificationDotHsl),
+    heightPx: num(p.heightPx, base.heightPx, 44, 80),
+    titleFontSizePx: num(p.titleFontSizePx, base.titleFontSizePx, 10, 22),
+    titleFontWeight: num(p.titleFontWeight, base.titleFontWeight, 400, 800),
+    searchHeightPx: num(p.searchHeightPx, base.searchHeightPx, 28, 52),
+    searchRadiusRem: num(p.searchRadiusRem, base.searchRadiusRem, 0, 1),
+    paddingHorizontalPx: num(p.paddingHorizontalPx, base.paddingHorizontalPx, 8, 32),
+    hideOnScrollDown: bool(p.hideOnScrollDown, base.hideOnScrollDown),
+    backdropBlur: bool(p.backdropBlur, base.backdropBlur),
+  };
+}
+
 function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppearance {
   return {
     fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
@@ -470,8 +651,8 @@ function defaultGlobal(overrides: Partial<GlobalAppearance> = {}): GlobalAppeara
     cardHsl: "0 0% 100%",
     borderHsl: "214 28% 88%",
     mutedForegroundHsl: "215 16% 42%",
-    sidebarBgHsl: "222 47% 11%",
-    sidebarFgHsl: "210 25% 92%",
+    sidebar: defaultSidebar(),
+    header: defaultHeader(),
     pageTitleGradient: true,
     meshBackground: true,
     cardBackdropBlur: false,
@@ -1301,6 +1482,11 @@ function mergeDevice(base: DeviceAppearance, patch: unknown): DeviceAppearance {
         ...base.global.sidebarLabels,
         ...((pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}) as Partial<SidebarLabels>),
       },
+      sidebar: mergeSidebar(base.global.sidebar, pg.sidebar, {
+        sidebarBgHsl: pg.sidebarBgHsl,
+        sidebarFgHsl: pg.sidebarFgHsl,
+      }),
+      header: mergeHeader(base.global.header, pg.header),
     },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
@@ -1334,6 +1520,11 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
           ? global.sidebarLabels
           : {}) as Partial<SidebarLabels>),
       },
+      sidebar: mergeSidebar(base.desktop.global.sidebar, global.sidebar, {
+        sidebarBgHsl: global.sidebarBgHsl,
+        sidebarFgHsl: global.sidebarFgHsl,
+      }),
+      header: mergeHeader(base.desktop.global.header, global.header),
     },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },
@@ -1430,8 +1621,48 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--border", g.borderHsl);
   root.style.setProperty("--input", g.borderHsl);
   root.style.setProperty("--muted-foreground", g.mutedForegroundHsl);
-  root.style.setProperty("--sidebar-background", g.sidebarBgHsl);
-  root.style.setProperty("--sidebar-foreground", g.sidebarFgHsl);
+  const sb = g.sidebar;
+  root.style.setProperty("--sidebar-background", sb.backgroundHsl);
+  root.style.setProperty("--sidebar-foreground", sb.foregroundHsl);
+  root.style.setProperty("--sidebar-primary", sb.primaryHsl);
+  root.style.setProperty("--sidebar-primary-foreground", sb.primaryForegroundHsl);
+  root.style.setProperty("--sidebar-accent", sb.accentHsl);
+  root.style.setProperty("--sidebar-accent-foreground", sb.accentForegroundHsl);
+  root.style.setProperty("--sidebar-border", sb.borderHsl);
+  root.style.setProperty("--sidebar-ring", sb.ringHsl);
+  root.style.setProperty("--sidebar-width", `${sb.widthRem}rem`);
+  root.style.setProperty("--sidebar-width-icon", `${sb.widthIconRem}rem`);
+  root.style.setProperty("--sb-width-mobile", `${sb.widthMobileRem}rem`);
+  root.style.setProperty("--sb-brand-title-size", `${sb.brandTitleSizePx}px`);
+  root.style.setProperty("--sb-brand-subtitle-size", `${sb.brandSubtitleSizePx}px`);
+  root.style.setProperty("--sb-brand-padding", `${sb.brandPaddingPx}px`);
+  root.style.setProperty("--sb-menu-font-size", `${sb.menuFontSizePx}px`);
+  root.style.setProperty("--sb-menu-height", `${sb.menuItemHeightPx}px`);
+  root.style.setProperty("--sb-menu-padding", `${sb.menuItemPaddingPx}px`);
+  root.style.setProperty("--sb-menu-radius", `${sb.menuItemRadiusRem}rem`);
+  root.style.setProperty("--sb-menu-icon-size", `${sb.menuIconSizePx}px`);
+  root.style.setProperty("--sb-menu-gap", `${sb.menuGapPx}px`);
+  root.style.setProperty("--sb-active-weight", String(sb.activeFontWeight));
+  root.style.setProperty("--sb-muted-opacity", String(sb.mutedOpacity));
+  root.dataset.sidebarBrandBorder = sb.brandShowBorder ? "1" : "0";
+  const hdr = g.header;
+  root.style.setProperty("--hdr-background", hdr.backgroundHsl);
+  root.style.setProperty("--hdr-foreground", hdr.foregroundHsl);
+  root.style.setProperty("--hdr-border", hdr.borderHsl);
+  root.style.setProperty("--hdr-title", hdr.titleColorHsl);
+  root.style.setProperty("--hdr-search-bg", hdr.searchBackgroundHsl);
+  root.style.setProperty("--hdr-search-border", hdr.searchBorderHsl);
+  root.style.setProperty("--hdr-icon", hdr.iconColorHsl);
+  root.style.setProperty("--hdr-icon-hover-bg", hdr.iconHoverBgHsl);
+  root.style.setProperty("--hdr-notification-dot", hdr.notificationDotHsl);
+  root.style.setProperty("--hdr-height", `${hdr.heightPx}px`);
+  root.style.setProperty("--hdr-title-size", `${hdr.titleFontSizePx}px`);
+  root.style.setProperty("--hdr-title-weight", String(hdr.titleFontWeight));
+  root.style.setProperty("--hdr-search-height", `${hdr.searchHeightPx}px`);
+  root.style.setProperty("--hdr-search-radius", `${hdr.searchRadiusRem}rem`);
+  root.style.setProperty("--hdr-padding-x", `${hdr.paddingHorizontalPx}px`);
+  root.dataset.hdrBlur = hdr.backdropBlur ? "1" : "0";
+  root.dataset.hdrHideScroll = hdr.hideOnScrollDown ? "1" : "0";
   root.style.setProperty("--ring", g.primaryHsl);
   root.style.setProperty("--glow-cyan", g.primaryHsl);
   root.style.setProperty("--glow-violet", g.accentHsl);

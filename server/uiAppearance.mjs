@@ -28,6 +28,129 @@ function defaultSidebarLabels(overrides = {}) {
   };
 }
 
+function defaultSidebar(overrides = {}) {
+  return {
+    backgroundHsl: "222 47% 11%",
+    foregroundHsl: "210 25% 92%",
+    primaryHsl: "192 85% 48%",
+    primaryForegroundHsl: "0 0% 100%",
+    accentHsl: "222 35% 18%",
+    accentForegroundHsl: "210 25% 96%",
+    borderHsl: "222 30% 22%",
+    ringHsl: "192 85% 48%",
+    widthRem: 16,
+    widthIconRem: 3,
+    widthMobileRem: 18,
+    brandTitle: "PG Diary",
+    brandSubtitle: "Question Bank",
+    brandTitleSizePx: 14,
+    brandSubtitleSizePx: 10,
+    brandPaddingPx: 16,
+    brandShowBorder: true,
+    menuFontSizePx: 14,
+    menuItemHeightPx: 32,
+    menuItemPaddingPx: 8,
+    menuItemRadiusRem: 0.375,
+    menuIconSizePx: 16,
+    menuGapPx: 8,
+    activeFontWeight: 500,
+    mutedOpacity: 0.6,
+    ...overrides,
+  };
+}
+
+function mergeSidebar(base, patch, legacy = {}) {
+  if (!patch || typeof patch !== "object") patch = {};
+  const str = (v, fallback) => (typeof v === "string" ? v : fallback);
+  const num = (v, fallback, min, max) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  const merged = {
+    backgroundHsl: str(patch.backgroundHsl, base.backgroundHsl),
+    foregroundHsl: str(patch.foregroundHsl, base.foregroundHsl),
+    primaryHsl: str(patch.primaryHsl, base.primaryHsl),
+    primaryForegroundHsl: str(patch.primaryForegroundHsl, base.primaryForegroundHsl),
+    accentHsl: str(patch.accentHsl, base.accentHsl),
+    accentForegroundHsl: str(patch.accentForegroundHsl, base.accentForegroundHsl),
+    borderHsl: str(patch.borderHsl, base.borderHsl),
+    ringHsl: str(patch.ringHsl, base.ringHsl),
+    widthRem: num(patch.widthRem, base.widthRem, 12, 24),
+    widthIconRem: num(patch.widthIconRem, base.widthIconRem, 2.5, 6),
+    widthMobileRem: num(patch.widthMobileRem, base.widthMobileRem, 14, 24),
+    brandTitle: str(patch.brandTitle, base.brandTitle),
+    brandSubtitle: str(patch.brandSubtitle, base.brandSubtitle),
+    brandTitleSizePx: num(patch.brandTitleSizePx, base.brandTitleSizePx, 10, 22),
+    brandSubtitleSizePx: num(patch.brandSubtitleSizePx, base.brandSubtitleSizePx, 8, 16),
+    brandPaddingPx: num(patch.brandPaddingPx, base.brandPaddingPx, 8, 32),
+    brandShowBorder: bool(patch.brandShowBorder, base.brandShowBorder),
+    menuFontSizePx: num(patch.menuFontSizePx, base.menuFontSizePx, 10, 18),
+    menuItemHeightPx: num(patch.menuItemHeightPx, base.menuItemHeightPx, 28, 52),
+    menuItemPaddingPx: num(patch.menuItemPaddingPx, base.menuItemPaddingPx, 0, 24),
+    menuItemRadiusRem: num(patch.menuItemRadiusRem, base.menuItemRadiusRem, 0, 1),
+    menuIconSizePx: num(patch.menuIconSizePx, base.menuIconSizePx, 12, 24),
+    menuGapPx: num(patch.menuGapPx, base.menuGapPx, 4, 16),
+    activeFontWeight: num(patch.activeFontWeight, base.activeFontWeight, 400, 800),
+    mutedOpacity: num(patch.mutedOpacity, base.mutedOpacity, 0.2, 1),
+  };
+  if (legacy.sidebarBgHsl) merged.backgroundHsl = legacy.sidebarBgHsl;
+  if (legacy.sidebarFgHsl) merged.foregroundHsl = legacy.sidebarFgHsl;
+  return merged;
+}
+
+function defaultHeader(overrides = {}) {
+  return {
+    backgroundHsl: "210 40% 98%",
+    foregroundHsl: "222 47% 11%",
+    borderHsl: "214 28% 88%",
+    titleColorHsl: "192 85% 38%",
+    searchBackgroundHsl: "0 0% 100%",
+    searchBorderHsl: "214 28% 88%",
+    iconColorHsl: "222 47% 11%",
+    iconHoverBgHsl: "210 30% 94%",
+    notificationDotHsl: "0 72% 51%",
+    heightPx: 56,
+    titleFontSizePx: 14,
+    titleFontWeight: 500,
+    searchHeightPx: 36,
+    searchRadiusRem: 0.375,
+    paddingHorizontalPx: 16,
+    hideOnScrollDown: true,
+    backdropBlur: false,
+    ...overrides,
+  };
+}
+
+function mergeHeader(base, patch) {
+  if (!patch || typeof patch !== "object") patch = {};
+  const str = (v, fallback) => (typeof v === "string" ? v : fallback);
+  const num = (v, fallback, min, max) => {
+    if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
+    return Math.min(max, Math.max(min, v));
+  };
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  return {
+    backgroundHsl: str(patch.backgroundHsl, base.backgroundHsl),
+    foregroundHsl: str(patch.foregroundHsl, base.foregroundHsl),
+    borderHsl: str(patch.borderHsl, base.borderHsl),
+    titleColorHsl: str(patch.titleColorHsl, base.titleColorHsl),
+    searchBackgroundHsl: str(patch.searchBackgroundHsl, base.searchBackgroundHsl),
+    searchBorderHsl: str(patch.searchBorderHsl, base.searchBorderHsl),
+    iconColorHsl: str(patch.iconColorHsl, base.iconColorHsl),
+    iconHoverBgHsl: str(patch.iconHoverBgHsl, base.iconHoverBgHsl),
+    notificationDotHsl: str(patch.notificationDotHsl, base.notificationDotHsl),
+    heightPx: num(patch.heightPx, base.heightPx, 44, 80),
+    titleFontSizePx: num(patch.titleFontSizePx, base.titleFontSizePx, 10, 22),
+    titleFontWeight: num(patch.titleFontWeight, base.titleFontWeight, 400, 800),
+    searchHeightPx: num(patch.searchHeightPx, base.searchHeightPx, 28, 52),
+    searchRadiusRem: num(patch.searchRadiusRem, base.searchRadiusRem, 0, 1),
+    paddingHorizontalPx: num(patch.paddingHorizontalPx, base.paddingHorizontalPx, 8, 32),
+    hideOnScrollDown: bool(patch.hideOnScrollDown, base.hideOnScrollDown),
+    backdropBlur: bool(patch.backdropBlur, base.backdropBlur),
+  };
+}
+
 function defaultGlobal(overrides = {}) {
   return {
     fontFamily: '"Segoe UI", system-ui, -apple-system, sans-serif',
@@ -41,8 +164,8 @@ function defaultGlobal(overrides = {}) {
     cardHsl: "0 0% 100%",
     borderHsl: "214 28% 88%",
     mutedForegroundHsl: "215 16% 42%",
-    sidebarBgHsl: "222 47% 11%",
-    sidebarFgHsl: "210 25% 92%",
+    sidebar: defaultSidebar(),
+    header: defaultHeader(),
     pageTitleGradient: true,
     meshBackground: true,
     cardBackdropBlur: false,
@@ -742,6 +865,11 @@ function mergeDevice(base, patch) {
         ...base.global.sidebarLabels,
         ...(pg.sidebarLabels && typeof pg.sidebarLabels === "object" ? pg.sidebarLabels : {}),
       },
+      sidebar: mergeSidebar(base.global.sidebar, pg.sidebar, {
+        sidebarBgHsl: pg.sidebarBgHsl,
+        sidebarFgHsl: pg.sidebarFgHsl,
+      }),
+      header: mergeHeader(base.global.header, pg.header),
     },
     conceptDetails: { ...base.conceptDetails, ...(p.conceptDetails ?? {}) },
     storyBasedLearning: { ...base.storyBasedLearning, ...(p.storyBasedLearning ?? {}) },
@@ -765,6 +893,11 @@ function fromV1(raw) {
         ...base.desktop.global.sidebarLabels,
         ...(global.sidebarLabels && typeof global.sidebarLabels === "object" ? global.sidebarLabels : {}),
       },
+      sidebar: mergeSidebar(base.desktop.global.sidebar, global.sidebar, {
+        sidebarBgHsl: global.sidebarBgHsl,
+        sidebarFgHsl: global.sidebarFgHsl,
+      }),
+      header: mergeHeader(base.desktop.global.header, global.header),
     },
     conceptDetails: { ...base.desktop.conceptDetails, ...conceptDetails },
     storyBasedLearning: { ...base.desktop.storyBasedLearning, ...storyBasedLearning },

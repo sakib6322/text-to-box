@@ -23,6 +23,8 @@ import {
   type LandingWhyItem,
   type ProgressPlanAppearance,
   type ProgressStepConfig,
+  type SidebarAppearance,
+  type HeaderAppearance,
   type SidebarLabels,
   type StoryDialogWidth,
   type HeadingSlidesAppearance,
@@ -32,6 +34,7 @@ import {
 } from "@/lib/uiAppearance";
 import { Textarea } from "@/components/ui/textarea";
 import { AppearanceOptionGuide } from "@/components/AppearanceOptionGuide";
+import { ColorField, FlexibleColorField, ThemeColorField } from "@/components/AppearanceColorFields";
 import {
   AllQuestionsLivePreview,
   AppearancePreviewPanel,
@@ -109,18 +112,6 @@ function TextField(props: { label: string; value: string; onChange: (v: string) 
   );
 }
 
-function ColorField(props: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
-  const hex = props.value.startsWith("#") ? props.value : "#000000";
-  return (
-    <Field label={props.label} hint={props.hint}>
-      <div className="flex gap-2">
-        <Input type="color" className="h-10 w-14 p-1" value={hex} onChange={(e) => props.onChange(e.target.value)} />
-        <Input value={props.value} onChange={(e) => props.onChange(e.target.value)} />
-      </div>
-    </Field>
-  );
-}
-
 function BoolField(props: { label: string; checked: boolean; onChange: (v: boolean) => void; hint?: string }) {
   return (
     <div className="flex items-start justify-between gap-3 rounded-md border p-3">
@@ -147,8 +138,6 @@ const GLOBAL_COLOR_KEYS = [
   "cardHsl",
   "borderHsl",
   "mutedForegroundHsl",
-  "sidebarBgHsl",
-  "sidebarFgHsl",
 ] as const satisfies readonly (keyof UiAppearance["desktop"]["global"])[];
 
 const GLOBAL_LAYOUT_KEYS = [
@@ -251,6 +240,32 @@ export default function AdminAppearance() {
         global: {
           ...deviceTheme.global,
           sidebarLabels: { ...deviceTheme.global.sidebarLabels, [key]: value },
+        },
+      },
+    });
+  };
+
+  const updateSidebar = <K extends keyof SidebarAppearance>(key: K, value: SidebarAppearance[K]) => {
+    commit({
+      ...theme,
+      [editDevice]: {
+        ...deviceTheme,
+        global: {
+          ...deviceTheme.global,
+          sidebar: { ...deviceTheme.global.sidebar, [key]: value },
+        },
+      },
+    });
+  };
+
+  const updateHeader = <K extends keyof HeaderAppearance>(key: K, value: HeaderAppearance[K]) => {
+    commit({
+      ...theme,
+      [editDevice]: {
+        ...deviceTheme,
+        global: {
+          ...deviceTheme.global,
+          header: { ...deviceTheme.global.header, [key]: value },
         },
       },
     });
@@ -495,6 +510,40 @@ export default function AdminAppearance() {
     toast.message(`Sidebar labels applied to ${labels} (unsaved)`);
   };
 
+  const applySidebarStyleTo = (targets: DeviceKey[]) => {
+    const sidebar = structuredClone(deviceTheme.global.sidebar);
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          global: { ...next[target].global, sidebar: structuredClone(sidebar) },
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Sidebar style applied to ${labels} (unsaved)`);
+  };
+
+  const applyHeaderStyleTo = (targets: DeviceKey[]) => {
+    const header = structuredClone(deviceTheme.global.header);
+    let next = theme;
+    for (const target of targets) {
+      next = {
+        ...next,
+        [target]: {
+          ...next[target],
+          global: { ...next[target].global, header: structuredClone(header) },
+        },
+      };
+    }
+    commit(next);
+    const labels = targets.map((t) => deviceMeta[t].label).join(", ");
+    toast.message(`Header style applied to ${labels} (unsaved)`);
+  };
+
   /** Copy current device Story-based learning settings onto targets (preview until Save). */
   const applyStoryTo = (targets: DeviceKey[]) => {
     const story = structuredClone(deviceTheme.storyBasedLearning);
@@ -559,6 +608,8 @@ export default function AdminAppearance() {
   };
 
   const g = deviceTheme.global;
+  const sb = deviceTheme.global.sidebar;
+  const hdr = deviceTheme.global.header;
   const c = deviceTheme.conceptDetails;
   const s = deviceTheme.storyBasedLearning;
   const aq = deviceTheme.allQuestions;
@@ -783,7 +834,7 @@ export default function AdminAppearance() {
             </div>
 
             <div className="flex flex-wrap items-end justify-between gap-2 pt-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Colors (HSL without hsl())</p>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Theme colors</p>
               <div className="flex flex-wrap gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={() => applyColorsTo(["mobile"])}>
                   Set to Phone
@@ -809,15 +860,13 @@ export default function AdminAppearance() {
               <strong>Save to database</strong>.
             </p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              <TextField label="Primary" value={g.primaryHsl} onChange={(v) => updateGlobal("primaryHsl", v)} />
-              <TextField label="Accent" value={g.accentHsl} onChange={(v) => updateGlobal("accentHsl", v)} />
-              <TextField label="Background" value={g.backgroundHsl} onChange={(v) => updateGlobal("backgroundHsl", v)} />
-              <TextField label="Foreground" value={g.foregroundHsl} onChange={(v) => updateGlobal("foregroundHsl", v)} />
-              <TextField label="Card" value={g.cardHsl} onChange={(v) => updateGlobal("cardHsl", v)} />
-              <TextField label="Border" value={g.borderHsl} onChange={(v) => updateGlobal("borderHsl", v)} />
-              <TextField label="Muted foreground" value={g.mutedForegroundHsl} onChange={(v) => updateGlobal("mutedForegroundHsl", v)} />
-              <TextField label="Sidebar background" value={g.sidebarBgHsl} onChange={(v) => updateGlobal("sidebarBgHsl", v)} />
-              <TextField label="Sidebar foreground" value={g.sidebarFgHsl} onChange={(v) => updateGlobal("sidebarFgHsl", v)} />
+              <ThemeColorField label="Primary" value={g.primaryHsl} onChange={(v) => updateGlobal("primaryHsl", v)} hint="বাটন, লিংক, ring — পুরো অ্যাপ" />
+              <ThemeColorField label="Accent" value={g.accentHsl} onChange={(v) => updateGlobal("accentHsl", v)} hint="গ্রেডিয়েন্ট, হাইলাইট" />
+              <ThemeColorField label="Background" value={g.backgroundHsl} onChange={(v) => updateGlobal("backgroundHsl", v)} hint="পেজ ব্যাকগ্রাউন্ড" />
+              <ThemeColorField label="Foreground" value={g.foregroundHsl} onChange={(v) => updateGlobal("foregroundHsl", v)} hint="মূল টেক্সট" />
+              <ThemeColorField label="Card" value={g.cardHsl} onChange={(v) => updateGlobal("cardHsl", v)} hint="glass-card ব্যাকগ্রাউন্ড" />
+              <ThemeColorField label="Border" value={g.borderHsl} onChange={(v) => updateGlobal("borderHsl", v)} hint="কার্ড/ইনপুট বর্ডার" />
+              <ThemeColorField label="Muted foreground" value={g.mutedForegroundHsl} onChange={(v) => updateGlobal("mutedForegroundHsl", v)} hint="hint, secondary text" />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <BoolField label="Page title gradient" checked={g.pageTitleGradient} onChange={(v) => updateGlobal("pageTitleGradient", v)} />
@@ -831,6 +880,124 @@ export default function AdminAppearance() {
                 onChange={(v) => updateGlobal("cardHoverHighlight", v)}
                 hint="Primary-tinted border on hover"
               />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Sidebar style</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarStyleTo(["mobile"])}>
+                    Set to Phone
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarStyleTo(["tablet"])}>
+                    Set to Tablet
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applySidebarStyleTo(["desktop"])}>
+                    Set to Computer
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applySidebarStyleTo(["mobile", "tablet", "desktop"])}
+                  >
+                    Set to all
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Colors, width, brand, and menu item styling for the app sidebar · {deviceMeta[editDevice].label}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ThemeColorField label="Background" value={sb.backgroundHsl} onChange={(v) => updateSidebar("backgroundHsl", v)} hint="Sidebar panel bg" />
+                <ThemeColorField label="Foreground" value={sb.foregroundHsl} onChange={(v) => updateSidebar("foregroundHsl", v)} hint="Menu text" />
+                <ThemeColorField label="Primary / brand" value={sb.primaryHsl} onChange={(v) => updateSidebar("primaryHsl", v)} hint="Brand title color" />
+                <ThemeColorField label="Primary text" value={sb.primaryForegroundHsl} onChange={(v) => updateSidebar("primaryForegroundHsl", v)} />
+                <ThemeColorField label="Accent / hover" value={sb.accentHsl} onChange={(v) => updateSidebar("accentHsl", v)} hint="Active menu bg" />
+                <ThemeColorField label="Accent text" value={sb.accentForegroundHsl} onChange={(v) => updateSidebar("accentForegroundHsl", v)} />
+                <ThemeColorField label="Border" value={sb.borderHsl} onChange={(v) => updateSidebar("borderHsl", v)} />
+                <ThemeColorField label="Focus ring" value={sb.ringHsl} onChange={(v) => updateSidebar("ringHsl", v)} />
+                <NumberField label="Width expanded (rem)" value={sb.widthRem} min={12} max={24} step={0.5} onChange={(n) => updateSidebar("widthRem", n)} />
+                <NumberField label="Width collapsed icon (rem)" value={sb.widthIconRem} min={2.5} max={6} step={0.25} onChange={(n) => updateSidebar("widthIconRem", n)} />
+                <NumberField label="Width mobile sheet (rem)" value={sb.widthMobileRem} min={14} max={24} step={0.5} onChange={(n) => updateSidebar("widthMobileRem", n)} />
+                <TextField label="Brand title" value={sb.brandTitle} onChange={(v) => updateSidebar("brandTitle", v)} />
+                <TextField label="Brand subtitle" value={sb.brandSubtitle} onChange={(v) => updateSidebar("brandSubtitle", v)} />
+                <NumberField label="Brand title size (px)" value={sb.brandTitleSizePx} min={10} max={22} onChange={(n) => updateSidebar("brandTitleSizePx", n)} />
+                <NumberField label="Brand subtitle size (px)" value={sb.brandSubtitleSizePx} min={8} max={16} onChange={(n) => updateSidebar("brandSubtitleSizePx", n)} />
+                <NumberField label="Brand padding (px)" value={sb.brandPaddingPx} min={8} max={32} onChange={(n) => updateSidebar("brandPaddingPx", n)} />
+                <NumberField label="Menu font size (px)" value={sb.menuFontSizePx} min={10} max={18} onChange={(n) => updateSidebar("menuFontSizePx", n)} />
+                <NumberField label="Menu item height (px)" value={sb.menuItemHeightPx} min={28} max={52} onChange={(n) => updateSidebar("menuItemHeightPx", n)} />
+                <NumberField label="Menu item padding (px)" value={sb.menuItemPaddingPx} min={0} max={24} onChange={(n) => updateSidebar("menuItemPaddingPx", n)} hint="প্রতিটি menu/submenu item-এর ভিতরের ফাঁক" />
+                <NumberField label="Menu item radius (rem)" value={sb.menuItemRadiusRem} min={0} max={1} step={0.05} onChange={(n) => updateSidebar("menuItemRadiusRem", n)} />
+                <NumberField label="Menu icon size (px)" value={sb.menuIconSizePx} min={12} max={24} onChange={(n) => updateSidebar("menuIconSizePx", n)} />
+                <NumberField label="Menu icon gap (px)" value={sb.menuGapPx} min={4} max={16} onChange={(n) => updateSidebar("menuGapPx", n)} />
+                <NumberField label="Active item font weight" value={sb.activeFontWeight} min={400} max={800} step={100} onChange={(n) => updateSidebar("activeFontWeight", n)} />
+                <NumberField label="Muted subtitle opacity" value={sb.mutedOpacity} min={0.2} max={1} step={0.05} onChange={(n) => updateSidebar("mutedOpacity", n)} />
+              </div>
+              <BoolField
+                label="Brand bottom border"
+                checked={sb.brandShowBorder}
+                onChange={(v) => updateSidebar("brandShowBorder", v)}
+              />
+            </div>
+
+            <div className="space-y-3 rounded-lg border p-4">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <p className="text-xs font-semibold uppercase text-muted-foreground">Header style</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyHeaderStyleTo(["mobile"])}>
+                    Set to Phone
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyHeaderStyleTo(["tablet"])}>
+                    Set to Tablet
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => applyHeaderStyleTo(["desktop"])}>
+                    Set to Computer
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => applyHeaderStyleTo(["mobile", "tablet", "desktop"])}
+                  >
+                    Set to all
+                  </Button>
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Top bar (page title, search, notifications) · {deviceMeta[editDevice].label}
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <ThemeColorField label="Background" value={hdr.backgroundHsl} onChange={(v) => updateHeader("backgroundHsl", v)} hint="AppShellHeader bg" />
+                <ThemeColorField label="Foreground" value={hdr.foregroundHsl} onChange={(v) => updateHeader("foregroundHsl", v)} />
+                <ThemeColorField label="Border" value={hdr.borderHsl} onChange={(v) => updateHeader("borderHsl", v)} />
+                <ThemeColorField label="Title color" value={hdr.titleColorHsl} onChange={(v) => updateHeader("titleColorHsl", v)} hint="Page title in header" />
+                <ThemeColorField label="Search background" value={hdr.searchBackgroundHsl} onChange={(v) => updateHeader("searchBackgroundHsl", v)} />
+                <ThemeColorField label="Search border" value={hdr.searchBorderHsl} onChange={(v) => updateHeader("searchBorderHsl", v)} />
+                <ThemeColorField label="Icon color" value={hdr.iconColorHsl} onChange={(v) => updateHeader("iconColorHsl", v)} hint="Bell button" />
+                <ThemeColorField label="Icon hover bg" value={hdr.iconHoverBgHsl} onChange={(v) => updateHeader("iconHoverBgHsl", v)} />
+                <ThemeColorField label="Notification dot" value={hdr.notificationDotHsl} onChange={(v) => updateHeader("notificationDotHsl", v)} />
+                <NumberField label="Height (px)" value={hdr.heightPx} min={44} max={80} onChange={(n) => updateHeader("heightPx", n)} />
+                <NumberField label="Title font size (px)" value={hdr.titleFontSizePx} min={10} max={22} onChange={(n) => updateHeader("titleFontSizePx", n)} />
+                <NumberField label="Title font weight" value={hdr.titleFontWeight} min={400} max={800} step={100} onChange={(n) => updateHeader("titleFontWeight", n)} />
+                <NumberField label="Search height (px)" value={hdr.searchHeightPx} min={28} max={52} onChange={(n) => updateHeader("searchHeightPx", n)} />
+                <NumberField label="Search radius (rem)" value={hdr.searchRadiusRem} min={0} max={1} step={0.05} onChange={(n) => updateHeader("searchRadiusRem", n)} />
+                <NumberField label="Horizontal padding (px)" value={hdr.paddingHorizontalPx} min={8} max={32} onChange={(n) => updateHeader("paddingHorizontalPx", n)} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <BoolField
+                  label="Hide header on scroll down"
+                  checked={hdr.hideOnScrollDown}
+                  onChange={(v) => updateHeader("hideOnScrollDown", v)}
+                  hint="Scroll down করলে header লুকায়"
+                />
+                <BoolField
+                  label="Header backdrop blur"
+                  checked={hdr.backdropBlur}
+                  onChange={(v) => updateHeader("backdropBlur", v)}
+                  hint="Sticky header-এ blur (global sticky blur-এর চেয়ে আলাদা)"
+                />
+              </div>
             </div>
 
             <div className="space-y-3 rounded-lg border p-4">
@@ -871,8 +1038,8 @@ export default function AdminAppearance() {
               </div>
             </div>
 
-            <AppearancePreviewPanel title="Live preview · Website UI" hint="Colors, typography, cards, and sidebar labels from current draft.">
-              <GlobalWebsiteLivePreview g={g} />
+            <AppearancePreviewPanel title="Live preview · Website UI" hint="Colors, typography, cards, sidebar, header, and labels from current draft.">
+              <GlobalWebsiteLivePreview g={g} sb={sb} hdr={hdr} />
             </AppearancePreviewPanel>
           </TabsContent>
 
@@ -2089,15 +2256,15 @@ export default function AdminAppearance() {
 
             {progressSection === "colors" ? (
               <div className="grid gap-3 sm:grid-cols-2">
-                <TextField label="Progress bar (HSL or hex)" value={prog.progressBarColor} onChange={(v) => updateProgressPlan("progressBarColor", v)} />
-                <TextField label="Complete badge (HSL or hex)" value={prog.completeBadgeBg} onChange={(v) => updateProgressPlan("completeBadgeBg", v)} />
-                <TextField label="Exam Night card bg" value={prog.examNightCardBg} onChange={(v) => updateProgressPlan("examNightCardBg", v)} />
-                <TextField label="Exam Night border" value={prog.examNightBorder} onChange={(v) => updateProgressPlan("examNightBorder", v)} />
-                <TextField label="Exam Night icon" value={prog.examNightIconColor} onChange={(v) => updateProgressPlan("examNightIconColor", v)} />
-                <TextField label="Final mock card bg" value={prog.finalMockCardBg} onChange={(v) => updateProgressPlan("finalMockCardBg", v)} />
-                <TextField label="Final mock border" value={prog.finalMockBorder} onChange={(v) => updateProgressPlan("finalMockBorder", v)} />
-                <TextField label="Final mock icon" value={prog.finalMockIconColor} onChange={(v) => updateProgressPlan("finalMockIconColor", v)} />
-                <TextField label="Mistake accent" value={prog.mistakeAccentColor} onChange={(v) => updateProgressPlan("mistakeAccentColor", v)} />
+                <FlexibleColorField label="Progress bar" value={prog.progressBarColor} onChange={(v) => updateProgressPlan("progressBarColor", v)} hint="My progress, concept browse %" />
+                <FlexibleColorField label="Complete badge" value={prog.completeBadgeBg} onChange={(v) => updateProgressPlan("completeBadgeBg", v)} />
+                <ColorField label="Exam Night card bg" value={prog.examNightCardBg} onChange={(v) => updateProgressPlan("examNightCardBg", v)} hint="Profile card" />
+                <ColorField label="Exam Night border" value={prog.examNightBorder} onChange={(v) => updateProgressPlan("examNightBorder", v)} />
+                <ColorField label="Exam Night icon" value={prog.examNightIconColor} onChange={(v) => updateProgressPlan("examNightIconColor", v)} />
+                <ColorField label="Final mock card bg" value={prog.finalMockCardBg} onChange={(v) => updateProgressPlan("finalMockCardBg", v)} />
+                <ColorField label="Final mock border" value={prog.finalMockBorder} onChange={(v) => updateProgressPlan("finalMockBorder", v)} />
+                <ColorField label="Final mock icon" value={prog.finalMockIconColor} onChange={(v) => updateProgressPlan("finalMockIconColor", v)} />
+                <ColorField label="Mistake accent" value={prog.mistakeAccentColor} onChange={(v) => updateProgressPlan("mistakeAccentColor", v)} hint="Review mistakes highlight" />
               </div>
             ) : null}
 
@@ -2210,8 +2377,8 @@ export default function AdminAppearance() {
               <TextField label="Previous label" value={hs.prevLabel} onChange={(v) => updateHeadingSlides("prevLabel", v)} />
               <TextField label="Counter template" value={hs.counterTemplate} onChange={(v) => updateHeadingSlides("counterTemplate", v)} hint="{current} / {total}" />
               <TextField label="Last slide label" value={hs.lastSlideLabel} onChange={(v) => updateHeadingSlides("lastSlideLabel", v)} hint="Optional text on last slide" />
-              <TextField label="Next bar background" value={hs.nextBarBg} onChange={(v) => updateHeadingSlides("nextBarBg", v)} />
-              <TextField label="Next bar text color" value={hs.nextBarFg} onChange={(v) => updateHeadingSlides("nextBarFg", v)} />
+              <ColorField label="Next bar background" value={hs.nextBarBg} onChange={(v) => updateHeadingSlides("nextBarBg", v)} hint="HeadingSlideReader sticky bar" />
+              <ColorField label="Next bar text color" value={hs.nextBarFg} onChange={(v) => updateHeadingSlides("nextBarFg", v)} />
             </div>
             <AppearancePreviewPanel title="Live preview · Heading slides">
               <HeadingSlidesLivePreview config={hs} />
