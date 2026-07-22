@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ChevronRight, Lock, Moon, Play, Star, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,12 @@ import { getAuthHeaders } from "@/lib/auth";
 import type { TaxonomyItem } from "@/lib/taxonomy";
 import { fetchCourseProgress, fetchProgressSets, type CourseProgressRollup, type ProgressPracticeSet } from "@/lib/progressApi";
 import { formatProgressPct, useProgressAppearance } from "@/hooks/useProgressAppearance";
+import {
+  readCourseBrowseNav,
+  topicConceptsLink,
+  type CourseBrowseNavState,
+  type CourseBrowseStep,
+} from "@/lib/courseBrowseNav";
 
 type TopicRow = {
   topic_id: string;
@@ -33,7 +39,16 @@ type SystemBlock = {
   topics: TopicRow[];
 };
 
-type BrowseStep = "subjects" | "systems" | "chapters" | "topics";
+type BrowseStep = CourseBrowseStep;
+
+function browseNavState(
+  step: BrowseStep,
+  subjectId: string | null,
+  systemId: string | null,
+  chapterId: string | null,
+): CourseBrowseNavState {
+  return { step, subjectId, systemId, chapterId };
+}
 
 function Stars({ n }: { n: number }) {
   if (n <= 0) return null;
@@ -49,7 +64,9 @@ function Stars({ n }: { n: number }) {
 export default function MyCourseBrowse() {
   const { courseId = "" } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const pp = useProgressAppearance();
+  const pendingNavRef = useRef(readCourseBrowseNav(location.state));
   const [name, setName] = useState("Course");
   const [today, setToday] = useState("");
   const [systems, setSystems] = useState<SystemBlock[]>([]);
@@ -78,10 +95,19 @@ export default function MyCourseBrowse() {
         setName(j.course?.name ?? "Course");
         setToday(j.today ?? "");
         setSystems(j.systems ?? []);
-        setStep("subjects");
-        setSubjectId(null);
-        setSystemId(null);
-        setChapterId(null);
+        const pending = pendingNavRef.current;
+        if (pending && (j.systems ?? []).length) {
+          setStep(pending.step);
+          setSubjectId(pending.subjectId ?? null);
+          setSystemId(pending.systemId ?? null);
+          setChapterId(pending.chapterId ?? null);
+          pendingNavRef.current = null;
+        } else {
+          setStep("subjects");
+          setSubjectId(null);
+          setSystemId(null);
+          setChapterId(null);
+        }
         try {
           const progress = await fetchCourseProgress(courseId);
           setRollup(progress);
@@ -470,7 +496,15 @@ export default function MyCourseBrowse() {
               <button
                 key={t.topic_id}
                 type="button"
-                onClick={() => navigate(`/my-courses/${courseId}/topics/${t.topic_id}`)}
+                onClick={() =>
+                  navigate(
+                    topicConceptsLink(
+                      courseId,
+                      t.topic_id,
+                      browseNavState("topics", subjectId, systemId, chapterId),
+                    ),
+                  )
+                }
                 className="flex w-full min-w-0 items-start gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5"
               >
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, CheckSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -14,9 +14,18 @@ type MappedTopic = {
   topic_id: string;
   topic_name: string;
   path: string;
+  subject_id?: string | null;
   subject_name?: string | null;
+  system_id?: string | null;
   system_name?: string | null;
+  chapter_id?: string | null;
   chapter_name?: string | null;
+};
+
+type MappingSeed = {
+  systemIds: Set<string>;
+  chapterIds: Set<string>;
+  topicIds: Set<string>;
 };
 
 type SystemRow = TaxonomyItem & { subject_id: string };
@@ -93,6 +102,8 @@ export default function AdminCourseMapping() {
   const [saving, setSaving] = useState(false);
   const [loadingCascade, setLoadingCascade] = useState(false);
   const [courseName, setCourseName] = useState("Course");
+  const mappingSeedRef = useRef<MappingSeed | null>(null);
+  const mappingSeededRef = useRef(false);
 
   const loadMapped = useCallback(async () => {
     const r = await fetch(apiUrl(`/api/admin/courses/${courseId}/topics`), { headers: getAuthHeaders() });
@@ -120,6 +131,43 @@ export default function AdminCourseMapping() {
     })();
   }, [courseId, loadMapped]);
 
+  useEffect(() => {
+    mappingSeededRef.current = false;
+    mappingSeedRef.current = null;
+    setMapped([]);
+    setSubjectIds(new Set());
+    setSystemIds(new Set());
+    setChapterIds(new Set());
+    setSelectedTopics(new Set());
+  }, [courseId]);
+
+  // Pre-select taxonomy levels from existing mapped topics (edit mode).
+  useEffect(() => {
+    if (mappingSeededRef.current || mapped.length === 0) return;
+
+    const nextSubjectIds = new Set<string>();
+    const nextSystemIds = new Set<string>();
+    const nextChapterIds = new Set<string>();
+    const nextTopicIds = new Set<string>();
+
+    for (const m of mapped) {
+      if (m.subject_id) nextSubjectIds.add(m.subject_id);
+      if (m.system_id) nextSystemIds.add(m.system_id);
+      if (m.chapter_id) nextChapterIds.add(m.chapter_id);
+      nextTopicIds.add(m.topic_id);
+    }
+
+    if (!nextSubjectIds.size) return;
+
+    mappingSeedRef.current = {
+      systemIds: nextSystemIds,
+      chapterIds: nextChapterIds,
+      topicIds: nextTopicIds,
+    };
+    mappingSeededRef.current = true;
+    setSubjectIds(nextSubjectIds);
+  }, [mapped]);
+
   // Subjects → systems (union)
   useEffect(() => {
     const ids = [...subjectIds];
@@ -144,7 +192,14 @@ export default function AdminCourseMapping() {
         });
         const next = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
         setSystems(next);
-        setSystemIds((prev) => new Set([...prev].filter((id) => merged.has(id))));
+        setSystemIds((prev) => {
+          const seed = mappingSeedRef.current;
+          if (seed?.systemIds.size) {
+            const seeded = new Set([...seed.systemIds].filter((id) => merged.has(id)));
+            if (seeded.size) return seeded;
+          }
+          return new Set([...prev].filter((id) => merged.has(id)));
+        });
       } catch (e) {
         if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load systems");
       } finally {
@@ -178,7 +233,14 @@ export default function AdminCourseMapping() {
         });
         const next = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
         setChapters(next);
-        setChapterIds((prev) => new Set([...prev].filter((id) => merged.has(id))));
+        setChapterIds((prev) => {
+          const seed = mappingSeedRef.current;
+          if (seed?.chapterIds.size) {
+            const seeded = new Set([...seed.chapterIds].filter((id) => merged.has(id)));
+            if (seeded.size) return seeded;
+          }
+          return new Set([...prev].filter((id) => merged.has(id)));
+        });
       } catch (e) {
         if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load chapters");
       } finally {
@@ -210,7 +272,13 @@ export default function AdminCourseMapping() {
         });
         const next = [...merged.values()].sort((a, b) => a.name.localeCompare(b.name));
         setTopics(next);
-        setSelectedTopics(new Set(next.map((t) => t.id)));
+        const seed = mappingSeedRef.current;
+        if (seed?.topicIds.size) {
+          setSelectedTopics(new Set([...seed.topicIds].filter((id) => merged.has(id))));
+          mappingSeedRef.current = null;
+        } else {
+          setSelectedTopics(new Set(next.map((t) => t.id)));
+        }
       } catch (e) {
         if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load topics");
       } finally {

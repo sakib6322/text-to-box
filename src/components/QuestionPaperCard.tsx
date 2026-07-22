@@ -40,6 +40,8 @@ type Props = {
   studentAnswer?: unknown;
   distribution?: { mode: string; options: McqDist | SbaDist } | null;
   showAnswerReview?: boolean;
+  /** When set, overrides All Questions appearance for explanations (e.g. Create exam builder). */
+  showExplanations?: boolean;
 };
 
 const optionLabel = (i: number) => String.fromCharCode(97 + i);
@@ -60,10 +62,13 @@ export function QuestionPaperCard({
   studentAnswer,
   distribution = null,
   showAnswerReview = false,
+  showExplanations: showExplanationsProp,
 }: Props) {
   const { appearance, activeDevice } = useUiAppearance();
   const aq = resolveDeviceTheme(appearance, activeDevice).allQuestions;
-  const showExplanations = aq.showExplanations !== false;
+  const showExplanations =
+    showExplanationsProp ?? (aq.showExplanations !== false);
+  const explanationsIndependent = showExplanationsProp !== undefined;
 
   const taxonomy = [subject, system, chapter, topic].filter(Boolean).join(" · ");
   const stem = questionMode === "mcq" ? mcq?.stem : sba?.stem;
@@ -241,7 +246,7 @@ export function QuestionPaperCard({
         </ol>
       ) : null}
 
-      {showExplanations && questionMode === "mcq" && mcqHasExplanations && !hideAnswers ? (
+      {showExplanations && questionMode === "mcq" && mcqHasExplanations && (!hideAnswers || explanationsIndependent) ? (
         <div className="question-paper-expl">
           <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
           {(mcq?.trueFalse ?? []).map((item, i) => {
@@ -259,7 +264,7 @@ export function QuestionPaperCard({
         </div>
       ) : null}
 
-      {showExplanations && questionMode === "sba" && sbaHasExplanations && !hideAnswers ? (
+      {showExplanations && questionMode === "sba" && sbaHasExplanations && (!hideAnswers || explanationsIndependent) ? (
         <div className="question-paper-expl">
           <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
           {(sba?.options ?? []).map((_opt, i) => {

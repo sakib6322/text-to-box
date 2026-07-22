@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
 
 
@@ -26,6 +27,10 @@ import { useHeaderSearch } from "@/components/AppShellContext";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 
+type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
+type McqPayload = { stem?: string; trueFalse?: TfItem[] };
+type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
+
 type QuestionRow = {
   id: string;
   questionMode: "mcq" | "sba";
@@ -35,8 +40,9 @@ type QuestionRow = {
   topic: string;
   concept: string;
   marks?: number;
-  mcq?: { stem?: string } | null;
-  sba?: { stem?: string } | null;
+  boards?: { id?: string | null; name: string; mention_count?: number }[];
+  mcq?: McqPayload | null;
+  sba?: SbaPayload | null;
 };
 
 
@@ -84,6 +90,8 @@ export default function CreateExam() {
   const [loadingQuestions, setLoadingQuestions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadingExam, setLoadingExam] = useState(Boolean(editId));
+  const [showAnswers, setShowAnswers] = useState(false);
+  const [showExplanations, setShowExplanations] = useState(false);
   const headerSearch = useMemo(
     () => ({
       value: search,
@@ -195,6 +203,16 @@ export default function CreateExam() {
       return next;
     });
   };
+
+  const selectAllVisible = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const q of filtered) next.add(q.id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
 
   useEffect(() => {
     if (!useScheduleWindow || !autoScheduleEnd || !scheduledStart) return;
@@ -387,6 +405,27 @@ export default function CreateExam() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={selectAllVisible}>
+            <CheckSquare className="h-3.5 w-3.5" />
+            Select all ({filtered.length})
+          </Button>
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1 text-xs" onClick={clearSelection}>
+            <Square className="h-3.5 w-3.5" />
+            Clear
+          </Button>
+          <div className="ml-auto flex flex-wrap items-center gap-3">
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+              <Switch checked={showAnswers} onCheckedChange={setShowAnswers} aria-label="Show answer" />
+              <span className="font-medium">Show answer</span>
+            </label>
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-xs">
+              <Switch checked={showExplanations} onCheckedChange={setShowExplanations} aria-label="Show explanation" />
+              <span className="font-medium">Show explanation</span>
+            </label>
+          </div>
+        </div>
+
         {loadingQuestions ? (
           <div className="py-8 text-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mx-auto" />
@@ -400,33 +439,42 @@ export default function CreateExam() {
               return (
                 <div
                   key={q.id}
-                  className={`rounded-xl border p-3 transition-colors ${checked ? "border-primary/50 bg-primary/5" : "border-border"}`}
+                  className={`rounded-xl border transition-colors ${checked ? "border-primary/50 bg-primary/5 ring-1 ring-primary/20" : "border-border"}`}
                 >
-                  <label className="flex items-start gap-3 cursor-pointer">
-                    <Checkbox checked={checked} onCheckedChange={() => toggle(q.id)} className="mt-1" />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex flex-wrap gap-1.5 items-center">
-                        <Badge variant="outline" className="text-[10px] uppercase">{q.questionMode}</Badge>
-                        <span className="text-[10px] text-muted-foreground tabular-nums">{q.marks ?? 1} mark</span>
-                        {q.concept ? <span className="text-xs font-medium truncate">{q.concept}</span> : null}
-                      </div>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {q.mcq?.stem ?? q.sba?.stem ?? "—"}
-                      </p>
+                  <div className="flex items-start gap-2 border-b bg-muted/20 px-3 py-2">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={() => toggle(q.id)}
+                      className="mt-0.5"
+                      aria-label={checked ? "Deselect question" : "Select question"}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-muted-foreground">{q.concept || "Untitled concept"}</p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="shrink-0 h-8 w-8"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggle(q.id);
-                      }}
-                    >
-                      {checked ? <CheckSquare className="h-4 w-4 text-primary" /> : <Square className="h-4 w-4" />}
-                    </Button>
-                  </label>
+                    <Badge variant="outline" className="shrink-0 text-[10px] uppercase tabular-nums">
+                      {q.marks ?? 1} mark
+                    </Badge>
+                  </div>
+                  <button
+                    type="button"
+                    className="block w-full cursor-pointer p-3 text-left"
+                    onClick={() => toggle(q.id)}
+                  >
+                    <QuestionPaperCard
+                      questionMode={q.questionMode}
+                      subject={q.subject}
+                      system={q.system}
+                      chapter={q.chapter}
+                      topic={q.topic}
+                      concept={q.concept}
+                      marks={q.marks}
+                      boards={q.boards}
+                      mcq={q.mcq}
+                      sba={q.sba}
+                      hideAnswers={!showAnswers}
+                      showExplanations={showExplanations}
+                    />
+                  </button>
                 </div>
               );
             })}
@@ -449,8 +497,11 @@ export default function CreateExam() {
                 topic={q.topic}
                 concept={q.concept}
                 marks={q.marks}
+                boards={q.boards}
                 mcq={q.mcq}
                 sba={q.sba}
+                hideAnswers={!showAnswers}
+                showExplanations={showExplanations}
               />
             ))}
           </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, BookOpen, GraduationCap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,23 @@ import { ProgressPctBadge } from "@/components/ProgressPctBadge";
 import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
 import { fetchCourseProgress } from "@/lib/progressApi";
+import {
+  conceptDetailsLink,
+  conceptLearnLink,
+  courseBrowseNavFromTopicPath,
+  courseFlowBackLink,
+  readCourseBrowseNav,
+  type CourseBrowseNavState,
+  type CourseTopicPath,
+} from "@/lib/courseBrowseNav";
 
 type Concept = { id: string; title: string };
 
 export default function MyCourseTopic() {
   const { courseId = "", topicId = "" } = useParams();
-  const [path, setPath] = useState("");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [topicPath, setTopicPath] = useState<CourseTopicPath | null>(null);
   const [concepts, setConcepts] = useState<Concept[]>([]);
   const [topicPct, setTopicPct] = useState<number | null>(null);
   const [conceptPctMap, setConceptPctMap] = useState<Map<string, number>>(new Map());
@@ -32,7 +43,7 @@ export default function MyCourseTopic() {
         ]);
         const j = (await conceptsRes.json().catch(() => ({}))) as {
           concepts?: Concept[];
-          path?: { path?: string };
+          path?: CourseTopicPath | null;
           error?: string;
           unlocks_on?: string;
         };
@@ -44,7 +55,7 @@ export default function MyCourseTopic() {
           throw new Error(j.error ?? "Failed to load");
         }
         setConcepts(j.concepts ?? []);
-        setPath(j.path?.path ?? "");
+        setTopicPath(j.path ?? null);
         if (progressRes) {
           const topic = progressRes.topics.find((t) => t.topic_id === topicId);
           setTopicPct(topic?.pct ?? null);
@@ -62,24 +73,36 @@ export default function MyCourseTopic() {
     })();
   }, [courseId, topicId]);
 
-  const learnHref = useMemo(
-    () => (conceptId: string) => `/concept/${conceptId}/learn?courseId=${courseId}`,
-    [courseId],
+  const pathLabel = topicPath?.path ?? "";
+  const browseNav = useMemo(
+    (): CourseBrowseNavState | null => readCourseBrowseNav(location.state) ?? courseBrowseNavFromTopicPath(topicPath),
+    [location.state, topicPath],
   );
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-10">
-      <Button asChild variant="ghost" size="sm">
-        <Link to={`/my-courses/${courseId}`}>
-          <ArrowLeft className="mr-1 h-4 w-4" /> Back to course
-        </Link>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        onClick={() =>
+          navigate(
+            courseFlowBackLink({
+              courseId,
+              locationState: location.state,
+              topicPath,
+            }),
+          )
+        }
+      >
+        <ArrowLeft className="mr-1 h-4 w-4" /> Back
       </Button>
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="page-title">Topic concepts</h1>
           {topicPct != null ? <ProgressPctBadge pct={topicPct} size="md" /> : null}
         </div>
-        {path ? <p className="text-sm text-muted-foreground mt-1">{path}</p> : null}
+        {pathLabel ? <p className="mt-1 text-sm text-muted-foreground">{pathLabel}</p> : null}
         {topicPct != null ? (
           <div className="mt-2 max-w-xs">
             <Progress value={topicPct} className="h-1.5" />
@@ -100,22 +123,22 @@ export default function MyCourseTopic() {
             return (
               <Card key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
                 <div className="min-w-0 flex-1 space-y-1">
-                  <p className="font-medium text-sm">{c.title}</p>
+                  <p className="text-sm font-medium">{c.title}</p>
                   {pct != null ? (
                     <div className="flex items-center gap-2">
                       <Progress value={pct} className="h-1 max-w-[120px]" />
-                      <span className="text-[10px] text-muted-foreground tabular-nums">{pct}%</span>
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{pct}%</span>
                     </div>
                   ) : null}
                 </div>
                 <div className="flex gap-2">
                   <Button asChild size="sm" variant="outline" className="gap-1">
-                    <Link to={learnHref(c.id)}>
+                    <Link to={conceptLearnLink(courseId, c.id, topicId, browseNav)}>
                       <GraduationCap className="h-3.5 w-3.5" /> Study
                     </Link>
                   </Button>
                   <Button asChild size="sm" variant="ghost" className="gap-1">
-                    <Link to={`/concept/${c.id}/details`}>
+                    <Link to={conceptDetailsLink(courseId, c.id, topicId, browseNav)}>
                       <BookOpen className="h-3.5 w-3.5" /> Details
                     </Link>
                   </Button>

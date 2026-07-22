@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, BookOpen, HelpCircle, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -29,6 +29,7 @@ import {
   isStep3Complete,
 } from "@/lib/userProgress";
 import { toast } from "sonner";
+import { courseFlowBackLink } from "@/lib/courseBrowseNav";
 import {
   userBottomBar,
   userBottomBarInner,
@@ -43,7 +44,9 @@ import {
 export default function ConceptLearn() {
   const { conceptId } = useParams<{ conceptId: string }>();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const courseId = searchParams.get("courseId") ?? "";
+  const topicId = searchParams.get("topicId") ?? "";
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
@@ -216,7 +219,14 @@ export default function ConceptLearn() {
       <div className={userPageTopBar}>
         <div className={userStickyHeader}>
           <Button asChild variant="ghost" size="icon" className="shrink-0">
-            <Link to={courseId ? `/my-courses/${courseId}` : "/my-suggestions"}>
+            <Link
+              to={courseFlowBackLink({
+                courseId: courseId || undefined,
+                topicId: topicId || undefined,
+                conceptId: conceptId || undefined,
+                locationState: location.state,
+              })}
+            >
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
