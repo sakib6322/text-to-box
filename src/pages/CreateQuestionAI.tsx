@@ -28,6 +28,14 @@ import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import { ConceptPickerDialog, ConceptSelectButton } from "@/components/ConceptPickerDialog";
 import { SuggestionMatchPanel } from "@/components/SuggestionMatchPanel";
+import { BoardCheckboxGroup, type BoardOption } from "@/components/BoardCheckboxGroup";
+import {
+  userBottomBar,
+  userBottomBarInner,
+  userPageShell,
+  userPageTopBar,
+  userStickyHeader,
+} from "@/lib/userShell";
 import {
   emptyConceptDetail,
   fetchConceptByIdWithBoards,
@@ -88,8 +96,6 @@ type ApprovedPoint = {
   matching?: boolean;
 };
 
-type BoardOption = { id: string; name: string };
-
 type TfItem = {
   id: string;
   statement: string;
@@ -136,37 +142,6 @@ const mkId = () =>
 function boardNamesFromIds(boardOptions: BoardOption[], ids: string[]): string[] {
   const byId = new Map(boardOptions.map((b) => [b.id, b.name]));
   return ids.map((id) => byId.get(id)).filter((n): n is string => Boolean(n?.trim()));
-}
-
-function BoardCheckboxGroup({
-  boardOptions,
-  selectedIds,
-  onChange,
-  compact = false,
-}: {
-  boardOptions: BoardOption[];
-  selectedIds: string[];
-  onChange: (ids: string[]) => void;
-  compact?: boolean;
-}) {
-  const toggle = (id: string) => {
-    onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
-  };
-
-  if (boardOptions.length === 0) {
-    return <span className="text-sm text-muted-foreground">No boards yet. Add them in Settings.</span>;
-  }
-
-  return (
-    <div className={cn("flex flex-wrap gap-x-4 gap-y-2", compact ? "gap-x-3 gap-y-1" : "rounded-md border p-3")}>
-      {boardOptions.map((b) => (
-        <label key={b.id} className={cn("flex cursor-pointer items-center gap-2", compact ? "text-xs" : "text-sm")}>
-          <Checkbox checked={selectedIds.includes(b.id)} onCheckedChange={() => toggle(b.id)} />
-          {b.name}
-        </label>
-      ))}
-    </div>
-  );
 }
 
 function questionStem(q: Pick<DraftQuestion, "mcq" | "sba">): string {
@@ -1306,23 +1281,27 @@ export default function CreateQuestionAI() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="page-title">Create Question</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
-            {breadcrumb.map((b, i) => (
-              <span key={`${b}-${i}`} className="inline-flex max-w-full items-center gap-1">
-                <span className="max-w-[12rem] truncate sm:max-w-[16rem]">{b}</span>
-                {i < breadcrumb.length - 1 ? <ChevronRight className="h-4 w-4 shrink-0 opacity-60" /> : null}
-              </span>
-            ))}
+    <div className={cn(userPageShell, "pb-28 md:pb-10")}>
+      <div className={userPageTopBar}>
+        <div className={cn(userStickyHeader, "flex-col items-stretch !gap-1 sm:flex-row sm:items-center")}>
+          <div className="min-w-0 flex-1">
+            <h1 className="page-title text-lg sm:text-xl">Create Question</h1>
+            <div className="mt-0.5 flex flex-wrap items-center gap-0.5 text-[11px] text-muted-foreground sm:mt-1 sm:gap-1 sm:text-sm">
+              {breadcrumb.map((b, i) => (
+                <span key={`${b}-${i}`} className="inline-flex max-w-full items-center gap-0.5 sm:gap-1">
+                  <span className="max-w-[9rem] truncate sm:max-w-[16rem]">{b}</span>
+                  {i < breadcrumb.length - 1 ? <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60 sm:h-4 sm:w-4" /> : null}
+                </span>
+              ))}
+            </div>
           </div>
+          <Badge variant="secondary" className="w-fit shrink-0 self-start text-[10px] sm:self-auto sm:text-xs">
+            AI auto-fill or manual
+          </Badge>
         </div>
-        <Badge variant="secondary">AI auto-fill or manual</Badge>
       </div>
 
-      <Card className="p-4">
+      <Card className="mx-3 space-y-4 p-3 sm:p-4 md:mx-0">
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Concept *</Label>
@@ -1339,18 +1318,9 @@ export default function CreateQuestionAI() {
           <TaxonomySelects value={taxonomy} onChange={setTaxonomy} required />
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-6">
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={enableBijoyPaste} onCheckedChange={(v) => setEnableBijoyPaste(Boolean(v))} />
-            Enable Bijoy Paste
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <Checkbox checked={enableHelper} onCheckedChange={(v) => setEnableHelper(Boolean(v))} />
-            Enable Helper
-          </label>
-        </div>
 
-        <div className="mt-4 space-y-4">
+
+        <div className="space-y-4">
           <Can permission="question_bank.create_ai.upload">
           <div className="space-y-2">
             <Label>Upload image / PDF for extract</Label>
@@ -1364,14 +1334,14 @@ export default function CreateQuestionAI() {
               onClick={() => canUpload && fileRef.current?.click()}
               onKeyDown={(e) => e.key === "Enter" && canUpload && fileRef.current?.click()}
               className={[
-                "rounded-lg border-2 border-dashed p-4 text-center transition-colors max-w-md",
-                canUpload ? "cursor-pointer" : "cursor-not-allowed opacity-50",
+                "w-full rounded-xl border-2 border-dashed p-4 text-center transition-colors sm:max-w-md sm:rounded-lg",
+                canUpload ? "cursor-pointer active:bg-primary/5" : "cursor-not-allowed opacity-50",
                 dragOver && canUpload ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/50",
               ].join(" ")}
             >
-              <Upload className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+              <Upload className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
               <p className="text-sm font-medium">ছবি/PDF ড্র্যাগ, ক্লিক করুন</p>
-              <p className="text-xs text-muted-foreground mt-1">Image অথবা PDF — extract এর জন্য</p>
+              <p className="mt-1 text-xs text-muted-foreground">Image অথবা PDF — extract এর জন্য</p>
               <Input
                 ref={fileRef}
                 type="file"
@@ -1382,13 +1352,13 @@ export default function CreateQuestionAI() {
               />
             </div>
             {isPdf && imageFile ? (
-              <div className="max-w-md rounded-md border p-3 flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="flex w-full items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground sm:max-w-md">
                 <FileText className="h-5 w-5 shrink-0" />
-                <span>{imageFile.name}</span>
+                <span className="min-w-0 truncate">{imageFile.name}</span>
               </div>
             ) : null}
             {imagePreview ? (
-              <div className="max-w-md rounded-md overflow-hidden border">
+              <div className="w-full overflow-hidden rounded-md border sm:max-w-md">
                 <img src={imagePreview} alt="Upload preview" className="w-full" />
               </div>
             ) : null}
@@ -1397,24 +1367,30 @@ export default function CreateQuestionAI() {
 
           <Can permission="question_bank.create_ai.extract">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <Button onClick={() => void handleExtract()} disabled={(!imageFile && !sourceText.trim()) || extracting} type="button">
+            <Button
+              className="h-11 w-full sm:h-10 sm:w-auto"
+              onClick={() => void handleExtract()}
+              disabled={(!imageFile && !sourceText.trim()) || extracting}
+              type="button"
+            >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
               {extracting ? "Extracting…" : "Extract concept"}
             </Button>
             <Button
+              className="h-11 w-full sm:h-10 sm:w-auto"
               variant="outline"
               onClick={() => void handleExtract({ skipMatching: true })}
               disabled={(!imageFile && !sourceText.trim()) || extracting}
               type="button"
             >
               {extracting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-              {extracting ? "Extracting…" : "Extract concept without matching"}
+              {extracting ? "Extracting…" : "Extract without matching"}
             </Button>
           </div>
           </Can>
         </div>
         <Can permission="question_bank.create_ai.source_text">
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2">
           <Label>Source text (Text to concept generator)</Label>
           <Textarea
             ref={sourceTextRef}
@@ -1422,7 +1398,7 @@ export default function CreateQuestionAI() {
             onChange={(e) => canSourceText && setSourceText(e.target.value)}
             readOnly={!canSourceText}
             rows={1}
-            className="min-h-10 resize-none overflow-hidden"
+            className="min-h-12 resize-none overflow-hidden text-base sm:min-h-10 sm:text-sm"
             placeholder="Paste or type source text…"
           />
         </div>
@@ -1430,10 +1406,10 @@ export default function CreateQuestionAI() {
       </Card>
 
       <Can permission="question_bank.create_ai.bulk">
-        <Card className="p-4 space-y-4">
+        <Card className="mx-3 space-y-4 p-3 sm:p-4 md:mx-0">
           <div>
             <h2 className="text-sm font-semibold">Bulk import (no AI)</h2>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="mt-1 text-xs text-muted-foreground">
               JSON paste <strong>অথবা</strong> CSV upload — Gemini ছাড়াই MCQ/SBA queue-তে যাবে। প্রতিটি
               প্রশ্নের boards name দিয়ে auto-select। Concept + taxonomy আগে select করতে হবে।
             </p>
@@ -1449,19 +1425,19 @@ export default function CreateQuestionAI() {
                 e.key === "Enter" && canBulk && !importingBulk && bulkCsvFileRef.current?.click()
               }
               className={[
-                "rounded-lg border-2 border-dashed p-4 text-center transition-colors max-w-xl",
-                canBulk && !importingBulk ? "cursor-pointer hover:border-primary/50" : "cursor-not-allowed opacity-50",
+                "w-full rounded-xl border-2 border-dashed p-4 text-center transition-colors sm:max-w-xl sm:rounded-lg",
+                canBulk && !importingBulk ? "cursor-pointer active:bg-primary/5 hover:border-primary/50" : "cursor-not-allowed opacity-50",
                 "border-muted-foreground/30",
               ].join(" ")}
             >
               {importingBulk ? (
-                <Loader2 className="mx-auto h-8 w-8 mb-2 text-muted-foreground animate-spin" />
+                <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-muted-foreground" />
               ) : (
-                <FileSpreadsheet className="mx-auto h-8 w-8 mb-2 text-muted-foreground" />
+                <FileSpreadsheet className="mx-auto mb-2 h-8 w-8 text-muted-foreground" />
               )}
               <p className="text-sm font-medium">{importingBulk ? "Importing…" : "CSV আপলোড করুন"}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Header: <code className="text-[11px]">type,stem,boards,texts,corrects,explanations</code>
+              <p className="mt-1 break-all text-xs text-muted-foreground">
+                Header: <code className="text-[10px] sm:text-[11px]">type,stem,boards,texts,corrects,explanations</code>
               </p>
               <Input
                 ref={bulkCsvFileRef}
@@ -1475,8 +1451,8 @@ export default function CreateQuestionAI() {
                 }}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" asChild>
+            <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+              <Button type="button" variant="outline" size="sm" className="h-10 w-full sm:h-8 sm:w-auto" asChild>
                 <a href="/samples/create-question-bulk.csv" download>
                   Download sample CSV
                 </a>
@@ -1485,6 +1461,7 @@ export default function CreateQuestionAI() {
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-10 w-full sm:h-8 sm:w-auto"
                 disabled={importingBulk}
                 onClick={() => void copyBulkExternalPrompt("csv")}
               >
@@ -1494,7 +1471,7 @@ export default function CreateQuestionAI() {
             </div>
           </div>
 
-          <div className="border-t pt-4 space-y-2">
+          <div className="space-y-2 border-t pt-4">
             <Label htmlFor="bulk-questions-json" className="text-xs font-medium text-muted-foreground">
               JSON text
             </Label>
@@ -1503,15 +1480,16 @@ export default function CreateQuestionAI() {
               value={bulkJsonText}
               onChange={(e) => canBulk && setBulkJsonText(e.target.value)}
               readOnly={!canBulk || importingBulk}
-              rows={10}
-              className="font-mono text-xs min-h-[160px]"
+              rows={8}
+              className="min-h-[140px] font-mono text-xs sm:min-h-[160px]"
               placeholder='{ "questions": [ { "type": "mcq", "stem": "...", "boards": [], "statements": [...] }, ... ] }'
             />
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <Button
               type="button"
+              className="h-11 w-full sm:h-10 sm:w-auto"
               onClick={() => void handleBulkImport()}
               disabled={importingBulk || !bulkJsonText.trim()}
             >
@@ -1521,13 +1499,14 @@ export default function CreateQuestionAI() {
             <Button
               type="button"
               variant="outline"
+              className="h-10 w-full sm:w-auto"
               onClick={() => void copyBulkExternalPrompt("json")}
               disabled={importingBulk}
             >
               <ClipboardCopy className="mr-2 h-4 w-4" />
               Copy JSON prompt
             </Button>
-            <Button type="button" variant="outline" asChild>
+            <Button type="button" variant="outline" className="h-10 w-full sm:w-auto" asChild>
               <a href="/samples/create-question-bulk.json" download>
                 Download sample JSON
               </a>
@@ -1535,6 +1514,7 @@ export default function CreateQuestionAI() {
             <Button
               type="button"
               variant="outline"
+              className="h-10 w-full sm:w-auto"
               disabled={importingBulk}
               onClick={() => bulkFileRef.current?.click()}
             >
@@ -1565,11 +1545,11 @@ export default function CreateQuestionAI() {
         </Card>
       </Can>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-        <Card className="p-4">
+      <div className="mx-3 grid grid-cols-1 gap-3 md:mx-0 lg:grid-cols-[280px_1fr] lg:gap-4">
+        <Card className="p-3 sm:p-4">
           <div className="text-sm font-medium">Select question type *</div>
           <p className="mt-1 text-xs text-muted-foreground">Only these two types are available.</p>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1 lg:space-y-0 lg:gap-2">
             <button
               type="button"
               onClick={() => {
@@ -1577,40 +1557,44 @@ export default function CreateQuestionAI() {
                 setTfItems((rows) => (rows.length > 0 ? rows : [{ id: mkId(), statement: "", correct: "true", explanation: "" }]));
               }}
               className={cn(
-                "w-full rounded-lg border p-3 text-left transition",
+                "rounded-xl border p-3 text-left transition active:scale-[0.99]",
                 questionMode === "mcq" ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
               )}
             >
               <div className="font-medium">MCQ</div>
-              <div className="text-xs text-muted-foreground">Multiple choice · with True/False under the question</div>
+              <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground sm:text-xs">
+                Multiple choice · T/F under question
+              </div>
             </button>
             <button
               type="button"
               onClick={() => setQuestionMode("sba")}
               className={cn(
-                "w-full rounded-lg border p-3 text-left transition",
+                "rounded-xl border p-3 text-left transition active:scale-[0.99]",
                 questionMode === "sba" ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
               )}
             >
               <div className="font-medium">SBA</div>
-              <div className="text-xs text-muted-foreground">Single best answer · five options</div>
+              <div className="mt-0.5 text-[10px] leading-snug text-muted-foreground sm:text-xs">
+                Single best answer · five options
+              </div>
             </button>
           </div>
         </Card>
 
-        <Card className="p-4">
+        <Card className="p-3 sm:p-4">
           {!result ? (
-            <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+            <div className="flex min-h-[140px] flex-col items-center justify-center gap-2 px-2 text-center text-muted-foreground sm:min-h-[200px]">
               <p className="text-sm font-medium text-foreground">Extraction</p>
-              <p className="max-w-md text-sm">Use image extract above to autofill, or type concept fields and the form below manually.</p>
+              <p className="max-w-md text-xs sm:text-sm">Use image extract above to autofill, or type concept fields and the form below manually.</p>
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <div>
                   <div className="text-sm font-medium">Extracted points</div>
                   <div className="text-xs text-muted-foreground">
-                    Approve = matched KP-এর count বাড়ায় (board সংখ্যা অনুযায়ী) — নতুন KP তৈরি হয় না। Save = selected concept-এ নতুন KP সেভ (boards থাকলে count, না থাকলে 0)।
+                    Approve = matched KP count বাড়ায় · Save = নতুন KP
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1">
@@ -1622,9 +1606,9 @@ export default function CreateQuestionAI() {
                   </Badge>
                 </div>
               </div>
-              <div className="max-h-[420px] space-y-2 overflow-y-auto pr-1">
+              <div className="max-h-[min(55vh,420px)] space-y-2 overflow-y-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
                 {points.map((p, idx) => (
-                  <Card key={p.point_id} className="p-3 space-y-2">
+                  <Card key={p.point_id} className="space-y-2 p-3">
                     <Textarea
                       value={p.text}
                       onChange={(e) => {
@@ -1635,7 +1619,7 @@ export default function CreateQuestionAI() {
                       }}
                       onBlur={() => void refreshPointMatch(idx)}
                       rows={2}
-                      className="resize-none"
+                      className="resize-none text-base sm:text-sm"
                     />
                     {p.matching ? (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -1674,30 +1658,29 @@ export default function CreateQuestionAI() {
         </Card>
       </div>
 
-      <Card className="p-4">
+      <Card className="mx-3 p-3 sm:p-4 md:mx-0">
         <div className="text-sm font-medium">Question details</div>
         <p className="mb-4 mt-1 text-xs text-muted-foreground">All fields are editable. Multi-value fields use one or more lines.</p>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-2 md:col-span-2 lg:col-span-3">
-            <Label>Boards (this question)</Label>
-            <p className="text-xs text-muted-foreground">
-              Select a question in the preview, then set boards here. Those boards apply when you Approve or Save a key point (and when you Save questions).
-              {queuedQuestions.length > 1 ? ` Editing question ${activeQuestionIndex + 1} of ${queuedQuestions.length}.` : null}
-            </p>
-            <BoardCheckboxGroup
-              boardOptions={boardOptions}
-              selectedIds={selectedBoardIds}
-              onChange={setSelectedBoardIds}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label>Boards (this question)</Label>
+          <p className="text-xs text-muted-foreground">
+            Select a question in the preview, then set boards here. Those boards apply when you Approve or Save a key point (and when you Save questions).
+            {queuedQuestions.length > 1 ? ` Editing question ${activeQuestionIndex + 1} of ${queuedQuestions.length}.` : null}
+          </p>
+          <BoardCheckboxGroup
+            boardOptions={boardOptions}
+            selectedIds={selectedBoardIds}
+            onChange={setSelectedBoardIds}
+            maxHeightClass="max-h-40 sm:max-h-52"
+          />
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
           <div className="space-y-2">
             <Label>Difficulty *</Label>
             <Select value={difficulty} onValueChange={setDifficulty}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-10">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1710,7 +1693,7 @@ export default function CreateQuestionAI() {
           <div className="space-y-2">
             <Label>Status *</Label>
             <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
+              <SelectTrigger className="h-11 sm:h-10">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1723,6 +1706,7 @@ export default function CreateQuestionAI() {
           <div className="space-y-2">
             <Label>Marks *</Label>
             <Input
+              className="h-11 text-base sm:h-10 sm:text-sm"
               value={marks}
               onChange={(e) => setMarks(e.target.value.replace(/[^\d.]/g, ""))}
               inputMode="decimal"
@@ -1765,11 +1749,12 @@ export default function CreateQuestionAI() {
         ) : null}
 
         {questionMode ? (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="h-10 w-full sm:h-8 sm:w-auto"
               onClick={generateExplanationsAi}
               disabled={generatingExplanations || extracting}
             >
@@ -1783,25 +1768,25 @@ export default function CreateQuestionAI() {
         ) : null}
 
         {questionMode === "mcq" ? (
-          <div className="mt-8 space-y-4 border-t pt-6">
+          <div className="mt-6 space-y-4 border-t pt-5 sm:mt-8 sm:pt-6">
             <div className="text-sm font-medium text-primary">MCQ</div>
             <div className="space-y-2">
               <Label>Question (stem) *</Label>
-              <Textarea value={mcqStem} onChange={(e) => setMcqStem(e.target.value)} rows={3} className="resize-y" />
+              <Textarea value={mcqStem} onChange={(e) => setMcqStem(e.target.value)} rows={3} className="resize-y text-base sm:text-sm" />
             </div>
             <div className="space-y-2">
               <div className="text-sm font-medium">True/False (under the question)</div>
               {tfItems.length === 0 ? <p className="text-sm text-muted-foreground">Use &quot;Add question&quot; to add a T/F sub-question.</p> : null}
               {tfItems.map((row, i) => (
-                <Card key={row.id} className="p-3">
+                <Card key={row.id} className="space-y-3 p-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                    <div className="flex-1 space-y-2">
+                    <div className="min-w-0 flex-1 space-y-2">
                       <Label>Statement {i + 1}</Label>
                       <Textarea
                         value={row.statement}
                         onChange={(e) => setTf(i, { statement: e.target.value })}
                         rows={2}
-                        className="resize-y"
+                        className="resize-y text-base sm:text-sm"
                       />
                     </div>
                     <div className="w-full sm:w-40">
@@ -1810,7 +1795,7 @@ export default function CreateQuestionAI() {
                         value={row.correct}
                         onValueChange={(v) => setTf(i, { correct: v as "true" | "false" })}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="h-11 sm:h-10">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -1826,14 +1811,14 @@ export default function CreateQuestionAI() {
                       value={row.explanation ?? ""}
                       onChange={(e) => setTf(i, { explanation: e.target.value })}
                       rows={2}
-                      className="resize-y"
+                      className="resize-y text-base sm:text-sm"
                       placeholder="Explain why this statement is true or false…"
                     />
                   </div>
                 </Card>
               ))}
             </div>
-            <Button type="button" className="w-full" onClick={addTfQuestion}>
+            <Button type="button" className="h-11 w-full sm:h-10" onClick={addTfQuestion}>
               <Plus className="mr-2 h-4 w-4" />
               Add question
             </Button>
@@ -1841,22 +1826,22 @@ export default function CreateQuestionAI() {
         ) : null}
 
         {questionMode === "sba" ? (
-          <div className="mt-8 space-y-4 border-t pt-6">
+          <div className="mt-6 space-y-4 border-t pt-5 sm:mt-8 sm:pt-6">
             <div className="text-sm font-medium text-primary">SBA (single best answer)</div>
             <div className="space-y-2">
               <Label>Question *</Label>
-              <Textarea value={sbaStem} onChange={(e) => setSbaStem(e.target.value)} rows={3} className="resize-y" />
+              <Textarea value={sbaStem} onChange={(e) => setSbaStem(e.target.value)} rows={3} className="resize-y text-base sm:text-sm" />
             </div>
             <div className="space-y-3">
               <Label>Options (5) *</Label>
               {sbaOptions.map((opt, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="mt-2 w-6 text-sm font-medium text-muted-foreground">{i + 1}.</span>
+                <div key={i} className="flex items-start gap-2 sm:gap-3">
+                  <span className="mt-2.5 w-5 shrink-0 text-sm font-medium text-muted-foreground sm:w-6">{i + 1}.</span>
                   <Textarea
                     value={opt}
                     onChange={(e) => setSbaOption(i, e.target.value)}
                     rows={2}
-                    className="min-h-0 flex-1 resize-y"
+                    className="min-h-0 flex-1 resize-y text-base sm:text-sm"
                   />
                 </div>
               ))}
@@ -1875,7 +1860,7 @@ export default function CreateQuestionAI() {
                       value={sbaOptionExplanations[i] ?? ""}
                       onChange={(e) => setSbaOptionExplanation(i, e.target.value)}
                       rows={2}
-                      className="resize-y"
+                      className="resize-y text-base sm:text-sm"
                       placeholder={isCorrect ? "Explain why this is the best answer…" : "Explain why this option is incorrect…"}
                     />
                   </div>
@@ -1887,12 +1872,12 @@ export default function CreateQuestionAI() {
               <RadioGroup
                 value={String(sbaCorrect)}
                 onValueChange={(v) => setSbaCorrect(Number(v) as 0 | 1 | 2 | 3 | 4)}
-                className="grid grid-cols-5 gap-2"
+                className="grid grid-cols-5 gap-1.5 sm:gap-2"
               >
                 {([0, 1, 2, 3, 4] as const).map((i) => (
                   <label
                     key={i}
-                    className="flex cursor-pointer items-center gap-2 rounded-md border p-2 text-sm"
+                    className="flex min-h-11 cursor-pointer items-center justify-center gap-1.5 rounded-lg border p-2 text-sm active:bg-muted/40 sm:min-h-0 sm:justify-start sm:gap-2"
                   >
                     <RadioGroupItem value={String(i)} />
                     <span>{i + 1}</span>
@@ -1904,7 +1889,8 @@ export default function CreateQuestionAI() {
         ) : null}
       </Card>
 
-      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-2">
+      {/* Desktop actions */}
+      <div className="mx-3 hidden flex-wrap items-center justify-end gap-2 border-t pt-2 md:mx-0 md:flex">
         <Can permission="question_bank.create_ai.add">
         <Button type="button" variant="secondary" onClick={() => addQuestionToPaper("mcq")}>
           <Plus className="mr-2 h-4 w-4" />
@@ -1925,20 +1911,51 @@ export default function CreateQuestionAI() {
         </Button>
         </Can>
       </div>
+
+      {/* Mobile sticky action bar */}
+      <div className={cn(userBottomBar, "md:hidden")}>
+        <div className={cn(userBottomBarInner, "flex-col gap-2")}>
+          <div className="grid grid-cols-2 gap-2">
+            <Can permission="question_bank.create_ai.add">
+            <Button type="button" variant="secondary" size="sm" className="h-10 text-xs" onClick={() => addQuestionToPaper("mcq")}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Add MCQ
+            </Button>
+            <Button type="button" variant="secondary" size="sm" className="h-10 text-xs" onClick={() => addQuestionToPaper("sba")}>
+              <Plus className="mr-1 h-3.5 w-3.5" />
+              Add SBA
+            </Button>
+            </Can>
+          </div>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" className="h-11 flex-1" onClick={resetForm}>
+              Reset
+            </Button>
+            <Can permission="question_bank.create_ai.add">
+            <Button type="button" className="h-11 flex-[1.4]" onClick={saveQuestion} disabled={saving || !questionMode}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {queuedQuestions.length > 1 ? `Save ${queuedQuestions.length}` : "Save"}
+            </Button>
+            </Can>
+          </div>
+        </div>
+      </div>
+
       {queuedQuestions.length > 0 && (
-        <Card className="p-4">
-          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <Card className="mx-3 p-3 sm:p-4 md:mx-0">
+          <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium">Question paper preview ({queuedQuestions.length})</div>
               <p className="text-xs text-muted-foreground">
                 Check questions to approve their matches or to link when approving/saving an extracted point.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
+                className="h-10 sm:h-8"
                 onClick={() => {
                   setSelectedQuestionIds((prev) =>
                     prev.size === queuedQuestions.length
@@ -1952,6 +1969,7 @@ export default function CreateQuestionAI() {
               <Button
                 type="button"
                 size="sm"
+                className="h-10 sm:h-8"
                 onClick={() => void approveSelectedQuestionMatches()}
                 disabled={
                   !queuedQuestions.some(
@@ -1959,11 +1977,11 @@ export default function CreateQuestionAI() {
                   )
                 }
               >
-                Approve selected matches
+                Approve selected
               </Button>
             </div>
           </div>
-          <div className="space-y-2">
+          <div className="max-h-[min(50vh,28rem)] space-y-2 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             {queuedQuestions.map((q, idx) => (
               <div
                 key={q.id}
@@ -1974,7 +1992,7 @@ export default function CreateQuestionAI() {
                   if (e.key === "Enter" || e.key === " ") selectQueuedQuestion(idx);
                 }}
                 className={cn(
-                  "flex cursor-pointer items-center justify-between rounded-md border p-3 transition",
+                  "flex cursor-pointer items-center justify-between gap-2 rounded-xl border p-3 transition active:scale-[0.995]",
                   idx === activeQuestionIndex ? "border-primary bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50",
                 )}
               >
@@ -2001,7 +2019,7 @@ export default function CreateQuestionAI() {
                         </Badge>
                       ) : null}
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="line-clamp-2 text-xs text-muted-foreground sm:truncate">
                       {q.mcq?.stem || q.sba?.stem || "No stem"}
                     </div>
                     {q.match && matchPath(q.match) ? (
@@ -2023,6 +2041,7 @@ export default function CreateQuestionAI() {
                   type="button"
                   variant="ghost"
                   size="icon"
+                  className="h-10 w-10 shrink-0 sm:h-9 sm:w-9"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (!guardPermission("question_bank.create_ai.delete")) return;
