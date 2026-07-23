@@ -724,6 +724,10 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
 
 .concept-detail-rich {
   background-color: var(--cd-bg, transparent);
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 html[data-cd-bg="1"] .concept-detail-rich {
@@ -818,9 +822,35 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 .concept-detail-table,
 .concept-detail-rich table {
   width: 100%;
+  max-width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-size: var(--cd-table-font-size, 12px);
+}
+
+/* Keep editor-set column / cell widths (colgroup, style="width:…") on larger screens */
+.concept-detail-rich table col,
+.concept-detail-rich table th,
+.concept-detail-rich table td {
+  box-sizing: border-box;
+}
+
+.concept-detail-rich figure.table,
+.concept-detail-rich .table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.concept-detail-rich figure.table > table,
+.concept-detail-rich .table > table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: auto;
 }
 
 .concept-detail-table th,
@@ -830,9 +860,20 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
   border: 1px solid var(--cd-table-border, #cbd5e1);
   padding: var(--cd-table-pad, 8px);
   vertical-align: top;
-  word-wrap: break-word;
   text-align: left;
   white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+.concept-detail-rich table p,
+.concept-detail-rich table span,
+.concept-detail-rich table strong,
+.concept-detail-rich table b {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .concept-detail-table th,
@@ -858,6 +899,63 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 
 .concept-detail-rich table p:last-child {
   margin-bottom: 0;
+}
+
+/* Mobile: wrap inside screen, keep editor column proportions when present */
+@media (max-width: 640px) {
+  /* Appearance: Mobile table — full-bleed / custom card chrome when table is present */
+  html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-rich table),
+  html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-table) {
+    padding: var(--cd-mobile-table-card-padding, 0px) !important;
+    border-width: var(--cd-mobile-table-card-border-width, 0px) !important;
+    border-radius: var(--cd-mobile-table-card-radius, 0px) !important;
+  }
+
+  html[data-cd-mobile-table-bleed="1"][data-cd-bg="1"] .concept-detail-rich:has(table) {
+    padding: var(--cd-mobile-table-card-padding, 0px) !important;
+    border-radius: var(--cd-mobile-table-card-radius, 0px);
+  }
+
+  .concept-detail-rich,
+  .concept-detail-card {
+    overflow-x: hidden;
+  }
+
+  .concept-detail-rich figure.table,
+  .concept-detail-rich .table {
+    overflow-x: hidden;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .concept-detail-table,
+  .concept-detail-rich table,
+  .concept-detail-rich figure.table > table,
+  .concept-detail-rich .table > table {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0;
+    /* Content-weighted when no saved widths (not equal columns) */
+    table-layout: auto;
+  }
+
+  /* Editor col/% widths → keep those ratios while fitting the screen */
+  .concept-detail-rich table:has(colgroup col[style]),
+  .concept-detail-rich table:has(col[style]),
+  .concept-detail-rich table:has(th[style*="width"]),
+  .concept-detail-rich table:has(td[style*="width"]) {
+    table-layout: fixed !important;
+  }
+
+  .concept-detail-table th,
+  .concept-detail-table td,
+  .concept-detail-rich table th,
+  .concept-detail-rich table td {
+    min-width: 0 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
 }
 
 

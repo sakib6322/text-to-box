@@ -117,6 +117,10 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
     body: "কোথায়: concept detail HTML tables — header row, borders, even rows, cell padding।",
   },
   {
+    title: "Mobile table",
+    body: "Phone (≤640px)-এ table থাকলে textbox card-এর padding/border/radius আলাদা (`mobileTableFullBleed` + `--cd-mobile-table-card-*`)। Default: padding/border/radius 0 = table পুরো card width।",
+  },
+  {
     title: "Code background / Blockquote border",
     body: "কোথায়: `<code>` inline ও `<blockquote>` left border in concept body।",
   },

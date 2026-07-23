@@ -1477,6 +1477,43 @@ export default function AdminAppearance() {
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Mobile table</p>
+              <p className="text-[11px] text-muted-foreground">
+                Phone (≤640px)-এ concept body-তে table থাকলে textbox card-এর padding / border আলাদা করে সেট করুন — table পুরো width নিতে পারে।
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Full-bleed table on phone"
+                  checked={c.mobileTableFullBleed !== false}
+                  onChange={(v) => updateCd("mobileTableFullBleed", v)}
+                  hint="চালু = নিচের padding/border/radius table থাকলে apply হবে"
+                />
+                <NumberField
+                  label="Card padding with table (px)"
+                  value={c.mobileTableCardPaddingPx ?? 0}
+                  min={0}
+                  max={48}
+                  onChange={(n) => updateCd("mobileTableCardPaddingPx", n)}
+                />
+                <NumberField
+                  label="Card border with table (px)"
+                  value={c.mobileTableCardBorderWidthPx ?? 0}
+                  min={0}
+                  max={8}
+                  step={0.5}
+                  onChange={(n) => updateCd("mobileTableCardBorderWidthPx", n)}
+                />
+                <NumberField
+                  label="Card radius with table (px)"
+                  value={c.mobileTableCardBorderRadiusPx ?? 0}
+                  min={0}
+                  max={32}
+                  onChange={(n) => updateCd("mobileTableCardBorderRadiusPx", n)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox shape</p>
               <p className="text-[11px] text-muted-foreground">
                 Concept details CKEditor textbox — radius, border, background, height, padding।

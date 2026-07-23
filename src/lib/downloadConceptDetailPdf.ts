@@ -172,7 +172,8 @@ export async function downloadConceptDetailPdf(
     u { text-decoration: underline; }
     ul, ol { margin: 0; padding-left: 1.25rem; }
     li { margin-bottom: 6px; }
-    table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+    table { width: auto; max-width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; }
+    col, th, td { box-sizing: border-box; }
     th, td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; word-wrap: break-word; }
     th { background: #fbbf24; color: #1e293b; font-weight: 700; text-align: left; }
     tbody tr:nth-child(even) td { background: #f8fafc; }

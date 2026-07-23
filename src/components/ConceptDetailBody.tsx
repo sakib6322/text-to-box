@@ -60,7 +60,7 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
         <div className="space-y-2">
           {table.title ? <p className="font-semibold">{table.title}</p> : null}
           <div className="overflow-x-auto">
-            <Table className="concept-detail-table table-fixed w-full border-collapse text-xs">
+            <Table className="concept-detail-table w-full border-collapse text-xs">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   {headers.map((h, i) => (

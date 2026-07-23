@@ -215,6 +215,14 @@ export type ConceptDetailsAppearance = {
   tableEvenRowBg: string;
   tableFontSizePx: number;
   tableCellPaddingPx: number;
+  /**
+   * Phone (≤640px): when concept body has a table, override textbox-card chrome
+   * so the table can use the full card width.
+   */
+  mobileTableFullBleed: boolean;
+  mobileTableCardPaddingPx: number;
+  mobileTableCardBorderWidthPx: number;
+  mobileTableCardBorderRadiusPx: number;
   codeBg: string;
   blockquoteBorder: string;
 };
@@ -882,6 +890,10 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     tableEvenRowBg: "#f8fafc",
     tableFontSizePx: 12,
     tableCellPaddingPx: 8,
+    mobileTableFullBleed: true,
+    mobileTableCardPaddingPx: 0,
+    mobileTableCardBorderWidthPx: 0,
+    mobileTableCardBorderRadiusPx: 0,
     codeBg: "#f1f5f9",
     blockquoteBorder: "#94a3b8",
     ...overrides,
@@ -2235,6 +2247,19 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-table-even", c.tableEvenRowBg);
   root.style.setProperty("--cd-table-font-size", `${c.tableFontSizePx}px`);
   root.style.setProperty("--cd-table-pad", `${c.tableCellPaddingPx}px`);
+  root.style.setProperty(
+    "--cd-mobile-table-card-padding",
+    `${Math.max(0, Number(c.mobileTableCardPaddingPx ?? 0))}px`,
+  );
+  root.style.setProperty(
+    "--cd-mobile-table-card-border-width",
+    `${Math.max(0, Number(c.mobileTableCardBorderWidthPx ?? 0))}px`,
+  );
+  root.style.setProperty(
+    "--cd-mobile-table-card-radius",
+    `${Math.max(0, Number(c.mobileTableCardBorderRadiusPx ?? 0))}px`,
+  );
+  root.dataset.cdMobileTableBleed = c.mobileTableFullBleed !== false ? "1" : "0";
   root.style.setProperty("--cd-code-bg", c.codeBg);
   root.style.setProperty("--cd-quote-border", c.blockquoteBorder);
   const cdCardBg = typeof c.cardBg === "string" && c.cardBg.trim() ? c.cardBg.trim() : "";

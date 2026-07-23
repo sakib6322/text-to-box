@@ -1,7 +1,9 @@
 import { useMemo } from "react";
+import { X } from "lucide-react";
 import { KeyPointList } from "@/components/KeyPointList";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -23,8 +25,18 @@ export function ConceptKeyPointsPanel({ open, onOpenChange, conceptName, keyPoin
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden p-0 sm:max-w-3xl">
-        <DialogHeader className="shrink-0 border-b px-4 py-3 sm:px-5">
+      <DialogContent
+        hideCloseButton
+        className="flex max-h-[85vh] max-w-2xl flex-col overflow-hidden p-0 sm:max-w-3xl"
+      >
+        <DialogClose
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-rose-500 text-white shadow-md transition hover:bg-rose-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400 focus-visible:ring-offset-2"
+          aria-label="Close"
+        >
+          <X className="h-4 w-4" strokeWidth={2.5} />
+        </DialogClose>
+
+        <DialogHeader className="shrink-0 border-b px-4 py-3 pr-14 sm:px-5">
           <DialogTitle className="text-base sm:text-lg">
             Key points{conceptName ? `: ${conceptName}` : ""}
           </DialogTitle>

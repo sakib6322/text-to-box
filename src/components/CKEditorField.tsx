@@ -29,11 +29,13 @@ import {
   Subscript,
   Superscript,
   Table,
+  TableColumnResize,
   TableToolbar,
   Underline,
   Undo,
 } from "ckeditor5";
 import "ckeditor5/ckeditor5.css";
+import "@ckeditor/ckeditor5-table/dist/index.css";
 import { cn } from "@/lib/utils";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { Button } from "@/components/ui/button";
@@ -153,6 +155,7 @@ const DEFAULT_PLUGINS = [
   Alignment,
   BlockQuote,
   Table,
+  TableColumnResize,
   TableToolbar,
   Image,
   ImageToolbar,
