@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -166,9 +167,13 @@ export default function ProgressSetTake() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 pb-10 px-3">
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
+        <AppBackButton
+          fallback={
+            conceptId
+              ? `/concept/${conceptId}/learn?courseId=${courseId}`
+              : `/my-courses/${courseId}`
+          }
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{title}</p>
           <p className="text-xs text-muted-foreground">

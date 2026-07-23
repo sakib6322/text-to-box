@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Clock, Loader2, Send } from "lucide-react";
+import { Clock, Loader2, Send } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -140,11 +141,7 @@ export default function TakeExam() {
     <div className="mx-auto w-full max-w-lg pb-28 md:max-w-3xl md:px-2 lg:max-w-4xl">
       <div className="sticky top-0 z-30 bg-background/95 border-b px-4 py-3 space-y-3">
         <div className="flex items-center gap-3">
-          <Button asChild variant="ghost" size="icon">
-            <Link to="/my-exams">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AppBackButton fallback="/my-exams" />
           <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm truncate">{title}</p>
             <p className="text-[10px] text-muted-foreground">

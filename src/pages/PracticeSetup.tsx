@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, BookOpen, CheckSquare, Loader2, Play, Square } from "lucide-react";
+import { BookOpen, CheckSquare, Loader2, Play, Square } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -157,11 +158,7 @@ export default function PracticeSetup() {
     <div className={userPageShellTight}>
       <div className={userPageTopBar}>
         <div className={userStickyHeader}>
-          <Button asChild variant="ghost" size="icon" className="shrink-0">
-            <Link to={`/concept/${conceptId}/details`}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AppBackButton fallback={`/concept/${conceptId}/details`} />
           <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
             <p className="text-xs text-muted-foreground md:text-sm">Practice setup</p>
             <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>

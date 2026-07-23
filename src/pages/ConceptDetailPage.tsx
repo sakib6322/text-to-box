@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, HelpCircle, List, Loader2, Play, Target } from "lucide-react";
+import { HelpCircle, List, Loader2, Play, Target } from "lucide-react";
 import { ConceptKeyPointsPanel } from "@/components/ConceptKeyPointsPanel";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptDetailShell } from "@/components/ConceptDetailShell";
@@ -14,6 +13,8 @@ import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import { sortKeyPointsByImportance } from "@/lib/progressEngine";
 import { userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useState } from "react";
 
 export default function ConceptDetailPage() {
   const { conceptId } = useParams<{ conceptId: string }>();
@@ -62,11 +63,7 @@ export default function ConceptDetailPage() {
     <div className={userPageShellTight}>
       <div className={userPageTopBar}>
         <div className={userStickyHeader}>
-          <Button asChild variant="ghost" size="icon" className="shrink-0">
-            <Link to="/my-suggestions">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AppBackButton fallback="/my-suggestions" />
           <div className="min-w-0 flex-1 basis-[min(100%,12rem)]">
             <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
             {taxonomy ? <p className="truncate text-[10px] text-muted-foreground md:text-xs">{taxonomy}</p> : null}
@@ -89,6 +86,7 @@ export default function ConceptDetailPage() {
                 <span className="hidden sm:inline">Questions</span>
               </Button>
             ) : null}
+            {csu.showKeyPointsButton !== false ? (
             <Button
               type="button"
               variant="outline"
@@ -101,6 +99,7 @@ export default function ConceptDetailPage() {
               <span className="sm:hidden">Keypoints</span>
               <span className="hidden sm:inline">Key points</span>
             </Button>
+            ) : null}
             {csu.showStudyButton ? (
               <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
                 <Link to={`/concept/${conceptId}/learn`}>

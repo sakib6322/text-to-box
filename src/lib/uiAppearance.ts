@@ -234,6 +234,8 @@ export type ConceptStudentUiAppearance = {
   /** Concept detail page + learn header */
   showDetailsButton: boolean;
   showQuestionsButton: boolean;
+  /** Header button that opens all key points panel (Details + Learn) */
+  showKeyPointsButton: boolean;
   showStudyButton: boolean;
   showPracticeButton: boolean;
   /** My Suggestions concept card */
@@ -1511,6 +1513,7 @@ export function defaultConceptStudentUi(
     showKeyPointsOnDetails: true,
     showDetailsButton: true,
     showQuestionsButton: true,
+    showKeyPointsButton: true,
     showStudyButton: true,
     showPracticeButton: true,
     showStudyAndPracticeButton: true,
@@ -1529,6 +1532,7 @@ export function mergeConceptStudentUi(
     showKeyPointsOnDetails: bool(p.showKeyPointsOnDetails, base.showKeyPointsOnDetails),
     showDetailsButton: bool(p.showDetailsButton, base.showDetailsButton),
     showQuestionsButton: bool(p.showQuestionsButton, base.showQuestionsButton),
+    showKeyPointsButton: bool(p.showKeyPointsButton, base.showKeyPointsButton),
     showStudyButton: bool(p.showStudyButton, base.showStudyButton),
     showPracticeButton: bool(p.showPracticeButton, base.showPracticeButton),
     showStudyAndPracticeButton: bool(p.showStudyAndPracticeButton, base.showStudyAndPracticeButton),

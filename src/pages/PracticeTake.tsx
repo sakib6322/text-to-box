@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PracticeQuestionBlock, type PracticeQuestionFull } from "@/components/PracticeQuestionBlock";
@@ -165,11 +166,7 @@ export default function PracticeTake() {
     return (
       <div className={shellClass}>
         <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3">
-          <Button asChild variant="ghost" size="icon">
-            <Link to="/study/progress">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AppBackButton fallback="/study/progress" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-muted-foreground">{sessionTitle}</p>
             <p className="text-sm font-medium">Full review</p>
@@ -236,11 +233,7 @@ export default function PracticeTake() {
   return (
     <div className={shellClass}>
       <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3">
-        <Button asChild variant="ghost" size="icon">
-          <Link to="/study/progress">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <AppBackButton fallback="/study/progress" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs text-muted-foreground">{sessionTitle}</p>
           <p className="text-sm font-medium tabular-nums">

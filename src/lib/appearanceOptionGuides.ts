@@ -130,7 +130,11 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   },
   {
     title: "Student action buttons",
-    body: "Details → concept header; Questions/Study/Practice → details + learn header; Study & Practice → My Suggestions card; Study → Practice setup back link। বন্ধ = বাটন render হয় না।",
+    body: "Details/Learn header: Questions, Key points, Study, Practice, Details। Study & Practice → My Suggestions card। Appearance → Student concept UI থেকে on/off।",
+  },
+  {
+    title: "Show Key points button",
+    body: "কোথায়: Concept Details + Concept Learn header — Questions-এর পাশে। ক্লিক = সব key points modal (count/board সহ)।",
   },
   {
     title: "Admin edit preview — Phone / Tablet / Computer",

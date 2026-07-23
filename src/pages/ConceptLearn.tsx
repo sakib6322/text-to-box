@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft, ArrowRight, BookOpen, HelpCircle, Loader2, Play } from "lucide-react";
+import { ArrowRight, BookOpen, HelpCircle, List, Loader2, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
+import { ConceptKeyPointsPanel } from "@/components/ConceptKeyPointsPanel";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptDetailShell } from "@/components/ConceptDetailShell";
+import { AppBackButton } from "@/components/AppBackButton";
 import { ConceptStepBar } from "@/components/ConceptProgressSteps";
 import { ConceptSelfTestExam } from "@/components/ConceptSelfTestExam";
 import { countPracticeAnswerUnits, type PracticeQuestionFull } from "@/components/PracticeQuestionBlock";
@@ -63,6 +65,7 @@ export default function ConceptLearn() {
   const [slideDir, setSlideDir] = useState<"forward" | "back">("forward");
   const [, setTick] = useState(0);
   const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [keyPointsOpen, setKeyPointsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
   const [completingStep3, setCompletingStep3] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
@@ -221,18 +224,14 @@ export default function ConceptLearn() {
     <div className={userPageShell}>
       <div className={userPageTopBar}>
         <div className={userStickyHeader}>
-          <Button asChild variant="ghost" size="icon" className="shrink-0">
-            <Link
-              to={courseFlowBackLink({
-                courseId: courseId || undefined,
-                topicId: topicId || undefined,
-                conceptId: conceptId || undefined,
-                locationState: location.state,
-              })}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
-          </Button>
+          <AppBackButton
+            fallback={courseFlowBackLink({
+              courseId: courseId || undefined,
+              topicId: topicId || undefined,
+              conceptId: conceptId || undefined,
+              locationState: location.state,
+            })}
+          />
           <div className="min-w-0 flex-1">
             <p className="truncate text-xs text-muted-foreground">{topicName || "Concept"}</p>
             <h1 className="truncate text-sm font-semibold md:text-lg">{conceptName}</h1>
@@ -242,6 +241,20 @@ export default function ConceptLearn() {
               <Button type="button" variant="outline" size="sm" className={userHeaderActionBtn} onClick={() => setQuestionsOpen(true)}>
                 <HelpCircle className="h-3.5 w-3.5 sm:mr-1" />
                 <span className={userHeaderActionLabel}>Questions</span>
+              </Button>
+            ) : null}
+            {csu.showKeyPointsButton !== false ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={userHeaderActionBtn}
+                title="Key points"
+                onClick={() => setKeyPointsOpen(true)}
+              >
+                <List className="h-3.5 w-3.5 sm:mr-1" />
+                <span className="sm:hidden">Keypoints</span>
+                <span className={userHeaderActionLabel}>Key points</span>
               </Button>
             ) : null}
             {csu.showDetailsButton ? (
@@ -408,6 +421,17 @@ export default function ConceptLearn() {
         boardName={boardFilter?.name}
         onClearBoardFilter={() => setBoardFilter(null)}
         onBoardClick={(board) => {
+          setBoardFilter(board);
+          setQuestionsOpen(true);
+        }}
+      />
+      <ConceptKeyPointsPanel
+        open={keyPointsOpen}
+        onOpenChange={setKeyPointsOpen}
+        conceptName={conceptName}
+        keyPoints={keyPoints}
+        onBoardClick={(board) => {
+          setKeyPointsOpen(false);
           setBoardFilter(board);
           setQuestionsOpen(true);
         }}

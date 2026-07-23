@@ -1672,6 +1672,12 @@ export default function AdminAppearance() {
                   hint="Details + Learn header"
                 />
                 <BoolField
+                  label="Show Key points button"
+                  checked={csu.showKeyPointsButton !== false}
+                  onChange={(v) => updateConceptStudentUi("showKeyPointsButton", v)}
+                  hint="Details + Learn header — Questions বাটনের পাশে; সব key points panel খোলে"
+                />
+                <BoolField
                   label="Show Study button"
                   checked={csu.showStudyButton}
                   onChange={(v) => updateConceptStudentUi("showStudyButton", v)}

@@ -203,6 +203,7 @@ export function ConceptDetailsLivePreview({
     showKeyPointsOnDetails: true,
     showDetailsButton: true,
     showQuestionsButton: true,
+    showKeyPointsButton: true,
     showStudyButton: true,
     showPracticeButton: true,
     showStudyAndPracticeButton: true,
@@ -241,6 +242,7 @@ export function ConceptDetailsLivePreview({
       ) : null}
       <div className="flex flex-wrap gap-2">
         {csu.showQuestionsButton ? <span className="rounded border px-2 py-1 text-xs">Questions</span> : null}
+        {csu.showKeyPointsButton !== false ? <span className="rounded border px-2 py-1 text-xs">Key points</span> : null}
         {csu.showStudyButton ? <span className="rounded border px-2 py-1 text-xs">Study</span> : null}
         {csu.showPracticeButton ? <span className="rounded border px-2 py-1 text-xs">Practice</span> : null}
         {csu.showDetailsButton ? <span className="rounded border px-2 py-1 text-xs">Details</span> : null}

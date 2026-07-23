@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, CheckSquare, Loader2, Save, Square } from "lucide-react";
+import { CheckSquare, Loader2, Save, Square } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -269,11 +270,7 @@ export default function CreateExam() {
   return (
     <div className="mx-auto max-w-4xl space-y-4 pb-24">
       <div className="rounded-lg border px-4 py-3 bg-background/95 flex items-center gap-3">
-        <Button asChild variant="ghost" size="icon" className="shrink-0">
-          <Link to="/admin/exam/schedules">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <AppBackButton fallback="/admin/exam/schedules" />
         <div className="min-w-0 flex-1">
           <h1 className="page-title-static text-lg sm:text-xl truncate">{editId ? "Edit exam" : "Create exam"}</h1>
           <p className="text-xs text-muted-foreground">All Questions থেকে MCQ/SBA সিলেক্ট করুন</p>

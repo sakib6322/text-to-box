@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -66,11 +67,7 @@ export default function ExamResult() {
   return (
     <div className="mx-auto w-full max-w-lg space-y-4 px-0 pb-8 md:max-w-3xl md:px-2 lg:max-w-4xl">
       <div className="flex items-center gap-3 px-1">
-        <Button asChild variant="ghost" size="icon">
-          <Link to="/my-exams">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
+        <AppBackButton fallback="/my-exams" />
         <div>
           <h1 className="page-title-static text-lg">{title}</h1>
           <p className="text-xs text-muted-foreground">Result & full review</p>
