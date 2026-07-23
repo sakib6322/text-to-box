@@ -232,7 +232,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     [search, adminView, browseStep],
   );
   useHeaderSearch(headerSearch);
-  const filtersVisible = useScrollUpVisible() && !searchFocused && !addTarget;
+  const filtersVisible =
+    useScrollUpVisible() && !searchFocused && !addTarget && expandedConceptIds.size === 0;
 
   const subjectName = useMemo(
     () => (subjectId === "all" ? "" : subjects.find((s) => s.id === subjectId)?.name ?? ""),
