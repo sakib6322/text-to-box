@@ -564,22 +564,25 @@ export function ProgressLivePreview({ section, prog }: { section: ProgressSectio
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {steps.slice(0, 4).map((s, i) => {
-            const locked = s.id > 1 && s.lockUntilPrevious !== false && demoLocal[i - 1] !== undefined && false;
-            const local = demoLocal[i] ?? 0;
+            // Demo: prior steps unfinished (local < 100) → lock when enabled
+            const prevDone = i === 0 || (demoLocal[i - 1] ?? 0) >= 100;
+            const locked = s.id > 1 && s.lockUntilPrevious !== false && !prevDone;
+            const local = locked ? 0 : (demoLocal[i] ?? 0);
             return (
               <div
                 key={s.id}
-                className={`rounded-lg border px-1 py-1.5 text-center ${s.id === 1 ? "border-primary bg-primary/10" : "border-border"}`}
+                className={`rounded-lg border px-1 py-1.5 text-center ${
+                  s.id === 1 ? "border-primary bg-primary/10" : locked ? "border-border opacity-50" : "border-border"
+                }`}
               >
                 <p className="text-[10px] font-semibold tabular-nums">{s.id}</p>
                 <p className="mt-0.5 line-clamp-1 text-[8px] leading-tight text-muted-foreground">
-                  {stepLabel(s.id as 1 | 2 | 3 | 4)}
+                  {locked ? "Locked" : stepLabel(s.id as 1 | 2 | 3 | 4)}
                 </p>
                 <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
                   <div className="h-full rounded-full bg-primary" style={{ width: `${local}%` }} />
                 </div>
                 <p className="mt-0.5 text-[8px] tabular-nums text-muted-foreground">{local}%</p>
-                {locked ? <p className="text-[8px] text-muted-foreground">locked</p> : null}
               </div>
             );
           })}

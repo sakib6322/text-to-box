@@ -397,20 +397,28 @@ export function registerCourseRoutes(app, { requireSupabase, requireAuthUser, re
       const today = todayDhaka();
       const { data: mapped } = await db.from("course_topics").select("topic_id").eq("course_id", courseId);
       const topicIds = (mapped ?? []).map((r) => r.topic_id);
-      const paths = await resolveTopicPaths(db, topicIds);
-      const importance = await topicImportanceMap(db, topicIds);
 
-      const { data: routines } = await db
-        .from("course_routines")
-        .select("id, system_id, publish_date, label")
-        .eq("course_id", courseId)
-        .order("publish_date", { ascending: true });
+      const [paths, routines] = await Promise.all([
+        resolveTopicPaths(db, topicIds),
+        db
+          .from("course_routines")
+          .select("id, system_id, publish_date, label")
+          .eq("course_id", courseId)
+          .order("publish_date", { ascending: true })
+          .then((r) => r.data ?? []),
+      ]);
 
       const unlockedSystemIds = new Set(
         (routines ?? [])
           .filter((r) => String(r.publish_date) <= today)
           .map((r) => r.system_id),
       );
+
+      // Stars/counts only for unlocked systems — skips heavy KP scan for locked content
+      const unlockedTopicIds = paths
+        .filter((p) => p.system_id && unlockedSystemIds.has(p.system_id))
+        .map((p) => p.topic_id);
+      const importance = await topicImportanceMap(db, unlockedTopicIds);
 
       const systemsMeta = new Map();
       for (const p of paths) {

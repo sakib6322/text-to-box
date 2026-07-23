@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -10,6 +10,12 @@ import { toast } from "sonner";
 import { ArrowLeft, ChevronRight, ClipboardCopy, FileJson, FileSpreadsheet, Loader2, Plus, RotateCcw, Trash2, Upload } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
+import {
+  getCachedCourseTaxonomy,
+  loadConceptsByTopicId,
+  loadCourseTaxonomy,
+  prefetchConceptsByTopicId,
+} from "@/lib/courseBrowseCache";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
@@ -208,6 +214,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const [loadingConcepts, setLoadingConcepts] = useState(false);
   const [browseLoading, setBrowseLoading] = useState(false);
   const [browseStep, setBrowseStep] = useState<BrowseStep>("subjects");
+  const [, startBrowseTransition] = useTransition();
 
   const [subjectId, setSubjectId] = useState("all");
   const [systemId, setSystemId] = useState("all");
@@ -353,15 +360,24 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
       return;
     }
     let cancelled = false;
-    setTaxonomyLoading(true);
+    const cached = getCachedCourseTaxonomy(selectedCourseId);
+    if (cached) {
+      const tax: CourseTaxonomy = {
+        subjects: cached.subjects,
+        systems: cached.systems,
+        chapters: cached.chapters,
+        topics: cached.topics,
+      };
+      setCourseTaxonomy(tax);
+      setSubjects(tax.subjects);
+      setTaxonomyLoading(false);
+    } else {
+      setTaxonomyLoading(true);
+    }
     void (async () => {
       try {
-        const r = await fetch(apiUrl(`/api/me/courses/${encodeURIComponent(selectedCourseId)}/taxonomy`), {
-          headers: getAuthHeaders(),
-        });
-        const j = (await r.json().catch(() => ({}))) as CourseTaxonomy & { error?: string };
+        const j = await loadCourseTaxonomy(selectedCourseId);
         if (cancelled) return;
-        if (!r.ok) throw new Error(j.error ?? "Failed to load course syllabus");
         const tax: CourseTaxonomy = {
           subjects: j.subjects ?? [],
           systems: j.systems ?? [],
@@ -370,14 +386,16 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         };
         setCourseTaxonomy(tax);
         setSubjects(tax.subjects);
-        setBrowseStep("subjects");
-        setSubjectId("all");
-        setSystemId("all");
-        setChapterId("all");
-        setTopicId("all");
-        setSystems([]);
-        setChapters([]);
-        setTopics([]);
+        if (!cached) {
+          setBrowseStep("subjects");
+          setSubjectId("all");
+          setSystemId("all");
+          setChapterId("all");
+          setTopicId("all");
+          setSystems([]);
+          setChapters([]);
+          setTopics([]);
+        }
       } catch (e) {
         if (!cancelled) {
           setCourseTaxonomy(null);
@@ -393,9 +411,29 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   }, [adminView, selectedCourseId]);
 
   useEffect(() => {
-    if (!adminView && browseStep !== "concepts") return;
-    void load();
-  }, [adminView, browseStep]);
+    if (adminView) {
+      void load();
+      return;
+    }
+    if (browseStep !== "concepts" || !topicId || topicId === "all") return;
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      try {
+        const shells = await loadConceptsByTopicId(topicId);
+        if (cancelled) return;
+        setConceptShells(shells);
+        setRows([]);
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Failed to load concepts");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [adminView, browseStep, topicId]);
 
   useEffect(() => {
     if (adminView) {
@@ -496,6 +534,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   }, [subjectId, systemId, chapterId, topicId]);
 
   useEffect(() => {
+    if (!adminView) return;
     let cancelled = false;
     (async () => {
       setLoadingConcepts(true);
@@ -503,8 +542,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         let query = supabase.from("concepts").select("id, title").order("title").limit(300);
         if (subjectName) query = query.eq("subject", subjectName);
         if (systemName) query = query.eq("system", systemName);
-        if (chapterName) query = query.eq("chapter", chapterName);
-        if (topicId !== "all") query = query.eq("topic_id", topicId);
+        if (chapterName) query = query.eq("chapter" as "topic", chapterName);
+        if (topicId !== "all") query = query.eq("topic_id" as "id", topicId);
         else if (topicName) query = query.eq("topic", topicName);
 
         const { data, error } = await query;
@@ -522,7 +561,43 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     return () => {
       cancelled = true;
     };
-  }, [subjectName, systemName, chapterName, topicName, topicId]);
+  }, [adminView, subjectName, systemName, chapterName, topicName, topicId]);
+
+  const pickSubject = (item: TaxonomyItem) => {
+    startBrowseTransition(() => {
+      setSubjectId(item.id);
+      setSystemId("all");
+      setChapterId("all");
+      setTopicId("all");
+      setConceptFilter("all");
+      setBrowseStep("systems");
+    });
+  };
+  const pickSystem = (item: TaxonomyItem) => {
+    startBrowseTransition(() => {
+      setSystemId(item.id);
+      setChapterId("all");
+      setTopicId("all");
+      setConceptFilter("all");
+      setBrowseStep("chapters");
+    });
+  };
+  const pickChapter = (item: TaxonomyItem) => {
+    startBrowseTransition(() => {
+      setChapterId(item.id);
+      setTopicId("all");
+      setConceptFilter("all");
+      setBrowseStep("topics");
+    });
+  };
+  const pickTopic = (item: TaxonomyItem) => {
+    prefetchConceptsByTopicId(item.id);
+    startBrowseTransition(() => {
+      setTopicId(item.id);
+      setConceptFilter("all");
+      setBrowseStep("concepts");
+    });
+  };
 
   const remove = async (row: Row) => {
     if (!guardPermission("suggestions.delete")) return;
@@ -1364,54 +1439,29 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const homeLink = hasPermission("home.view") ? "/builder" : "/my-courses";
 
   const goBrowse = (step: BrowseStep) => {
-    setSearch("");
-    setBrowseStep(step);
-    if (step === "subjects") {
-      setSubjectId("all");
-      setSystemId("all");
-      setChapterId("all");
-      setTopicId("all");
-      setConceptFilter("all");
-    } else if (step === "systems") {
-      setSystemId("all");
-      setChapterId("all");
-      setTopicId("all");
-      setConceptFilter("all");
-    } else if (step === "chapters") {
-      setChapterId("all");
-      setTopicId("all");
-      setConceptFilter("all");
-    } else if (step === "topics") {
-      setTopicId("all");
-      setConceptFilter("all");
-    }
-  };
-
-  const pickSubject = (item: TaxonomyItem) => {
-    setSubjectId(item.id);
-    setSystemId("all");
-    setChapterId("all");
-    setTopicId("all");
-    setConceptFilter("all");
-    setBrowseStep("systems");
-  };
-  const pickSystem = (item: TaxonomyItem) => {
-    setSystemId(item.id);
-    setChapterId("all");
-    setTopicId("all");
-    setConceptFilter("all");
-    setBrowseStep("chapters");
-  };
-  const pickChapter = (item: TaxonomyItem) => {
-    setChapterId(item.id);
-    setTopicId("all");
-    setConceptFilter("all");
-    setBrowseStep("topics");
-  };
-  const pickTopic = (item: TaxonomyItem) => {
-    setTopicId(item.id);
-    setConceptFilter("all");
-    setBrowseStep("concepts");
+    startBrowseTransition(() => {
+      setSearch("");
+      setBrowseStep(step);
+      if (step === "subjects") {
+        setSubjectId("all");
+        setSystemId("all");
+        setChapterId("all");
+        setTopicId("all");
+        setConceptFilter("all");
+      } else if (step === "systems") {
+        setSystemId("all");
+        setChapterId("all");
+        setTopicId("all");
+        setConceptFilter("all");
+      } else if (step === "chapters") {
+        setChapterId("all");
+        setTopicId("all");
+        setConceptFilter("all");
+      } else if (step === "topics") {
+        setTopicId("all");
+        setConceptFilter("all");
+      }
+    });
   };
 
   const browseBack = () => {
@@ -1755,6 +1805,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
               loading={browseLoading}
               emptyLabel="No mapped topics in this chapter"
               onSelect={pickTopic}
+              onItemHover={(item) => prefetchConceptsByTopicId(item.id)}
             />
           )
         ) : !adminView && (!selectedCourseId || enrolledCourses.length === 0) ? null : loading ? (

@@ -1217,13 +1217,26 @@ export function mergeProgressPlan(base: ProgressPlanAppearance, patch: unknown):
     }
     steps = [1, 2, 3, 4].map((id) => {
       const s = byId.get(id as 1 | 2 | 3 | 4)!;
+      const lock =
+        typeof s.lockUntilPrevious === "boolean"
+          ? s.lockUntilPrevious
+          : typeof (base.steps.find((b) => b.id === id) as ProgressStepConfig | undefined)?.lockUntilPrevious ===
+              "boolean"
+            ? (base.steps.find((b) => b.id === id) as ProgressStepConfig).lockUntilPrevious
+            : id !== 1;
       return {
         id: s.id,
         label: s.label,
         labelBn: s.labelBn,
-        lockUntilPrevious: typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : id !== 1,
+        lockUntilPrevious: lock,
       };
     });
+  } else {
+    // Ensure every step always has an explicit boolean (older saved themes)
+    steps = base.steps.map((s) => ({
+      ...s,
+      lockUntilPrevious: typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : s.id !== 1,
+    }));
   }
   const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
   const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);

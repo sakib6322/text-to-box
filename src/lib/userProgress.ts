@@ -399,17 +399,31 @@ export function saveResumeCursor(
   });
 }
 
-/** Content complete for step 2 (does not require step 1 — unlock-safe). */
-export function isStep2Complete(progress: StudyProgress | null, totalKeyPoints: number): boolean {
-  if (progress?.step2CompletedAt) return true;
-  if (totalKeyPoints <= 0) return true;
-  return (progress?.studiedKeyPointIds?.length ?? 0) >= totalKeyPoints;
+/** Step 1 finished (button / last slide). */
+export function isStep1FullyDone(progress: StudyProgress | null): boolean {
+  if (!progress) return false;
+  if (progress.step1CompletedAt) return true;
+  const total = progress.step1SlideTotal ?? 0;
+  if (total <= 0) return false;
+  return (progress.step1MaxSlideIndex ?? 0) >= total - 1;
 }
 
+/** Content complete for step 2 (unlock gate + %). Empty KP only counts after explicit complete. */
+export function isStep2Complete(progress: StudyProgress | null, totalKeyPoints: number): boolean {
+  if (progress?.step2CompletedAt) return true;
+  if (totalKeyPoints > 0) {
+    return (progress?.studiedKeyPointIds?.length ?? 0) >= totalKeyPoints;
+  }
+  return false;
+}
+
+/** Content complete for step 3. Empty self-test only counts after explicit complete. */
 export function isStep3Complete(progress: StudyProgress | null, totalSelfQa: number): boolean {
   if (progress?.step3CompletedAt) return true;
-  if (totalSelfQa <= 0) return true;
-  return (progress?.selfQaSeenIds?.length ?? 0) >= totalSelfQa;
+  if (totalSelfQa > 0) {
+    return (progress?.selfQaSeenIds?.length ?? 0) >= totalSelfQa;
+  }
+  return false;
 }
 
 export function markSelfQaSeen(
@@ -470,10 +484,11 @@ export function studyProgressInput(
 ): ConceptProgressInput {
   const studied = p?.studiedKeyPointIds ?? [];
   const totalKp = opts?.totalKeyPoints ?? p?.totalKeyPoints ?? 0;
-  const step1Done = !!p?.step1CompletedAt;
-  const step2Done = !!p?.step2CompletedAt || (totalKp > 0 ? studied.length >= totalKp : true);
   const seenQa = p?.selfQaSeenIds ?? [];
-  const step3Done = !!p?.step3CompletedAt || (totalSelfQa > 0 ? seenQa.length >= totalSelfQa : true);
+  // Only mark completed from timestamps or real completion counts — never treat empty totals as done
+  const step1Done = !!p?.step1CompletedAt;
+  const step2Done = !!p?.step2CompletedAt || (totalKp > 0 && studied.length >= totalKp);
+  const step3Done = !!p?.step3CompletedAt || (totalSelfQa > 0 && seenQa.length >= totalSelfQa);
   return {
     step1Completed: step1Done,
     step1MaxSlideIndex: p?.step1MaxSlideIndex ?? 0,

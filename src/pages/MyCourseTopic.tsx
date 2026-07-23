@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ProgressPctBadge } from "@/components/ProgressPctBadge";
-import { apiUrl } from "@/lib/apiBase";
-import { getAuthHeaders } from "@/lib/auth";
-import { fetchCourseProgress } from "@/lib/progressApi";
+import {
+  getCachedCourseProgress,
+  getCachedTopicConcepts,
+  loadCourseProgressCached,
+  loadTopicConcepts,
+} from "@/lib/courseBrowseCache";
 import {
   getStudyProgress,
   hydrateProgressFromServer,
@@ -30,55 +33,79 @@ export default function MyCourseTopic() {
   const { courseId = "", topicId = "" } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [topicPath, setTopicPath] = useState<CourseTopicPath | null>(null);
-  const [concepts, setConcepts] = useState<Concept[]>([]);
-  const [topicPct, setTopicPct] = useState<number | null>(null);
-  const [conceptPctMap, setConceptPctMap] = useState<Map<string, number>>(new Map());
-  const [loading, setLoading] = useState(true);
-  const [lockedMsg, setLockedMsg] = useState<string | null>(null);
+  const cached = courseId && topicId ? getCachedTopicConcepts(courseId, topicId) : null;
+  const cachedProgress = courseId ? getCachedCourseProgress(courseId) : null;
+  const [topicPath, setTopicPath] = useState<CourseTopicPath | null>(
+    () => (cached?.path as CourseTopicPath | null) ?? null,
+  );
+  const [concepts, setConcepts] = useState<Concept[]>(() => cached?.concepts ?? []);
+  const [topicPct, setTopicPct] = useState<number | null>(() => {
+    if (!cachedProgress) return null;
+    return cachedProgress.topics.find((t) => t.topic_id === topicId)?.pct ?? null;
+  });
+  const [conceptPctMap, setConceptPctMap] = useState<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    if (!cachedProgress) return map;
+    for (const c of cachedProgress.concepts) {
+      if (c.topic_id === topicId) map.set(c.concept_id, c.pct);
+    }
+    return map;
+  });
+  const [loading, setLoading] = useState(!(cached?.concepts && cached.concepts.length > 0) && !cached?.unlocks_on);
+  const [lockedMsg, setLockedMsg] = useState<string | null>(
+    () => (cached?.status === 403 && cached.unlocks_on ? `Unlocks on ${cached.unlocks_on}` : null),
+  );
   const [, setTick] = useState(0);
 
   useEffect(() => {
+    if (!courseId || !topicId) return;
+    let cancelled = false;
     void (async () => {
+      const hadCache = Boolean(getCachedTopicConcepts(courseId, topicId)?.concepts?.length);
+      if (!hadCache) setLoading(true);
       try {
-        await hydrateProgressFromServer();
-        const [conceptsRes, progressRes] = await Promise.all([
-          fetch(apiUrl(`/api/me/courses/${courseId}/topics/${topicId}/concepts`), {
-            headers: getAuthHeaders(),
-          }),
-          fetchCourseProgress(courseId).catch(() => null),
-        ]);
-        const j = (await conceptsRes.json().catch(() => ({}))) as {
-          concepts?: Concept[];
-          path?: CourseTopicPath | null;
-          error?: string;
-          unlocks_on?: string;
-        };
-        if (!conceptsRes.ok) {
-          if (conceptsRes.status === 403 && j.unlocks_on) {
-            setLockedMsg(`Unlocks on ${j.unlocks_on}`);
-            return;
-          }
-          throw new Error(j.error ?? "Failed to load");
+        const conceptsPromise = loadTopicConcepts(courseId, topicId);
+        const progressPromise = loadCourseProgressCached(courseId).catch(() => null);
+        void hydrateProgressFromServer().catch(() => undefined);
+
+        const j = await conceptsPromise;
+        if (cancelled) return;
+        if (j.status === 403 && j.unlocks_on) {
+          setLockedMsg(`Unlocks on ${j.unlocks_on}`);
+          setConcepts([]);
+          setLoading(false);
+          return;
         }
+        if (j.error && j.status && j.status >= 400) {
+          throw new Error(j.error);
+        }
+        setLockedMsg(null);
         setConcepts(j.concepts ?? []);
-        setTopicPath(j.path ?? null);
-        if (progressRes) {
-          const topic = progressRes.topics.find((t) => t.topic_id === topicId);
-          setTopicPct(topic?.pct ?? null);
-          const map = new Map<string, number>();
-          for (const c of progressRes.concepts) {
-            if (c.topic_id === topicId) map.set(c.concept_id, c.pct);
-          }
-          setConceptPctMap(map);
+        setTopicPath((j.path as CourseTopicPath | null) ?? null);
+        setLoading(false);
+
+        const progressRes = await progressPromise;
+        if (cancelled || !progressRes) {
+          setTick((n) => n + 1);
+          return;
         }
+        const topic = progressRes.topics.find((t) => t.topic_id === topicId);
+        setTopicPct(topic?.pct ?? null);
+        const map = new Map<string, number>();
+        for (const c of progressRes.concepts) {
+          if (c.topic_id === topicId) map.set(c.concept_id, c.pct);
+        }
+        setConceptPctMap(map);
         setTick((n) => n + 1);
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Load failed");
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Load failed");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [courseId, topicId]);
 
   const pathLabel = topicPath?.path ?? "";

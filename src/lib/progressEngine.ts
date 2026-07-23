@@ -43,23 +43,24 @@ export function conceptStepRatios(input: ConceptProgressInput): ConceptStepRatio
       ? clamp01((Math.max(0, input.step1MaxSlideIndex) + 1) / input.step1SlideTotal)
       : 0;
 
+  // Empty content = 0% until explicitly completed (do NOT auto-fill 100%)
   const r2 = input.step2Completed
     ? 1
     : input.totalKeyPoints > 0
       ? clamp01(input.studiedKeyPointIds.length / input.totalKeyPoints)
-      : 1; // no key points → step contributes full band
+      : 0;
 
   const r3 = input.step3Completed
     ? 1
     : input.totalSelfQa > 0
       ? clamp01(input.selfQaSeenIds.length / input.totalSelfQa)
-      : 1; // no self-test units → full band
+      : 0;
 
   const r4 = input.step4Completed
     ? 1
     : input.totalConceptSets > 0
       ? clamp01(input.passedConceptSetIds.length / input.totalConceptSets)
-      : 0; // no practice sets → 0 until marked complete
+      : 0;
 
   return {
     r1,
@@ -93,14 +94,13 @@ export function conceptProgressPct(input: ConceptProgressInput): number {
   return Math.min(100, Math.round(c1 + c2 + c3 + c4));
 }
 
-/** First incomplete step (ratio < 1); prefers content that still has work. */
+/** First incomplete step (ratio < 1). */
 export function currentConceptStep(input: ConceptProgressInput): 1 | 2 | 3 | 4 {
   const { r1, r2, r3, r4 } = conceptStepRatios(input);
   if (r1 < 1) return 1;
   if (r2 < 1) return 2;
-  if (r3 < 1 && input.totalSelfQa > 0) return 3;
-  if (r4 < 1) return 4;
   if (r3 < 1) return 3;
+  if (r4 < 1) return 4;
   return 4;
 }
 

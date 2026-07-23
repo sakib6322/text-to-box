@@ -3,27 +3,29 @@ import { ChevronRight, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { TaxonomyItem } from "@/lib/taxonomy";
 
-const BATCH = 12;
+const BATCH = 48;
 
 type Props = {
   items: TaxonomyItem[];
   loading?: boolean;
   emptyLabel?: string;
   onSelect: (item: TaxonomyItem) => void;
+  onItemHover?: (item: TaxonomyItem) => void;
 };
 
-/** Vertical list with progressive (lazy) reveal as you scroll. */
+/** Vertical list with progressive reveal as you scroll. */
 export function TaxonomyBrowseList({
   items,
   loading = false,
   emptyLabel = "No items found",
   onSelect,
+  onItemHover,
 }: Props) {
-  const [visibleCount, setVisibleCount] = useState(BATCH);
+  const [visibleCount, setVisibleCount] = useState(() => Math.min(BATCH, Math.max(items.length, BATCH)));
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setVisibleCount(BATCH);
+    setVisibleCount(Math.min(Math.max(items.length, 1), BATCH));
   }, [items]);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function TaxonomyBrowseList({
         if (!entry.isIntersecting) return;
         setVisibleCount((n) => Math.min(n + BATCH, items.length));
       },
-      { rootMargin: "120px" },
+      { rootMargin: "200px" },
     );
     io.observe(el);
     return () => io.disconnect();
@@ -58,13 +60,14 @@ export function TaxonomyBrowseList({
 
   return (
     <div className="mx-auto w-full max-w-2xl space-y-2">
-      {visible.map((item, i) => (
+      {visible.map((item) => (
         <button
           key={item.id}
           type="button"
           onClick={() => onSelect(item)}
+          onPointerEnter={() => onItemHover?.(item)}
+          onFocus={() => onItemHover?.(item)}
           className="flex w-full min-w-0 items-start gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5 active:scale-[0.99]"
-          style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
         >
           <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">
             {String(item.name).trim().charAt(0).toUpperCase() || "?"}
@@ -78,11 +81,7 @@ export function TaxonomyBrowseList({
           <ChevronRight className="mt-2 h-4 w-4 shrink-0 text-muted-foreground" />
         </button>
       ))}
-      {visibleCount < items.length ? (
-        <div ref={sentinelRef} className="flex justify-center py-4 text-xs text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-        </div>
-      ) : null}
+      {visibleCount < items.length ? <div ref={sentinelRef} className="h-6" aria-hidden /> : null}
     </div>
   );
 }

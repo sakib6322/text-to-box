@@ -609,10 +609,10 @@ function defaultProgressPlan(overrides = {}) {
     enabled: true,
     stepBarTitle: "Progress Plan",
     steps: [
-      { id: 1, label: "Concept Learning", labelBn: "কনসেপ্ট শেখা" },
-      { id: 2, label: "Key Points", labelBn: "Key Points" },
-      { id: 3, label: "Question Yourself", labelBn: "নিজেকে পরীক্ষা" },
-      { id: 4, label: "Practice Questions", labelBn: "Practice Questions" },
+      { id: 1, label: "Concept Learning", labelBn: "কনসেপ্ট শেখা", lockUntilPrevious: false },
+      { id: 2, label: "Key Points", labelBn: "Key Points", lockUntilPrevious: true },
+      { id: 3, label: "Question Yourself", labelBn: "নিজেকে পরীক্ষা", lockUntilPrevious: true },
+      { id: 4, label: "Practice Questions", labelBn: "Practice Questions", lockUntilPrevious: true },
     ],
     defaultPassPercent: 70,
     examNightHoursBefore: 24,
@@ -676,14 +676,35 @@ function mergeProgressPlan(base, patch) {
       if (!raw || typeof raw !== "object") continue;
       const id = raw.id;
       if (id < 1 || id > 4) continue;
-      const prev = byId.get(id) ?? { id, label: "", labelBn: "" };
+      const prev = byId.get(id) ?? { id, label: "", labelBn: "", lockUntilPrevious: id !== 1 };
       byId.set(id, {
         id,
         label: typeof raw.label === "string" ? raw.label : prev.label,
         labelBn: typeof raw.labelBn === "string" ? raw.labelBn : prev.labelBn,
+        lockUntilPrevious:
+          typeof raw.lockUntilPrevious === "boolean"
+            ? raw.lockUntilPrevious
+            : typeof prev.lockUntilPrevious === "boolean"
+              ? prev.lockUntilPrevious
+              : id !== 1,
       });
     }
-    steps = [1, 2, 3, 4].map((id) => byId.get(id));
+    steps = [1, 2, 3, 4].map((id) => {
+      const s = byId.get(id) ?? { id, label: "", labelBn: "", lockUntilPrevious: id !== 1 };
+      return {
+        id: s.id,
+        label: s.label,
+        labelBn: s.labelBn,
+        lockUntilPrevious:
+          typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : id !== 1,
+      };
+    });
+  } else {
+    steps = (base.steps || []).map((s) => ({
+      ...s,
+      lockUntilPrevious:
+        typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : s.id !== 1,
+    }));
   }
   const out = { ...base, steps };
   for (const key of Object.keys(base)) {

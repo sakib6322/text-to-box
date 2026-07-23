@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ChevronRight, Lock, Moon, Play, Star, Trophy } from "lucide-react";
 import { toast } from "sonner";
@@ -7,10 +7,15 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressPctBadge } from "@/components/ProgressPctBadge";
 import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
-import { apiUrl } from "@/lib/apiBase";
-import { getAuthHeaders } from "@/lib/auth";
+import {
+  getCachedCourseBrowse,
+  getCachedCourseProgress,
+  loadCourseBrowse,
+  loadCourseProgressCached,
+  prefetchTopicConcepts,
+} from "@/lib/courseBrowseCache";
 import type { TaxonomyItem } from "@/lib/taxonomy";
-import { fetchCourseProgress, fetchProgressSets, type CourseProgressRollup, type ProgressPracticeSet } from "@/lib/progressApi";
+import { fetchProgressSets, type CourseProgressRollup, type ProgressPracticeSet } from "@/lib/progressApi";
 import { formatProgressPct, useProgressAppearance } from "@/hooks/useProgressAppearance";
 import {
   readCourseBrowseNav,
@@ -67,13 +72,16 @@ export default function MyCourseBrowse() {
   const location = useLocation();
   const pp = useProgressAppearance();
   const pendingNavRef = useRef(readCourseBrowseNav(location.state));
-  const [name, setName] = useState("Course");
-  const [today, setToday] = useState("");
-  const [systems, setSystems] = useState<SystemBlock[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [rollup, setRollup] = useState<CourseProgressRollup | null>(null);
+  const cachedBrowse = courseId ? getCachedCourseBrowse(courseId) : null;
+  const cachedProgress = courseId ? getCachedCourseProgress(courseId) : null;
+  const [name, setName] = useState(cachedBrowse?.course?.name ?? "Course");
+  const [today, setToday] = useState(cachedBrowse?.today ?? "");
+  const [systems, setSystems] = useState<SystemBlock[]>(() => (cachedBrowse?.systems as SystemBlock[]) ?? []);
+  const [loading, setLoading] = useState(!cachedBrowse);
+  const [rollup, setRollup] = useState<CourseProgressRollup | null>(cachedProgress);
   const [examNightSets, setExamNightSets] = useState<ProgressPracticeSet[]>([]);
   const [finalMockSets, setFinalMockSets] = useState<ProgressPracticeSet[]>([]);
+  const [, startTransition] = useTransition();
 
   const [step, setStep] = useState<BrowseStep>("subjects");
   const [subjectId, setSubjectId] = useState<string | null>(null);
@@ -81,20 +89,16 @@ export default function MyCourseBrowse() {
   const [chapterId, setChapterId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!courseId) return;
+    let cancelled = false;
     void (async () => {
-      setLoading(true);
+      if (!getCachedCourseBrowse(courseId)) setLoading(true);
       try {
-        const r = await fetch(apiUrl(`/api/me/courses/${courseId}/browse`), { headers: getAuthHeaders() });
-        const j = (await r.json().catch(() => ({}))) as {
-          course?: { name: string };
-          today?: string;
-          systems?: SystemBlock[];
-          error?: string;
-        };
-        if (!r.ok) throw new Error(j.error ?? "Failed to load");
+        const j = await loadCourseBrowse(courseId);
+        if (cancelled) return;
         setName(j.course?.name ?? "Course");
         setToday(j.today ?? "");
-        setSystems(j.systems ?? []);
+        setSystems((j.systems as SystemBlock[]) ?? []);
         const pending = pendingNavRef.current;
         if (pending && (j.systems ?? []).length) {
           setStep(pending.step);
@@ -102,37 +106,64 @@ export default function MyCourseBrowse() {
           setSystemId(pending.systemId ?? null);
           setChapterId(pending.chapterId ?? null);
           pendingNavRef.current = null;
-        } else {
+        } else if (!getCachedCourseBrowse(courseId)) {
           setStep("subjects");
           setSubjectId(null);
           setSystemId(null);
           setChapterId(null);
         }
-        try {
-          const progress = await fetchCourseProgress(courseId);
-          setRollup(progress);
-          if (progress.exam_night_visible) {
-            setExamNightSets(await fetchProgressSets(courseId, { set_kind: "exam_night_pyq" }));
-          } else {
-            setExamNightSets([]);
-          }
-          if (progress.final_mocks.total > 0 && progress.final_mocks.passed < progress.final_mocks.total) {
-            setFinalMockSets(await fetchProgressSets(courseId, { set_kind: "final_mock" }));
-          } else {
-            setFinalMockSets([]);
-          }
-        } catch {
+      } catch (e) {
+        if (!cancelled) toast.error(e instanceof Error ? e.message : "Load failed");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId]);
+
+  // Progress badges — never block the hierarchy UI
+  useEffect(() => {
+    if (!courseId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const progress = await loadCourseProgressCached(courseId);
+        if (cancelled) return;
+        setRollup(progress);
+        const [exam, mocks] = await Promise.all([
+          progress.exam_night_visible
+            ? fetchProgressSets(courseId, { set_kind: "exam_night_pyq" })
+            : Promise.resolve([] as ProgressPracticeSet[]),
+          progress.final_mocks.total > 0 && progress.final_mocks.passed < progress.final_mocks.total
+            ? fetchProgressSets(courseId, { set_kind: "final_mock" })
+            : Promise.resolve([] as ProgressPracticeSet[]),
+        ]);
+        if (cancelled) return;
+        setExamNightSets(exam);
+        setFinalMockSets(mocks);
+      } catch {
+        if (!cancelled) {
           setRollup(null);
           setExamNightSets([]);
           setFinalMockSets([]);
         }
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Load failed");
-      } finally {
-        setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [courseId]);
+
+  const goStep = (next: BrowseStep, patch: { subjectId?: string | null; systemId?: string | null; chapterId?: string | null }) => {
+    startTransition(() => {
+      if ("subjectId" in patch) setSubjectId(patch.subjectId ?? null);
+      if ("systemId" in patch) setSystemId(patch.systemId ?? null);
+      if ("chapterId" in patch) setChapterId(patch.chapterId ?? null);
+      setStep(next);
+    });
+  };
 
   const subjectName = useMemo(() => {
     if (!subjectId) return "";
@@ -233,18 +264,15 @@ export default function MyCourseBrowse() {
 
   const goBack = () => {
     if (step === "topics") {
-      setChapterId(null);
-      setStep("chapters");
+      goStep("chapters", { chapterId: null });
       return;
     }
     if (step === "chapters") {
-      setSystemId(null);
-      setStep("systems");
+      goStep("systems", { systemId: null, chapterId: null });
       return;
     }
     if (step === "systems") {
-      setSubjectId(null);
-      setStep("subjects");
+      goStep("subjects", { subjectId: null, systemId: null, chapterId: null });
     }
   };
 
@@ -431,12 +459,7 @@ export default function MyCourseBrowse() {
         <TaxonomyBrowseList
           items={subjectItems}
           emptyLabel="No subjects mapped in this course"
-          onSelect={(item) => {
-            setSubjectId(item.id);
-            setSystemId(null);
-            setChapterId(null);
-            setStep("systems");
-          }}
+          onSelect={(item) => goStep("systems", { subjectId: item.id, systemId: null, chapterId: null })}
         />
       ) : step === "systems" ? (
         <TaxonomyBrowseList
@@ -444,8 +467,6 @@ export default function MyCourseBrowse() {
           emptyLabel="No systems under this subject"
           onSelect={(item) => {
             const sys = systems.find((s) => s.system_id === item.id);
-            setSystemId(item.id);
-            setChapterId(null);
             if (sys && !sys.unlocked) {
               toast.message(
                 sys.publish_date
@@ -453,7 +474,7 @@ export default function MyCourseBrowse() {
                   : "This system is not scheduled yet",
               );
             }
-            setStep("chapters");
+            goStep("chapters", { systemId: item.id, chapterId: null });
           }}
         />
       ) : step === "chapters" ? (
@@ -477,10 +498,7 @@ export default function MyCourseBrowse() {
           <TaxonomyBrowseList
             items={chapterItems}
             emptyLabel="No chapters under this system"
-            onSelect={(item) => {
-              setChapterId(item.id);
-              setStep("topics");
-            }}
+            onSelect={(item) => goStep("topics", { chapterId: item.id })}
           />
         )
       ) : (
@@ -496,15 +514,18 @@ export default function MyCourseBrowse() {
               <button
                 key={t.topic_id}
                 type="button"
-                onClick={() =>
+                onPointerEnter={() => prefetchTopicConcepts(courseId, t.topic_id)}
+                onFocus={() => prefetchTopicConcepts(courseId, t.topic_id)}
+                onClick={() => {
+                  prefetchTopicConcepts(courseId, t.topic_id);
                   navigate(
                     topicConceptsLink(
                       courseId,
                       t.topic_id,
                       browseNavState("topics", subjectId, systemId, chapterId),
                     ),
-                  )
-                }
+                  );
+                }}
                 className="flex w-full min-w-0 items-start gap-3 rounded-xl border bg-card px-4 py-3.5 text-left shadow-sm transition hover:border-primary/40 hover:bg-primary/5"
               >
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-semibold text-primary">

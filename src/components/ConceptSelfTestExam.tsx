@@ -109,8 +109,14 @@ export function ConceptSelfTestExam({
       setQIndex((i) => i + 1);
       return;
     }
+    if (totalUnits > 0 && seenIds.size < totalUnits) {
+      toast.message(`Answer all items first (${seenIds.size}/${totalUnits})`);
+      return;
+    }
     onComplete();
   };
+
+  const canFinish = totalUnits <= 0 || seenIds.size >= totalUnits;
 
   const nextLabel =
     qIndex >= questions.length - 1 ? (
@@ -199,7 +205,7 @@ export function ConceptSelfTestExam({
 
       <div className={userBottomBar}>
         <div className={userBottomBarInner}>
-          <Button type="button" className="flex-1" disabled={completing} onClick={goNext}>
+          <Button type="button" className="flex-1" disabled={completing || (qIndex >= questions.length - 1 && !canFinish)} onClick={goNext}>
             {nextLabel}
           </Button>
         </div>

@@ -165,14 +165,14 @@ function conceptProgressPct(row, selfQaTotal, conceptSetsTotal, passedSetIds) {
     ? 1
     : totalKp > 0
       ? clamp01(studied.length / totalKp)
-      : 1;
+      : 0;
 
   const seenQa = Array.isArray(row.self_qa_seen_ids) ? row.self_qa_seen_ids : [];
   const r3 = row.step3_completed_at
     ? 1
     : selfQaTotal > 0
       ? clamp01(seenQa.length / selfQaTotal)
-      : 1;
+      : 0;
 
   const r4 = row.step4_completed_at
     ? 1

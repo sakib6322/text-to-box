@@ -43,7 +43,7 @@ describe("additive conceptProgressPct", () => {
     expect(pct).toBe(20);
   });
 
-  it("gives full 25% when step1 completed even mid-slides", () => {
+  it("gives only step1 25% when later steps have empty totals (no auto-100%)", () => {
     const pct = conceptProgressPct({
       ...empty,
       step1Completed: true,
@@ -53,7 +53,34 @@ describe("additive conceptProgressPct", () => {
       totalSelfQa: 0,
       totalConceptSets: 0,
     });
-    // r1=1, r2=1 (no KP), r3=1 (no QA), r4=0 → 75
+    // Empty KP/QA/sets stay 0 until explicitly completed
+    expect(pct).toBe(25);
+  });
+
+  it("empty step totals stay at 0% until marked complete", () => {
+    const r = conceptStepRatios({
+      ...empty,
+      step1Completed: true,
+      totalKeyPoints: 0,
+      totalSelfQa: 0,
+      totalConceptSets: 0,
+    });
+    expect(r.r1).toBe(1);
+    expect(r.r2).toBe(0);
+    expect(r.r3).toBe(0);
+    expect(r.r4).toBe(0);
+  });
+
+  it("explicit complete marks empty steps as 100% local", () => {
+    const pct = conceptProgressPct({
+      ...empty,
+      step1Completed: true,
+      step2Completed: true,
+      step3Completed: true,
+      totalKeyPoints: 0,
+      totalSelfQa: 0,
+      totalConceptSets: 0,
+    });
     expect(pct).toBe(75);
   });
 

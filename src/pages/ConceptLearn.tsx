@@ -25,6 +25,7 @@ import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import {
   getStudyProgress,
   hydrateProgressFromServer,
+  isStep2Complete,
   markConceptStep,
   markKeyPointStudied,
   markSelfQaSeen,
@@ -105,7 +106,13 @@ export default function ConceptLearn() {
   );
 
   const canEnter = (step: 1 | 2 | 3 | 4) =>
-    isConceptStepUnlocked(step, progress, keyPoints.length, selfTestTotal, lockSteps);
+    isConceptStepUnlocked(
+      step,
+      conceptId ? getStudyProgress(conceptId) : null,
+      keyPoints.length,
+      selfTestTotal,
+      lockSteps,
+    );
 
   const loadAll = useCallback(async () => {
     if (!conceptId) return;
@@ -192,6 +199,18 @@ export default function ConceptLearn() {
     }
   }, [conceptId, conceptName, keyPoints.length, loading]);
 
+  // No questions in bank → mark step 3 done only after step 2 (unlock practice; mini-bar stays 0 until marked)
+  useEffect(() => {
+    if (!conceptId || loading || selfTestTotal > 0) return;
+    const p = getStudyProgress(conceptId);
+    if (isStep2Complete(p, keyPoints.length) && !p?.step3CompletedAt) {
+      void markConceptStep(conceptId, conceptName, 3, {
+        totalKeyPoints: keyPoints.length,
+        selfQaSeenIds: p?.selfQaSeenIds ?? [],
+      }).then(() => setTick((n) => n + 1));
+    }
+  }, [conceptId, conceptName, selfTestTotal, keyPoints.length, loading]);
+
   const currentKp = keyPoints[kpStep];
 
   const goKpPrev = () => {
@@ -252,6 +271,14 @@ export default function ConceptLearn() {
 
   const completeStep3 = async () => {
     if (!conceptId || completingStep3) return;
+    if (selfTestTotal > 0) {
+      const p0 = getStudyProgress(conceptId);
+      const seen = p0?.selfQaSeenIds?.length ?? 0;
+      if (seen < selfTestTotal) {
+        toast.message(`Answer all items first (${seen}/${selfTestTotal})`);
+        return;
+      }
+    }
     setCompletingStep3(true);
     try {
       const p = getStudyProgress(conceptId);
