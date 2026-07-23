@@ -129,12 +129,14 @@ export default function CourseLanding() {
   const { appearance } = useUiAppearance();
   const faq = appearance.landingFaq;
   const lp = appearance.landingPage;
-  const faqItems = faq.items.filter((it) => it.question.trim() || it.answers.some((a) => a.text.trim()));
+  const faqItems = (faq?.items ?? []).filter(
+    (it) => it.question.trim() || it.answers.some((a) => a.text.trim()),
+  );
   const authed = isAuthenticated();
   const session = getSession();
   const appLink = authed ? (session?.role === "user" ? "/my-courses" : "/builder") : "/login";
-  const ctaLabel = authed ? lp.goToAppLabel : lp.loginButtonLabel;
-  const landingStyle = landingPageStyleVars(lp) as CSSProperties;
+  const ctaLabel = authed ? (lp?.goToAppLabel ?? "Go to app") : (lp?.loginButtonLabel ?? "Login");
+  const landingStyle = landingPageStyleVars(lp ?? appearance.landingPage) as CSSProperties;
 
   useEffect(() => {
     const id = "pg-landing-fonts";

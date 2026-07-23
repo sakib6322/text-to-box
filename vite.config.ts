@@ -35,21 +35,10 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
+  // Do NOT force-split react/ckeditor/pdf via manualChunks — that caused
+  // "Cannot access X before initialization" and a blank landing page in production.
+  // Let Vite/Rollup split on dynamic import() boundaries instead.
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return;
-          if (id.includes("@ckeditor") || id.includes("ckeditor5")) return "ckeditor";
-          if (id.includes("jspdf") || id.includes("html2canvas")) return "pdf";
-          if (id.includes("@radix-ui")) return "radix";
-          if (id.includes("@tanstack")) return "query";
-          if (/node_modules[/\\](react-dom|scheduler)([/\\]|$)/.test(id)) return "react-vendor";
-          if (/node_modules[/\\]react[/\\]/.test(id) || /node_modules[/\\]react[/\\]index/.test(id)) return "react-vendor";
-          if (id.includes("react-router")) return "router";
-          if (id.includes("sonner")) return "toast";
-        },
-      },
-    },
+    chunkSizeWarningLimit: 1200,
   },
 }));
