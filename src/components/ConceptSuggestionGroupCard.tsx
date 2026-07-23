@@ -165,23 +165,29 @@ export function ConceptSuggestionGroupCard({
       {expanded ? (
         <div className="border-t bg-muted/20 px-4 pb-4 pt-3 sm:px-5 sm:pb-5">
           <p className="mb-3 text-xs font-medium text-muted-foreground sm:text-sm">Key points</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {sortedRows.map((r) => (
-              <SuggestionKeyPointCard
-                key={r.id}
-                content={r.content}
-                incrementCount={r.increment_count}
-                boardLinks={r.key_point_boards ?? []}
-                boardFilterId={boardFilter}
-                showActions={adminView}
-                deleting={deleting === r.id}
-                onEdit={onEdit ? () => onEdit(r) : undefined}
-                onDelete={onDelete ? () => onDelete(r) : undefined}
-                onBoardClick={onBoardClick}
-                compact
-              />
-            ))}
-          </div>
+          {sortedRows.length === 0 ? (
+            <p className="rounded-lg border border-dashed bg-background/60 px-3 py-6 text-center text-xs text-muted-foreground sm:text-sm">
+              No key points yet{adminView ? " — use Add box to create one" : ""}.
+            </p>
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {sortedRows.map((r) => (
+                <SuggestionKeyPointCard
+                  key={r.id}
+                  content={r.content}
+                  incrementCount={r.increment_count}
+                  boardLinks={r.key_point_boards ?? []}
+                  boardFilterId={boardFilter}
+                  showActions={adminView}
+                  deleting={deleting === r.id}
+                  onEdit={onEdit ? () => onEdit(r) : undefined}
+                  onDelete={onDelete ? () => onDelete(r) : undefined}
+                  onBoardClick={onBoardClick}
+                  compact
+                />
+              ))}
+            </div>
+          )}
           {adminView && onAdd ? (
             <div className="mt-3 space-y-3">
               <Button

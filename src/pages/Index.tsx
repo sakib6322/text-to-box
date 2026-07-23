@@ -367,9 +367,8 @@ const Index = () => {
   const handleSave = async () => {
     if (!guardPermission("home.add")) return;
     if (!requireTaxonomy()) return;
-    if (!points.length) return toast.error("No key points to save");
-    if (points.some((p) => !p.content.trim())) return toast.error("Empty boxes — fill or remove");
     if (!conceptName.trim()) return toast.error("Concept is required — extract from image or type manually");
+    const trimmedPoints = points.map((p) => p.content.trim()).filter(Boolean);
     setSaving(true);
     try {
       const resp = await fetch(apiUrl("/api/save-concept"), {
@@ -382,7 +381,7 @@ const Index = () => {
           chapter: taxonomy.chapterName,
           topic: taxonomy.topicName,
           topic_id: taxonomy.topicId,
-          high_yield_points: points.map((p) => p.content),
+          high_yield_points: trimmedPoints,
           ...conceptDetailToSavePayload(conceptDetail),
         }),
       });
@@ -395,13 +394,19 @@ const Index = () => {
       };
       if (!resp.ok) throw new Error(typeof data?.error === "string" ? data.error : "Save failed");
 
-      const saved = data?.count ?? points.length;
+      const saved = data?.count ?? trimmedPoints.length;
       const embSaved = data?.embeddings_saved;
       const embMissing = data?.embeddings_missing;
       const detailVec = data?.detail_embedding_saved;
 
       if (typeof embMissing === "number" && embMissing > 0) {
         toast.warning(`Saved ${saved} points but ${embMissing} embedding(s) failed — check Gemini API keys`);
+      } else if (saved === 0) {
+        toast.success(
+          detailVec
+            ? "Saved concept (detail/story) with no key points — visible in Suggestions"
+            : "Saved concept with no key points — visible in Suggestions",
+        );
       } else if (detailVec && typeof embSaved === "number") {
         toast.success(`Saved concept with ${embSaved} key-point vectors + detail vector`);
       } else if (typeof embSaved === "number") {

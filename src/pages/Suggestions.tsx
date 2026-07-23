@@ -53,6 +53,15 @@ type ConceptJoin = {
   topic: string | null;
 } | null;
 
+type ConceptShell = {
+  id: string;
+  title: string | null;
+  subject: string | null;
+  system: string | null;
+  chapter: string | null;
+  topic: string | null;
+};
+
 type Row = {
   id: string;
   content: string;
@@ -84,7 +93,9 @@ const newAddDraft = (partial?: Partial<AddDraftBox>): AddDraftBox => ({
   ...partial,
 });
 
-function compactTaxonomy(c: ConceptJoin): string {
+function compactTaxonomy(
+  c: ConceptJoin | Pick<ConceptShell, "subject" | "system" | "chapter" | "topic"> | null | undefined,
+): string {
   if (!c) return "";
   const parts = [c.subject, c.system, c.chapter, c.topic].map((x) => (x ?? "").trim()).filter(Boolean);
   return parts.join(" → ");
@@ -143,6 +154,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   type BrowseStep = "subjects" | "systems" | "chapters" | "topics" | "concepts";
 
   const [rows, setRows] = useState<Row[]>([]);
+  const [conceptShells, setConceptShells] = useState<ConceptShell[]>([]);
   const [loading, setLoading] = useState(mode === "admin");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
@@ -238,10 +250,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("key_points")
-      .select(
-        `
+    try {
+      const [kpRes, conceptsHttp] = await Promise.all([
+        supabase
+          .from("key_points")
+          .select(
+            `
         id,
         content,
         language,
@@ -260,13 +274,37 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
           topic
         )
       `,
-      )
-      .order("increment_count", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) toast.error(error.message);
-    else setRows((data as unknown as Row[]) ?? []);
-    setLoading(false);
+          )
+          .order("increment_count", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(500),
+        fetch(apiUrl("/api/concepts"), { headers: getAuthHeaders() }),
+      ]);
+      if (kpRes.error) toast.error(kpRes.error.message);
+      else setRows((kpRes.data as unknown as Row[]) ?? []);
+
+      const conceptsJson = (await conceptsHttp.json().catch(() => ({}))) as {
+        concepts?: ConceptShell[];
+        error?: string;
+      };
+      if (!conceptsHttp.ok) {
+        toast.error(conceptsJson.error ?? "Failed to load concepts");
+        setConceptShells([]);
+      } else {
+        setConceptShells(
+          (conceptsJson.concepts ?? []).map((c) => ({
+            id: c.id,
+            title: c.title ?? null,
+            subject: c.subject ?? null,
+            system: c.system ?? null,
+            chapter: c.chapter ?? null,
+            topic: c.topic ?? null,
+          })),
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1248,8 +1286,56 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
         });
       }
     }
+
+    // Concepts with zero key points (or after last KP deleted) still appear in Suggestions.
+    // Board filter hides them — they have no board links.
+    if (boardFilter === "all") {
+      const allowedTopicNames =
+        !adminView && courseTaxonomy
+          ? new Set(courseTaxonomy.topics.map((t) => norm(t.name)))
+          : null;
+      const q = search.toLowerCase().trim();
+
+      for (const c of conceptShells) {
+        if (map.has(c.id)) continue;
+        if (allowedTopicNames && !allowedTopicNames.has(norm(c.topic))) continue;
+        if (subjectName && norm(c.subject) !== norm(subjectName)) continue;
+        if (systemName && norm(c.system) !== norm(systemName)) continue;
+        if (chapterName && norm(c.chapter) !== norm(chapterName)) continue;
+        if (topicName && norm(c.topic) !== norm(topicName)) continue;
+        if (conceptFilter !== "all" && c.id !== conceptFilter) continue;
+        const title = (c.title ?? "").trim() || "Untitled";
+        if (
+          q &&
+          !`${title} ${c.subject ?? ""} ${c.system ?? ""} ${c.chapter ?? ""} ${c.topic ?? ""}`
+            .toLowerCase()
+            .includes(q)
+        ) {
+          continue;
+        }
+        map.set(c.id, {
+          conceptId: c.id,
+          title,
+          taxonomy: compactTaxonomy(c),
+          rows: [],
+        });
+      }
+    }
+
     return Array.from(map.values());
-  }, [filteredRows]);
+  }, [
+    filteredRows,
+    conceptShells,
+    boardFilter,
+    adminView,
+    courseTaxonomy,
+    search,
+    subjectName,
+    systemName,
+    chapterName,
+    topicName,
+    conceptFilter,
+  ]);
 
   const resetFilters = () => {
     setSearch("");
@@ -1671,10 +1757,12 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading…
           </div>
-        ) : filteredRows.length === 0 ? (
-          <Card className="p-12 text-center text-muted-foreground border-dashed">No matching suggestions found.</Card>
         ) : conceptGroups.length === 0 ? (
-          <Card className="p-12 text-center text-muted-foreground border-dashed">No concepts found for these filters.</Card>
+          <Card className="p-12 text-center text-muted-foreground border-dashed">
+            {filteredRows.length === 0
+              ? "No matching suggestions found."
+              : "No concepts found for these filters."}
+          </Card>
         ) : (
           <div className="mx-auto w-full max-w-6xl space-y-3 sm:space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">

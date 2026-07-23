@@ -3066,7 +3066,6 @@ app.post("/api/save-concept", async (req, res) => {
       .map((p) => p.trim())
       .filter(Boolean);
     if (!conceptName) return res.status(400).json({ error: "concept_name required" });
-    if (points.length === 0) return res.status(400).json({ error: "high_yield_points required" });
 
     const detailSummary =
       typeof body?.detail_summary === "string" && !isRichHtmlEmpty(body.detail_summary)
@@ -3117,33 +3116,41 @@ app.post("/api/save-concept", async (req, res) => {
     const saveBoardIds = Array.isArray(body?.board_ids)
       ? body.board_ids.filter((id) => typeof id === "string" && id.trim())
       : [];
-    const keyPointRows = await Promise.all(
-      points.map(async (content, idx) => {
-        const emb = await embedTextRotating(db, content);
-        return {
-          concept_id: concept.id,
-          content,
-          language: "mixed",
-          position: idx,
-          embedding: toPgVector(emb),
-        };
-      }),
-    );
-    const embeddingsSaved = keyPointRows.filter((r) => r.embedding != null).length;
-    const embeddingsMissing = keyPointRows.length - embeddingsSaved;
-    const { data: insertedKp, error: kpErr } = await db.from("key_points").insert(keyPointRows).select("id");
-    if (kpErr) return res.status(500).json({ error: kpErr.message });
 
-    if (saveBoardIds.length && insertedKp?.length) {
-      for (const kp of insertedKp) {
-        if (kp?.id) await linkKeyPointBoards(db, kp.id, saveBoardIds);
+    let insertedKp = [];
+    let embeddingsSaved = 0;
+    let embeddingsMissing = 0;
+
+    if (points.length > 0) {
+      const keyPointRows = await Promise.all(
+        points.map(async (content, idx) => {
+          const emb = await embedTextRotating(db, content);
+          return {
+            concept_id: concept.id,
+            content,
+            language: "mixed",
+            position: idx,
+            embedding: toPgVector(emb),
+          };
+        }),
+      );
+      embeddingsSaved = keyPointRows.filter((r) => r.embedding != null).length;
+      embeddingsMissing = keyPointRows.length - embeddingsSaved;
+      const { data, error: kpErr } = await db.from("key_points").insert(keyPointRows).select("id");
+      if (kpErr) return res.status(500).json({ error: kpErr.message });
+      insertedKp = data ?? [];
+
+      if (saveBoardIds.length && insertedKp.length) {
+        for (const kp of insertedKp) {
+          if (kp?.id) await linkKeyPointBoards(db, kp.id, saveBoardIds);
+        }
       }
     }
 
     return res.json({
       ok: true,
       concept_id: concept.id,
-      count: insertedKp?.length ?? 0,
+      count: insertedKp.length,
       embeddings_saved: embeddingsSaved,
       embeddings_missing: embeddingsMissing,
       detail_embedding_saved: detailEmbedding != null,
