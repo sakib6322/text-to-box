@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
@@ -12,7 +12,6 @@ import { apiUrl } from "@/lib/apiBase";
 import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
 import { ConnectionStatus } from "@/components/ConnectionStatus";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
-import { ConceptDetailsInlinePanel } from "@/components/ConceptDetailsInlinePanel";
 import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, conceptDetailToSavePayload, clearConceptCaches, type ConceptDetail, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { hasPermission } from "@/lib/auth";
@@ -42,6 +41,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useHeaderSearch } from "@/components/AppShellContext";
 import { useScrollUpVisible } from "@/hooks/use-scroll-up-visible";
+
+const ConceptDetailsInlinePanel = lazy(() =>
+  import("@/components/ConceptDetailsInlinePanel").then((m) => ({ default: m.ConceptDetailsInlinePanel })),
+);
 
 type BoardLink = SuggestionBoardLink;
 
@@ -1792,27 +1795,35 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   detailsOpen={detailsConceptId === g.conceptId}
                   detailsPanel={
                     detailsConceptId === g.conceptId ? (
-                      <ConceptDetailsInlinePanel
-                        active
-                        variant="inline"
-                        conceptName={detailsConceptName}
-                        detail={detailsConceptDetail}
-                        keyPoints={detailsKeyPoints}
-                        loading={detailsLoading}
-                        editable={canEdit}
-                        onDetailChange={setDetailsConceptDetail}
-                        onSave={saveConceptDetail}
-                        saving={savingConceptDetail}
-                        keyPointsEditable={canEdit || canAdd || canDelete}
-                        boardOptions={boardList}
-                        onSaveKeyPoint={saveDetailsKeyPoint}
-                        onAddKeyPoint={addDetailsKeyPoint}
-                        onDeleteKeyPoint={deleteDetailsKeyPoint}
-                        savingKeyPoint={savingKeyPoint}
-                        conceptId={g.conceptId}
-                        showSelfQaEditor={hasPermission("progress.self_qa.manage")}
-                        onClose={closeDetailsPanel}
+                      <Suspense
+                        fallback={
+                          <div className="flex justify-center py-10 text-muted-foreground">
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading details…
+                          </div>
+                        }
+                      >
+                        <ConceptDetailsInlinePanel
+                          active
+                          variant="inline"
+                          conceptName={detailsConceptName}
+                          detail={detailsConceptDetail}
+                          keyPoints={detailsKeyPoints}
+                          loading={detailsLoading}
+                          editable={canEdit}
+                          onDetailChange={setDetailsConceptDetail}
+                          onSave={saveConceptDetail}
+                          saving={savingConceptDetail}
+                          keyPointsEditable={canEdit || canAdd || canDelete}
+                          boardOptions={boardList}
+                          onSaveKeyPoint={saveDetailsKeyPoint}
+                          onAddKeyPoint={addDetailsKeyPoint}
+                          onDeleteKeyPoint={deleteDetailsKeyPoint}
+                          savingKeyPoint={savingKeyPoint}
+                          conceptId={g.conceptId}
+                          showSelfQaEditor={hasPermission("progress.self_qa.manage")}
+                          onClose={closeDetailsPanel}
                       />
+                      </Suspense>
                     ) : undefined
                   }
                   onEdit={

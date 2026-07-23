@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { logout, canAccessAdmin, hasPermission, isAdmin } from "@/lib/auth";
 import { SETTINGS_TAB_ANY_VIEW } from "@/lib/permissions";
+import { prefetchRoute } from "@/lib/routeModules";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -173,7 +174,11 @@ function NavDropdown({
             {item.children?.map((child) => (
               <SidebarMenuSubItem key={child.to}>
                 <SidebarMenuSubButton asChild isActive={isActive(child.to)}>
-                  <Link to={child.to}>
+                  <Link
+                    to={child.to}
+                    onMouseEnter={() => prefetchRoute(child.to)}
+                    onFocus={() => prefetchRoute(child.to)}
+                  >
                     <span>{labelFor(child.labelKey, child.label)}</span>
                   </Link>
                 </SidebarMenuSubButton>
@@ -229,7 +234,11 @@ export function AdminSidebar() {
                 return (
                   <SidebarMenuItem key={item.to ?? item.label}>
                     <SidebarMenuButton asChild tooltip={itemLabel} isActive={isActive(item.to)}>
-                      <Link to={item.to ?? "#"}>
+                      <Link
+                        to={item.to ?? "#"}
+                        onMouseEnter={() => item.to && prefetchRoute(item.to)}
+                        onFocus={() => item.to && prefetchRoute(item.to)}
+                      >
                         {Icon ? <Icon /> : null}
                         <span>{itemLabel}</span>
                       </Link>
@@ -246,7 +255,11 @@ export function AdminSidebar() {
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="My profile" isActive={isActive("/profile")}>
-                  <Link to="/profile">
+                  <Link
+                    to="/profile"
+                    onMouseEnter={() => prefetchRoute("/profile")}
+                    onFocus={() => prefetchRoute("/profile")}
+                  >
                     <User />
                     <span>My profile</span>
                   </Link>

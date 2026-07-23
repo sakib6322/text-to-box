@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { htmlToPlainText, isHtmlEmpty } from "@/lib/htmlContent";
@@ -13,13 +13,17 @@ import { apiUrl } from "@/lib/apiBase";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
-import { ConceptDetailCard } from "@/components/ConceptDetailCard";
 import { ConceptSuggestionsPanel } from "@/components/ConceptSuggestionsPanel";
-import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 
 const CKEditorField = lazy(() =>
   import("@/components/CKEditorField").then((m) => ({ default: m.CKEditorField })),
+);
+const ConceptDetailCard = lazy(() =>
+  import("@/components/ConceptDetailCard").then((m) => ({ default: m.ConceptDetailCard })),
+);
+const ConceptDetailsDialog = lazy(() =>
+  import("@/components/ConceptDetailsDialog").then((m) => ({ default: m.ConceptDetailsDialog })),
 );
 import {
   ACCEPTED_SOURCE_TYPES,
@@ -761,13 +765,15 @@ const Index = () => {
             ) : null}
           </Card>
 
-          <ConceptDetailCard
-            conceptName={conceptName}
-            detail={conceptDetail}
-            onOpenDetails={() => setDetailsOpen(true)}
-            editable={canEdit}
-            onDetailChange={canEdit ? applyConceptDetail : undefined}
-          />
+          <Suspense fallback={<div className="h-32 animate-pulse rounded-lg bg-muted/50" />}>
+            <ConceptDetailCard
+              conceptName={conceptName}
+              detail={conceptDetail}
+              onOpenDetails={() => setDetailsOpen(true)}
+              editable={canEdit}
+              onDetailChange={canEdit ? applyConceptDetail : undefined}
+            />
+          </Suspense>
 
           {canMatch ? (
             <ConceptSuggestionsPanel lines={suggestionLines} matches={suggestionMatches} loading={matching} />
@@ -826,16 +832,18 @@ const Index = () => {
         </div>
       </main>
 
-      <ConceptDetailsDialog
-        open={detailsOpen}
-        onOpenChange={setDetailsOpen}
-        conceptName={conceptName}
-        detail={conceptDetail}
-        keyPoints={[]}
-        showKeyPoints={false}
-        editable={canEdit}
-        onDetailChange={canEdit ? applyConceptDetail : undefined}
-      />
+      <Suspense fallback={null}>
+        <ConceptDetailsDialog
+          open={detailsOpen}
+          onOpenChange={setDetailsOpen}
+          conceptName={conceptName}
+          detail={conceptDetail}
+          keyPoints={[]}
+          showKeyPoints={false}
+          editable={canEdit}
+          onDetailChange={canEdit ? applyConceptDetail : undefined}
+        />
+      </Suspense>
 
       <ConfirmDeleteDialog
         open={deletePointIndex !== null}

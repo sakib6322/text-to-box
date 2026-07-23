@@ -44,6 +44,10 @@ export default defineConfig(({ mode }) => ({
           if (id.includes("jspdf") || id.includes("html2canvas")) return "pdf";
           if (id.includes("@radix-ui")) return "radix";
           if (id.includes("@tanstack")) return "query";
+          if (/node_modules[/\\](react-dom|scheduler)([/\\]|$)/.test(id)) return "react-vendor";
+          if (/node_modules[/\\]react[/\\]/.test(id) || /node_modules[/\\]react[/\\]index/.test(id)) return "react-vendor";
+          if (id.includes("react-router")) return "router";
+          if (id.includes("sonner")) return "toast";
         },
       },
     },

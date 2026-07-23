@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Suspense, lazy, useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, BookOpen, CalendarDays, ChevronDown, ChevronRight, Headphones, Menu, Play, X } from "lucide-react";
 import { apiUrl } from "@/lib/apiBase";
 import { getSession, isAuthenticated } from "@/lib/auth";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { LandingSection } from "@/components/LandingSection";
-import { WhyCarousel } from "@/components/WhyCarousel";
 import { heroSectionBackground, landingPageStyleVars, type LandingFaqItem } from "@/lib/uiAppearance";
+import { prefetchAppShell, prefetchLikelyRoutes } from "@/lib/routeModules";
+
+const WhyCarousel = lazy(() =>
+  import("@/components/WhyCarousel").then((m) => ({ default: m.WhyCarousel })),
+);
 
 type CourseRoutine = {
   id: string;
@@ -156,6 +160,11 @@ export default function CourseLanding() {
     })();
   }, []);
 
+  useEffect(() => {
+    prefetchAppShell();
+    prefetchLikelyRoutes(authed ? [appLink, "/my-courses", "/login"] : ["/login", "/my-courses"]);
+  }, [authed, appLink]);
+
   const heroStageRef = useRef<HTMLDivElement>(null);
   const [heroInView, setHeroInView] = useState(true);
   const [heroHovered, setHeroHovered] = useState(false);
@@ -233,7 +242,14 @@ export default function CourseLanding() {
           </nav>
 
           <div className="flex items-center gap-2">
-            <Link to={appLink} className="pg-btn-primary hidden sm:inline-flex">
+            <Link
+              to={appLink}
+              className="pg-btn-primary hidden sm:inline-flex"
+              onMouseEnter={() => {
+                prefetchAppShell();
+                prefetchLikelyRoutes([appLink]);
+              }}
+            >
               {ctaLabel}
             </Link>
             <button
@@ -418,12 +434,14 @@ export default function CourseLanding() {
             ) : null}
             {(lp.whyItems?.filter((it) => it.text.trim()).length ?? 0) > 0 ? (
               <div className="mt-10 sm:mt-12">
-                <WhyCarousel
-                  items={lp.whyItems.filter((it) => it.text.trim())}
-                  autoplay={lp.whyAutoplay !== false}
-                  intervalSec={lp.whyIntervalSec || 3}
-                  transitionSec={lp.whyTransitionSec || 0.55}
-                />
+                <Suspense fallback={<div className="mx-auto h-40 max-w-4xl animate-pulse rounded-2xl bg-white/10" />}>
+                  <WhyCarousel
+                    items={lp.whyItems.filter((it) => it.text.trim())}
+                    autoplay={lp.whyAutoplay !== false}
+                    intervalSec={lp.whyIntervalSec || 3}
+                    transitionSec={lp.whyTransitionSec || 0.55}
+                  />
+                </Suspense>
               </div>
             ) : null}
           </div>

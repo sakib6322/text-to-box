@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Loader2, LogIn, UserPlus } from "lucide-react";
 import { isAuthenticated, getDefaultLandingPath, login, register, getAuthHeaders } from "@/lib/auth";
 import { apiUrl } from "@/lib/apiBase";
+import { prefetchAdminShell, prefetchAppShell, prefetchLikelyRoutes } from "@/lib/routeModules";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +23,12 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [tab, setTab] = useState(defaultTab);
+
+  useEffect(() => {
+    prefetchAppShell();
+    prefetchAdminShell();
+    prefetchLikelyRoutes(["/my-courses", "/builder", "/admin"]);
+  }, []);
 
   if (isAuthenticated()) {
     if (from && from !== "/login") return <Navigate to={from} replace />;

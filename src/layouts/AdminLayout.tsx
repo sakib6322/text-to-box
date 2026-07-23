@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { SidebarInset, SidebarProvider, SidebarRail, SidebarTrigger } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { Separator } from "@/components/ui/separator";
 import { useSidebarOpen } from "@/hooks/use-sidebar-open";
 import { AppShellHeader } from "@/components/AppShellHeader";
+import { PageFallback } from "@/components/lazyPage";
 
 export default function AdminLayout() {
   const [open, setOpen] = useSidebarOpen(true);
@@ -23,10 +25,11 @@ export default function AdminLayout() {
           }
         />
         <div className="app-mesh-content app-page-pad flex-1">
-          <Outlet />
+          <Suspense fallback={<PageFallback />}>
+            <Outlet />
+          </Suspense>
         </div>
       </SidebarInset>
     </SidebarProvider>
   );
 }
-
