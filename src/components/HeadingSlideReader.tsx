@@ -74,9 +74,20 @@ type Props = {
   className?: string;
   /** Called when user reaches the last slide (or single-slide content) */
   onReachLastSlide?: () => void;
+  /** Controlled slide index (e.g. heading jump filter) */
+  index?: number;
+  onIndexChange?: (index: number) => void;
 };
 
-export function HeadingSlideReader({ html, config, richClassName, className, onReachLastSlide }: Props) {
+export function HeadingSlideReader({
+  html,
+  config,
+  richClassName,
+  className,
+  onReachLastSlide,
+  index: indexProp,
+  onIndexChange,
+}: Props) {
   const levels = useMemo(
     () => levelsFromFlags(config),
     [config.splitH1, config.splitH2, config.splitH3, config.splitH4, config.splitH5, config.splitH6],
@@ -93,7 +104,19 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
   );
 
   const scrollMode = config.scrollMode === "nested" ? "nested" : "page";
-  const [index, setIndex] = useState(0);
+  const controlled = indexProp !== undefined;
+  const [uncontrolledIndex, setUncontrolledIndex] = useState(0);
+  const index = controlled ? indexProp : uncontrolledIndex;
+  const setIndex = useCallback(
+    (next: number | ((prev: number) => number)) => {
+      const prev = controlled ? indexProp : uncontrolledIndex;
+      const resolved = typeof next === "function" ? next(prev) : next;
+      const clamped = Math.min(Math.max(0, resolved), Math.max(0, slides.length - 1));
+      if (!controlled) setUncontrolledIndex(clamped);
+      onIndexChange?.(clamped);
+    },
+    [controlled, indexProp, uncontrolledIndex, onIndexChange, slides.length],
+  );
   const [nearEnd, setNearEnd] = useState(!config.requireScrollToEnd);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endSentinelRef = useRef<HTMLDivElement>(null);
@@ -104,8 +127,11 @@ export function HeadingSlideReader({ html, config, richClassName, className, onR
   const hasMultiple = slides.length > 1;
 
   useEffect(() => {
-    setIndex(0);
-  }, [html, levels.join(",")]);
+    if (controlled) onIndexChange?.(0);
+    else setUncontrolledIndex(0);
+    // Reset only when content/split config changes — not when onIndexChange identity changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [html, levels.join(","), controlled]);
 
   // Nested mode: measure scroll inside the box
   useEffect(() => {

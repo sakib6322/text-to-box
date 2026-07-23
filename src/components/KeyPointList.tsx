@@ -14,6 +14,7 @@ type Props = {
   studiedIds?: Set<string>;
   currentId?: string;
   onBoardClick?: (board: BoardClickTarget) => void;
+  preserveOrder?: boolean;
 };
 
 function normalize(kps: KeyPointWithBoards[] | string[]): KeyPointWithBoards[] {
@@ -35,8 +36,9 @@ function boardBadges(kp: KeyPointWithBoards): Array<BoardLinkDisplay & { key: st
   return (kp.boardNames ?? []).map((name) => ({ key: name, name, label: name }));
 }
 
-export function KeyPointList({ keyPoints, compact, studiedIds, currentId, onBoardClick }: Props) {
-  const list = sortKeyPointsByImportance(normalize(keyPoints));
+export function KeyPointList({ keyPoints, compact, studiedIds, currentId, onBoardClick, preserveOrder = false }: Props) {
+  const normalized = normalize(keyPoints);
+  const list = preserveOrder ? normalized : sortKeyPointsByImportance(normalized);
   if (!list.length) return null;
 
   return (

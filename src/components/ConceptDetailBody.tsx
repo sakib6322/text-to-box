@@ -23,6 +23,9 @@ type Props = {
   showVerbatim?: boolean;
   /** Admin Suggestions → Details edit preview panel */
   adminPreview?: boolean;
+  /** Controlled heading-slide index (jump filter) */
+  slideIndex?: number;
+  onSlideIndexChange?: (index: number) => void;
 };
 
 function defaultHeaders(table: DetailTable | null): string[] {
@@ -93,7 +96,15 @@ function LegacyConceptDetailBody({ detail, showVerbatim }: { detail: ConceptDeta
   );
 }
 
-export function ConceptDetailBody({ detail, editable = false, onChange, showVerbatim = true, adminPreview = false }: Props) {
+export function ConceptDetailBody({
+  detail,
+  editable = false,
+  onChange,
+  showVerbatim = true,
+  adminPreview = false,
+  slideIndex,
+  onSlideIndexChange,
+}: Props) {
   const { appearance, activeDevice } = useUiAppearance();
   const hs = appearance.headingSlides;
 
@@ -127,7 +138,13 @@ export function ConceptDetailBody({ detail, editable = false, onChange, showVerb
     return (
       <div className="space-y-4 text-sm leading-relaxed">
         {useHeadingSlides ? (
-          <HeadingSlideReader html={unifiedBody} config={hs} richClassName="concept-detail-rich" />
+          <HeadingSlideReader
+            html={unifiedBody}
+            config={hs}
+            richClassName="concept-detail-rich"
+            index={slideIndex}
+            onIndexChange={onSlideIndexChange}
+          />
         ) : (
           <div className="concept-detail-rich">
             <RichHtmlContent content={unifiedBody} />

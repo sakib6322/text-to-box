@@ -5,6 +5,7 @@ import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasConceptDetailContent } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
+import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import { BookOpen } from "lucide-react";
 import { useState } from "react";
 
@@ -24,6 +25,7 @@ export function ConceptDetailCard({
   onDetailChange,
 }: Props) {
   const [storyOpen, setStoryOpen] = useState(false);
+  const { slideIndex, setSlideIndex, jumpFilter } = useConceptHeadingSlideNav(detail, !editable);
   if (!hasConceptDetailContent(detail)) return null;
 
   return (
@@ -34,6 +36,7 @@ export function ConceptDetailCard({
         editable={editable}
         onDetailChange={onDetailChange}
         onOpenChange={setStoryOpen}
+        leadingAction={jumpFilter}
       />
       {!storyOpen ? (
       <Card className="concept-detail-card space-y-4">
@@ -49,7 +52,12 @@ export function ConceptDetailCard({
           </Button>
         </div>
 
-        <ConceptDetailBody detail={detail} showVerbatim={false} />
+        <ConceptDetailBody
+          detail={detail}
+          showVerbatim={false}
+          slideIndex={slideIndex}
+          onSlideIndexChange={setSlideIndex}
+        />
       </Card>
       ) : null}
     </div>

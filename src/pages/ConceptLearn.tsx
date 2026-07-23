@@ -17,6 +17,7 @@ import { fetchProgressSets, type ProgressPracticeSet } from "@/lib/progressApi";
 import { apiUrl } from "@/lib/apiBase";
 import { useProgressAppearance, useProgressStepLabel } from "@/hooks/useProgressAppearance";
 import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
+import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import {
   getStudyProgress,
   hydrateProgressFromServer,
@@ -64,6 +65,7 @@ export default function ConceptLearn() {
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
   const [completingStep3, setCompletingStep3] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
+  const { slideIndex, setSlideIndex, jumpFilter } = useConceptHeadingSlideNav(detail);
 
   const progress = conceptId ? getStudyProgress(conceptId) : null;
   const studiedIds = useMemo(() => new Set(progress?.studiedKeyPointIds ?? []), [progress]);
@@ -279,10 +281,20 @@ export default function ConceptLearn() {
 
         {activeStep === 1 ? (
           <div className="mx-auto max-w-3xl space-y-4">
-            <StoryBasedLearningButton detail={detail} conceptName={conceptName} onOpenChange={setStoryOpen} />
+            <StoryBasedLearningButton
+              detail={detail}
+              conceptName={conceptName}
+              onOpenChange={setStoryOpen}
+              leadingAction={jumpFilter}
+            />
             {!storyOpen ? (
             <Card className="concept-detail-card">
-              <ConceptDetailBody detail={detail} showVerbatim />
+              <ConceptDetailBody
+                detail={detail}
+                showVerbatim
+                slideIndex={slideIndex}
+                onSlideIndexChange={setSlideIndex}
+              />
             </Card>
             ) : null}
             <div className="flex justify-center">

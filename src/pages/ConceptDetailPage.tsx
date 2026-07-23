@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, HelpCircle, Loader2, Play, Target } from "lucide-react";
+import { ArrowLeft, HelpCircle, List, Loader2, Play, Target } from "lucide-react";
+import { ConceptKeyPointsPanel } from "@/components/ConceptKeyPointsPanel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
@@ -9,6 +10,7 @@ import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards } from "@/lib/conceptDetail";
 import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
+import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import { sortKeyPointsByImportance } from "@/lib/progressEngine";
 import { userContentCard, userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
@@ -22,9 +24,11 @@ export default function ConceptDetailPage() {
   const [detail, setDetail] = useState(emptyConceptDetail());
   const [keyPoints, setKeyPoints] = useState<KeyPointWithBoards[]>([]);
   const [questionsOpen, setQuestionsOpen] = useState(false);
+  const [keyPointsOpen, setKeyPointsOpen] = useState(false);
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
   const csu = useConceptStudentUi();
+  const { slideIndex, setSlideIndex, jumpFilter } = useConceptHeadingSlideNav(detail);
 
   useEffect(() => {
     if (!conceptId) return;
@@ -85,6 +89,18 @@ export default function ConceptDetailPage() {
                 <span className="hidden sm:inline">Questions</span>
               </Button>
             ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={userHeaderActionBtn}
+              title="Key points"
+              onClick={() => setKeyPointsOpen(true)}
+            >
+              <List className="h-3.5 w-3.5 shrink-0" />
+              <span className="sm:hidden">Keypoints</span>
+              <span className="hidden sm:inline">Key points</span>
+            </Button>
             {csu.showStudyButton ? (
               <Button asChild size="sm" className={userHeaderActionBtn} title="Key Point Study">
                 <Link to={`/concept/${conceptId}/learn`}>
@@ -107,14 +123,24 @@ export default function ConceptDetailPage() {
       </div>
 
       <div className="space-y-3">
-        <StoryBasedLearningButton detail={detail} conceptName={conceptName} onOpenChange={setStoryOpen} />
+        <StoryBasedLearningButton
+          detail={detail}
+          conceptName={conceptName}
+          onOpenChange={setStoryOpen}
+          leadingAction={jumpFilter}
+        />
         {!storyOpen ? (
         <Card className={userContentCard}>
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
             </div>
-            <ConceptDetailBody detail={detail} showVerbatim />
+            <ConceptDetailBody
+              detail={detail}
+              showVerbatim
+              slideIndex={slideIndex}
+              onSlideIndexChange={setSlideIndex}
+            />
           </div>
           {csu.showKeyPointsOnDetails && keyPoints.length ? (
             <div className="space-y-2 border-t pt-4">
@@ -163,6 +189,17 @@ export default function ConceptDetailPage() {
         boardName={boardFilter?.name}
         onClearBoardFilter={() => setBoardFilter(null)}
         onBoardClick={(board) => {
+          setBoardFilter(board);
+          setQuestionsOpen(true);
+        }}
+      />
+      <ConceptKeyPointsPanel
+        open={keyPointsOpen}
+        onOpenChange={setKeyPointsOpen}
+        conceptName={conceptName}
+        keyPoints={keyPoints}
+        onBoardClick={(board) => {
+          setKeyPointsOpen(false);
           setBoardFilter(board);
           setQuestionsOpen(true);
         }}

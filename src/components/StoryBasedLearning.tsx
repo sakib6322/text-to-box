@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { BookMarked, ChevronDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { CKEditorField } from "@/components/CKEditorField";
+import { HeadingSlideJumpFilter } from "@/components/HeadingSlideJumpFilter";
 import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -26,6 +27,8 @@ type StoryBasedLearningButtonProps = {
   className?: string;
   /** Fired when story panel opens/closes — parents can hide Concept Details below. */
   onOpenChange?: (open: boolean) => void;
+  /** Opposite side of the Story button (e.g. concept heading jump filter). */
+  leadingAction?: ReactNode;
 };
 
 function StoryPreviewBody({
@@ -33,11 +36,15 @@ function StoryPreviewBody({
   emptyMessage,
   storyEnabled,
   headingSlides,
+  slideIndex,
+  onSlideIndexChange,
 }: {
   html: string;
   emptyMessage: string;
   storyEnabled: boolean;
   headingSlides: HeadingSlidesAppearance;
+  slideIndex?: number;
+  onSlideIndexChange?: (index: number) => void;
 }) {
   if (isHtmlEmpty(html)) {
     return <p className="story-based-learning-empty text-sm">{emptyMessage}</p>;
@@ -49,6 +56,8 @@ function StoryPreviewBody({
         config={headingSlides}
         richClassName="story-based-learning-rich"
         className="story-based-learning"
+        index={slideIndex}
+        onIndexChange={onSlideIndexChange}
       />
     );
   }
@@ -70,6 +79,7 @@ export function StoryBasedLearningButton({
   size = "sm",
   className,
   onOpenChange,
+  leadingAction,
 }: StoryBasedLearningButtonProps) {
   const { appearance, activeDevice } = useUiAppearance();
   const sbl = resolveDeviceTheme(appearance, activeDevice).storyBasedLearning;
@@ -77,16 +87,24 @@ export function StoryBasedLearningButton({
   const [open, setOpen] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [draftStory, setDraftStory] = useState(detail.storyHtml);
+  const [slideIndex, setSlideIndex] = useState(0);
 
   const setOpenAndNotify = (next: boolean) => {
     setOpen(next);
     onOpenChange?.(next);
     if (!next) setShowPreview(false);
+    if (next) setSlideIndex(0);
   };
 
   useEffect(() => {
     if (open) setDraftStory(detail.storyHtml);
   }, [open, detail.storyHtml]);
+
+  const storyHtmlForSlides = editable ? draftStory : detail.storyHtml;
+
+  useEffect(() => {
+    setSlideIndex(0);
+  }, [storyHtmlForSlides, hs.storyEnabled]);
 
   const handleStoryChange = (html: string) => {
     setDraftStory(html);
@@ -101,6 +119,22 @@ export function StoryBasedLearningButton({
   };
 
   const empty = isHtmlEmpty(draftStory) && isHtmlEmpty(detail.storyHtml);
+  const showStoryJump =
+    open &&
+    hs.storyEnabled &&
+    !isHtmlEmpty(storyHtmlForSlides) &&
+    (!editable || showPreview);
+  const storyJumpFilter = showStoryJump ? (
+    <HeadingSlideJumpFilter
+      html={storyHtmlForSlides}
+      config={hs}
+      index={slideIndex}
+      onIndexChange={setSlideIndex}
+    />
+  ) : null;
+  /** Left of Story button: concept filter when closed, story filter when open. */
+  const toolbarStart = open ? storyJumpFilter : leadingAction;
+  const showToolbarStart = toolbarStart != null;
 
   return (
     <Collapsible
@@ -108,11 +142,23 @@ export function StoryBasedLearningButton({
       onOpenChange={setOpenAndNotify}
       className={cn("story-based-learning-root w-full", className)}
     >
-      <div className="flex justify-end">
+      <div
+        className={cn(
+          "flex w-full items-center gap-2",
+          showToolbarStart ? "justify-between" : "justify-end",
+        )}
+      >
+        {showToolbarStart ? <div className="min-w-0">{toolbarStart}</div> : null}
         <CollapsibleTrigger asChild>
-          <Button type="button" variant={variant} size={size} className="gap-1.5" aria-expanded={open}>
+          <Button
+            type="button"
+            variant={variant}
+            size={size}
+            className="shrink-0 gap-1.5"
+            aria-expanded={open}
+          >
             {sbl.showButtonIcon ? <BookMarked className="h-4 w-4" /> : null}
-            {sbl.buttonLabel}
+            <span className="truncate">{sbl.buttonLabel}</span>
             {hasStoryContent(detail) ? (
               <span
                 className="h-1.5 w-1.5 rounded-full story-based-learning-accent"
@@ -130,11 +176,11 @@ export function StoryBasedLearningButton({
       <CollapsibleContent className="story-based-learning-dropdown data-[state=open]:animate-in data-[state=closed]:animate-out">
         <div className="story-based-learning-panel mt-2 overflow-hidden">
           <div
-            className="flex flex-wrap items-start justify-between gap-2 border-b px-3 py-2 sm:px-4"
+            className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4"
             style={{ borderColor: "var(--sbl-border)" }}
             data-sbl-title
           >
-            <p className="min-w-0 text-sm font-semibold">
+            <p className="min-w-0 flex-1 text-sm font-semibold">
               {sbl.buttonLabel}
               {conceptName ? `: ${conceptName}` : ""}
             </p>
@@ -198,6 +244,8 @@ export function StoryBasedLearningButton({
                         emptyMessage={sbl.emptyMessage}
                         storyEnabled={hs.storyEnabled}
                         headingSlides={hs}
+                        slideIndex={slideIndex}
+                        onSlideIndexChange={setSlideIndex}
                       />
                     </div>
                   </div>
@@ -229,6 +277,8 @@ export function StoryBasedLearningButton({
                 emptyMessage={sbl.emptyMessage}
                 storyEnabled={hs.storyEnabled}
                 headingSlides={hs}
+                slideIndex={slideIndex}
+                onSlideIndexChange={setSlideIndex}
               />
             </div>
           )}
