@@ -7,8 +7,8 @@ import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
 import { richHtmlImageOptionsFromEditor } from "@/lib/richHtmlImages";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
-import { conceptAdminPreviewHeadingSlidesEnabled, conceptAdminPreviewPanelEnabled } from "@/lib/uiAppearance";
-import { Download, Loader2, X } from "lucide-react";
+import { conceptAdminPreviewHeadingSlidesEnabled } from "@/lib/uiAppearance";
+import { Download, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import {
@@ -17,6 +17,7 @@ import {
 } from "@/components/EditableKeyPointSection";
 import type { BoardOption } from "@/components/BoardCheckboxGroup";
 import { ConceptSelfQaEditor } from "@/components/ConceptSelfQaEditor";
+import { cn } from "@/lib/utils";
 
 export type ConceptDetailsInlinePanelProps = {
   active: boolean;
@@ -78,12 +79,9 @@ export function ConceptDetailsInlinePanel({
   const [draft, setDraft] = useState<ConceptDetail>(detail);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const normalizedKps = normalizeKeyPoints(keyPoints);
   const adminPreviewSlides = conceptAdminPreviewHeadingSlidesEnabled(
-    appearance.conceptAdminPreview,
-    activeDevice,
-  );
-  const adminPreviewVisible = conceptAdminPreviewPanelEnabled(
     appearance.conceptAdminPreview,
     activeDevice,
   );
@@ -97,7 +95,10 @@ export function ConceptDetailsInlinePanel({
   }, [active, loading]);
 
   useEffect(() => {
-    if (!active) setStoryOpen(false);
+    if (!active) {
+      setStoryOpen(false);
+      setShowPreview(false);
+    }
   }, [active]);
 
   const handleDraftChange = (updater: ConceptDetailUpdater) => {
@@ -167,6 +168,19 @@ export function ConceptDetailsInlinePanel({
           ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {editable && !loading && !storyOpen ? (
+            <Button
+              type="button"
+              variant={showPreview ? "default" : "outline"}
+              size="sm"
+              className="h-8 gap-1.5 text-xs"
+              onClick={() => setShowPreview((v) => !v)}
+              aria-pressed={showPreview}
+            >
+              {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showPreview ? "Hide preview" : "Preview"}
+            </Button>
+          ) : null}
           {showDownloadPdf && !loading ? (
             <Button
               type="button"
@@ -202,7 +216,16 @@ export function ConceptDetailsInlinePanel({
         </div>
       ) : storyOpen ? null : editable ? (
         <div className="space-y-4">
-          <div className={adminPreviewVisible ? "grid gap-4 lg:grid-cols-2" : undefined}>
+          <div
+            className={cn(
+              showPreview &&
+                (activeDevice === "tablet"
+                  ? "grid gap-4 md:grid-cols-2"
+                  : activeDevice === "desktop"
+                    ? "grid gap-4 lg:grid-cols-2"
+                    : "grid gap-4"),
+            )}
+          >
             <div className="flex min-h-0 flex-col rounded-lg border bg-background">
               <div className="shrink-0 border-b px-3 py-2 sm:px-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Edit</p>
@@ -213,7 +236,7 @@ export function ConceptDetailsInlinePanel({
               </div>
             </div>
 
-            {adminPreviewVisible ? (
+            {showPreview ? (
               <div className="flex min-h-0 flex-col rounded-lg border bg-muted/30">
                 <div className="shrink-0 border-b bg-muted/50 px-3 py-2 sm:px-4">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
@@ -235,7 +258,7 @@ export function ConceptDetailsInlinePanel({
             ) : null}
           </div>
 
-          {!adminPreviewVisible ? (
+          {!showPreview ? (
             <div className="space-y-4">
               {keyPointsSection}
               {showSelfQaEditor && conceptId ? (
