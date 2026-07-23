@@ -2,6 +2,9 @@ import { CONCEPT_STEP_WEIGHT } from "@/lib/progressPlan";
 
 export type ConceptProgressInput = {
   step1Completed: boolean;
+  /** Highest slide index reached (0-based); used when Step 1 not fully completed */
+  step1MaxSlideIndex: number;
+  step1SlideTotal: number;
   studiedKeyPointIds: string[];
   totalKeyPoints: number;
   step2Completed: boolean;
@@ -12,6 +15,63 @@ export type ConceptProgressInput = {
   totalConceptSets: number;
   step4Completed: boolean;
 };
+
+export type ConceptStepRatios = {
+  /** 0–1 within each step (step-local 100%) */
+  r1: number;
+  r2: number;
+  r3: number;
+  r4: number;
+  /** Contribution toward concept total (each ≤ 25) */
+  c1: number;
+  c2: number;
+  c3: number;
+  c4: number;
+};
+
+function clamp01(n: number): number {
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n >= 1) return 1;
+  return n;
+}
+
+/** Per-step completion ratios — independent (unlock-safe additive model). */
+export function conceptStepRatios(input: ConceptProgressInput): ConceptStepRatios {
+  const r1 = input.step1Completed
+    ? 1
+    : input.step1SlideTotal > 0
+      ? clamp01((Math.max(0, input.step1MaxSlideIndex) + 1) / input.step1SlideTotal)
+      : 0;
+
+  const r2 = input.step2Completed
+    ? 1
+    : input.totalKeyPoints > 0
+      ? clamp01(input.studiedKeyPointIds.length / input.totalKeyPoints)
+      : 1; // no key points → step contributes full band
+
+  const r3 = input.step3Completed
+    ? 1
+    : input.totalSelfQa > 0
+      ? clamp01(input.selfQaSeenIds.length / input.totalSelfQa)
+      : 1; // no self-test units → full band
+
+  const r4 = input.step4Completed
+    ? 1
+    : input.totalConceptSets > 0
+      ? clamp01(input.passedConceptSetIds.length / input.totalConceptSets)
+      : 0; // no practice sets → 0 until marked complete
+
+  return {
+    r1,
+    r2,
+    r3,
+    r4,
+    c1: r1 * CONCEPT_STEP_WEIGHT,
+    c2: r2 * CONCEPT_STEP_WEIGHT,
+    c3: r3 * CONCEPT_STEP_WEIGHT,
+    c4: r4 * CONCEPT_STEP_WEIGHT,
+  };
+}
 
 export function averagePct(values: number[]): number {
   if (!values.length) return 0;
@@ -24,46 +84,23 @@ export function halfRollup(contentPct: number, completedSets: number, totalSets:
   return Math.round(contentHalf + examHalf);
 }
 
-/** Concept progress 0–100 based on 4 steps (25% each). */
+/**
+ * Concept progress 0–100 = sum of four independent step contributions (≤25 each).
+ * Example: Learn 5% + Self-test 10% (Key Points skipped) = 15%.
+ */
 export function conceptProgressPct(input: ConceptProgressInput): number {
-  let pct = 0;
-  if (input.step1Completed) pct += CONCEPT_STEP_WEIGHT;
-  else return pct;
-
-  if (input.totalKeyPoints > 0) {
-    const kpRatio = Math.min(1, input.studiedKeyPointIds.length / input.totalKeyPoints);
-    pct += kpRatio * CONCEPT_STEP_WEIGHT;
-  } else if (input.step2Completed) {
-    pct += CONCEPT_STEP_WEIGHT;
-  }
-  if (!input.step2Completed && input.totalKeyPoints > 0 && input.studiedKeyPointIds.length >= input.totalKeyPoints) {
-    pct = CONCEPT_STEP_WEIGHT * 2;
-  }
-
-  if (input.step3Completed) {
-    pct = Math.max(pct, CONCEPT_STEP_WEIGHT * 3);
-  } else if (input.totalSelfQa > 0) {
-    const qaRatio = Math.min(1, input.selfQaSeenIds.length / input.totalSelfQa);
-    const step3Partial = CONCEPT_STEP_WEIGHT * 2 + qaRatio * CONCEPT_STEP_WEIGHT;
-    pct = Math.max(pct, step3Partial);
-  }
-
-  if (input.step4Completed) {
-    pct = 100;
-  } else if (input.totalConceptSets > 0) {
-    const setRatio = Math.min(1, input.passedConceptSetIds.length / input.totalConceptSets);
-    const step4Partial = CONCEPT_STEP_WEIGHT * 3 + setRatio * CONCEPT_STEP_WEIGHT;
-    pct = Math.max(pct, step4Partial);
-  }
-
-  return Math.min(100, Math.round(pct));
+  const { c1, c2, c3, c4 } = conceptStepRatios(input);
+  return Math.min(100, Math.round(c1 + c2 + c3 + c4));
 }
 
+/** First incomplete step (ratio < 1); prefers content that still has work. */
 export function currentConceptStep(input: ConceptProgressInput): 1 | 2 | 3 | 4 {
-  if (!input.step1Completed) return 1;
-  if (!input.step2Completed) return 2;
-  if (!input.step3Completed && input.totalSelfQa > 0) return 3;
-  if (!input.step4Completed) return 4;
+  const { r1, r2, r3, r4 } = conceptStepRatios(input);
+  if (r1 < 1) return 1;
+  if (r2 < 1) return 2;
+  if (r3 < 1 && input.totalSelfQa > 0) return 3;
+  if (r4 < 1) return 4;
+  if (r3 < 1) return 3;
   return 4;
 }
 

@@ -10,6 +10,7 @@ import { ConceptDetailBody } from "@/components/ConceptDetailBody";
 import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { AppBackButton } from "@/components/AppBackButton";
 import { ConceptStepBar } from "@/components/ConceptProgressSteps";
+import { isConceptStepUnlocked } from "@/lib/conceptStepUnlock";
 import { ConceptSelfTestExam } from "@/components/ConceptSelfTestExam";
 import { countPracticeAnswerUnits, type PracticeQuestionFull } from "@/components/PracticeQuestionBlock";
 import { KeyPointStudySlide } from "@/components/KeyPointStudySlide";
@@ -27,11 +28,13 @@ import {
   markConceptStep,
   markKeyPointStudied,
   markSelfQaSeen,
+  saveResumeCursor,
+  saveStep1SlideProgress,
   studyCompletionPct,
   getCurrentConceptStep,
-  isStep2Complete,
-  isStep3Complete,
 } from "@/lib/userProgress";
+import type { ProgressStepConfig } from "@/lib/uiAppearance";
+import { CONCEPT_STEPS } from "@/lib/progressPlan";
 import { toast } from "sonner";
 import { courseFlowBackLink } from "@/lib/courseBrowseNav";
 import {
@@ -78,13 +81,31 @@ export default function ConceptLearn() {
     () => conceptSets.filter((s) => s.attempt?.passed).map((s) => s.id),
     [conceptSets],
   );
-  const pct = studyCompletionPct(progress, selfTestTotal, conceptSets.length, passedSetIds);
-  const resumeStep = getCurrentConceptStep(progress, selfTestTotal, conceptSets.length, passedSetIds);
-  const step2Done = isStep2Complete(progress, keyPoints.length);
-  const step3Done = isStep3Complete(progress, selfTestTotal);
+  const pct = studyCompletionPct(progress, selfTestTotal, conceptSets.length, passedSetIds, {
+    totalKeyPoints: keyPoints.length,
+  });
   const pp = useProgressAppearance();
   const csu = useConceptStudentUi();
   const stepLabel = useProgressStepLabel(activeStep);
+
+  const lockSteps: ProgressStepConfig[] = useMemo(
+    () =>
+      [1, 2, 3, 4].map((id) => {
+        const fromPp = pp.steps.find((s) => s.id === id);
+        const fallback = CONCEPT_STEPS.find((s) => s.id === id)!;
+        return {
+          id: id as 1 | 2 | 3 | 4,
+          label: fromPp?.label ?? fallback.label,
+          labelBn: fromPp?.labelBn ?? fallback.labelBn,
+          lockUntilPrevious:
+            typeof fromPp?.lockUntilPrevious === "boolean" ? fromPp.lockUntilPrevious : id !== 1,
+        };
+      }),
+    [pp.steps],
+  );
+
+  const canEnter = (step: 1 | 2 | 3 | 4) =>
+    isConceptStepUnlocked(step, progress, keyPoints.length, selfTestTotal, lockSteps);
 
   const loadAll = useCallback(async () => {
     if (!conceptId) return;
@@ -117,11 +138,22 @@ export default function ConceptLearn() {
       const p = getStudyProgress(conceptId);
       const setCount = courseId ? sets.length : 0;
       const passedIds = sets.filter((s) => s.attempt?.passed).map((s) => s.id);
-      const step = getCurrentConceptStep(p, totalUnits, setCount, passedIds);
+      const step = getCurrentConceptStep(p, totalUnits, setCount, passedIds, {
+        totalKeyPoints: data.keyPoints.length,
+      });
       setActiveStep(step);
-      if (p?.studiedKeyPointIds.length) {
+      if (typeof p?.step1MaxSlideIndex === "number" && p.step1MaxSlideIndex > 0) {
+        setSlideIndex(p.step1MaxSlideIndex);
+      }
+      if (p?.resumeKeyPointId || p?.studiedKeyPointIds?.length) {
         const sorted = sortKeyPointsByImportance(data.keyPoints);
-        const idx = sorted.findIndex((kp) => kp.id && !p.studiedKeyPointIds.includes(kp.id));
+        const byResume = p.resumeKeyPointId
+          ? sorted.findIndex((kp) => kp.id === p.resumeKeyPointId)
+          : -1;
+        const idx =
+          byResume >= 0
+            ? byResume
+            : sorted.findIndex((kp) => kp.id && !p.studiedKeyPointIds.includes(kp.id));
         setKpStep(idx >= 0 ? idx : 0);
       }
     } catch (e) {
@@ -130,11 +162,27 @@ export default function ConceptLearn() {
     } finally {
       setLoading(false);
     }
-  }, [conceptId, courseId, navigate]);
+  }, [conceptId, courseId, navigate, setSlideIndex]);
 
   useEffect(() => {
     void loadAll();
   }, [loadAll]);
+
+  // Step 1 slide → additive partial progress (no setTick loop)
+  useEffect(() => {
+    if (!conceptId || loading || activeStep !== 1) return;
+    const total = slides.length;
+    if (total <= 0) return;
+    saveStep1SlideProgress(conceptId, conceptName, slideIndex, total, {
+      totalKeyPoints: keyPoints.length,
+      markComplete: slideIndex >= total - 1,
+    });
+  }, [slideIndex, slides.length, conceptId, conceptName, keyPoints.length, loading, activeStep]);
+
+  useEffect(() => {
+    if (!conceptId || loading) return;
+    saveResumeCursor(conceptId, conceptName, { resumeStep: activeStep });
+  }, [activeStep, conceptId, conceptName, loading]);
 
   useEffect(() => {
     if (!conceptId || loading || keyPoints.length > 0) return;
@@ -154,11 +202,14 @@ export default function ConceptLearn() {
 
   const goKpNext = async () => {
     if (!conceptId) return;
+    if (!canEnter(2)) {
+      toast.message(pp.lockedPreviousSteps);
+      return;
+    }
     if (keyPoints.length === 0) {
-      if (!progress?.step1CompletedAt) return;
       await markConceptStep(conceptId, conceptName, 2, { totalKeyPoints: 0 });
       setTick((n) => n + 1);
-      setActiveStep(selfTestTotal > 0 ? 3 : 4);
+      setActiveStep(selfTestTotal > 0 && canEnter(3) ? 3 : canEnter(4) ? 4 : 2);
       toast.success("Key points skipped — continue");
       return;
     }
@@ -172,15 +223,24 @@ export default function ConceptLearn() {
       await markConceptStep(conceptId, conceptName, 2, { totalKeyPoints: keyPoints.length });
       setTick((n) => n + 1);
       toast.success("Key points complete!");
-      setActiveStep(3);
+      setActiveStep(canEnter(3) ? 3 : 4);
     }
   };
 
   const completeStep1 = async () => {
     if (!conceptId) return;
-    await markConceptStep(conceptId, conceptName, 1, { totalKeyPoints: keyPoints.length });
+    const total = Math.max(slides.length, 1);
+    saveStep1SlideProgress(conceptId, conceptName, Math.max(total - 1, 0), total, {
+      markComplete: true,
+      totalKeyPoints: keyPoints.length,
+    });
+    await markConceptStep(conceptId, conceptName, 1, {
+      totalKeyPoints: keyPoints.length,
+      step1MaxSlideIndex: Math.max(total - 1, 0),
+      step1SlideTotal: total,
+    });
     setTick((n) => n + 1);
-    setActiveStep(2);
+    setActiveStep(canEnter(2) ? 2 : 1);
     toast.success("Concept learning complete — Key Points unlocked");
   };
 
@@ -275,11 +335,16 @@ export default function ConceptLearn() {
           pct={pct}
           activeStep={activeStep}
           totalKeyPoints={keyPoints.length}
+          totalSelfQa={selfTestTotal}
+          totalConceptSets={conceptSets.length}
+          passedConceptSetIds={passedSetIds}
           onStepClick={(s) => {
-            if (s === 2 && !progress?.step1CompletedAt) return;
-            if (s === 3 && !step2Done) return;
-            if (s === 4 && !step3Done && selfTestTotal > 0) return;
+            if (!canEnter(s)) {
+              toast.message(pp.lockedPreviousSteps);
+              return;
+            }
             setActiveStep(s);
+            setTick((n) => n + 1);
           }}
         />
         <Progress value={pct} className="h-2" />
@@ -288,7 +353,7 @@ export default function ConceptLearn() {
           <p className="text-xs font-semibold text-foreground">
             Step {activeStep}: {stepLabel}
           </p>
-          {activeStep > resumeStep && activeStep > 1 ? (
+          {!canEnter(activeStep) ? (
             <p className="text-[11px] text-amber-700 dark:text-amber-400">{pp.lockedPreviousSteps}</p>
           ) : null}
         </div>
@@ -307,7 +372,10 @@ export default function ConceptLearn() {
                 detail={detail}
                 showVerbatim
                 slideIndex={slideIndex}
-                onSlideIndexChange={setSlideIndex}
+                onSlideIndexChange={(i) => {
+                  setSlideIndex(i);
+                  setTick((n) => n + 1);
+                }}
                 slides={slides}
               />
             </ConceptDetailShell>
@@ -320,8 +388,8 @@ export default function ConceptLearn() {
 
         {activeStep === 2 ? (
           <div className="space-y-5">
-            {!progress?.step1CompletedAt ? (
-              <Card className="p-4 text-center text-sm text-muted-foreground">Complete Concept Learning (Step 1) first.</Card>
+            {!canEnter(2) ? (
+              <Card className="p-4 text-center text-sm text-muted-foreground">{pp.lockedPreviousSteps}</Card>
             ) : (
               <>
                 <div className="mx-auto w-full max-w-2xl min-w-0 overflow-hidden">
@@ -337,9 +405,7 @@ export default function ConceptLearn() {
                   ) : (
                     <Card className="space-y-3 p-6 text-center text-sm text-muted-foreground">
                       <p>No key points — this step auto-completes.</p>
-                      <Button onClick={() => void goKpNext()} disabled={!progress?.step1CompletedAt}>
-                        {pp.step2CompleteButton}
-                      </Button>
+                      <Button onClick={() => void goKpNext()}>{pp.step2CompleteButton}</Button>
                     </Card>
                   )}
                 </div>
@@ -360,8 +426,8 @@ export default function ConceptLearn() {
         ) : null}
 
         {activeStep === 3 ? (
-          !step2Done ? (
-            <Card className="p-4 text-center text-sm text-muted-foreground">Complete Key Points (Step 2) first.</Card>
+          !canEnter(3) ? (
+            <Card className="p-4 text-center text-sm text-muted-foreground">{pp.lockedPreviousSteps}</Card>
           ) : (
             <ConceptSelfTestExam
               conceptId={conceptId!}
@@ -376,10 +442,14 @@ export default function ConceptLearn() {
         ) : null}
 
         {activeStep === 4 ? (
-          !step3Done && selfTestTotal > 0 ? (
+          !canEnter(4) ? (
             <Card className="p-4 text-center text-sm text-muted-foreground space-y-3">
-              <p>Complete Question Yourself (Step 3) first — progress must reach 75%.</p>
-              <Button size="sm" onClick={() => setActiveStep(3)}>Continue Question Yourself</Button>
+              <p>{pp.lockedPreviousSteps}</p>
+              {canEnter(3) ? (
+                <Button size="sm" onClick={() => setActiveStep(3)}>
+                  Continue Question Yourself
+                </Button>
+              ) : null}
             </Card>
           ) : (
             <div className="mx-auto max-w-xl space-y-3">

@@ -28,34 +28,30 @@ export const PROGRESS_PLAN_SECTIONS: PlanSection[] = [
       {
         title: "Step 1 — Concept Learning (25%)",
         bullets: [
-          "Read concept detail paragraphs (ConceptDetailBody, Story Based Learning).",
-          "Mark complete when user finishes reading / clicks Step complete.",
-          "Already exists; integrated into guided stepper.",
+          "Heading slides contribute partial credit: (slides reached / total) × 25%.",
+          "Finishing the last slide (or Step complete) fills the full 25% band.",
+          "Progress adds independently — unlock mode can skip to other steps without losing this credit.",
         ],
       },
       {
-        title: "Step 2 — Key Points (50%)",
+        title: "Step 2 — Key Points (25%)",
         bullets: [
-          "Locked until Step 1 is complete.",
-          "Key points sorted by board importance (increment_count DESC, board mention_count DESC).",
-          "Partial credit: studied KPs / total KPs × 25% within step 2 band.",
-          "Complete when all key points studied.",
+          "Partial: studied KPs / total × 25%. Appearance can unlock without Step 1.",
+          "Total concept % = sum of all step contributions (e.g. Learn 5% + Self-test 10% = 15%).",
         ],
       },
       {
-        title: "Step 3 — Question Yourself (75%)",
+        title: "Step 3 — Question Yourself (25%)",
         bullets: [
-          "Admin-authored one-liner Q&A per concept.",
-          "Slide flow: question only → Next → answer below → Next → next question.",
-          "Complete when all cards viewed.",
+          "Partial: seen answer units / total × 25%.",
+          "Unlock from Appearance → Progress plan → Lock until previous (off).",
         ],
       },
       {
-        title: "Step 4 — Practice Questions (100%)",
+        title: "Step 4 — Practice Questions (25%)",
         bullets: [
-          "Students do NOT pick questions — admin creates concept practice sets.",
-          "Student completes all assigned sets (default pass threshold 70%).",
-          "Wrong answers feed Review Mistakes bank.",
+          "Partial: passed admin sets / total × 25%.",
+          "Step bar shows a mini 0–100% line per step plus overall concept %.",
         ],
       },
     ],

@@ -3036,6 +3036,16 @@ export default function AdminAppearance() {
                     <p className="text-xs font-semibold uppercase text-muted-foreground">Step {step.id}</p>
                     <TextField label="English label" value={step.label} onChange={(v) => updateProgressStep(step.id, { label: v })} />
                     <TextField label="Bengali label" value={step.labelBn} onChange={(v) => updateProgressStep(step.id, { labelBn: v })} />
+                    {step.id > 1 ? (
+                      <BoolField
+                        label="Lock until previous step"
+                        checked={step.lockUntilPrevious !== false}
+                        onChange={(v) => updateProgressStep(step.id, { lockUntilPrevious: v })}
+                        hint="Off = unlock — skip allowed; total % = sum of each step’s share (e.g. Learn 5% + Self-test 10% = 15%)."
+                      />
+                    ) : (
+                      <p className="text-[11px] text-muted-foreground">Step 1 is always open. Slides contribute partial credit toward 25%.</p>
+                    )}
                   </Card>
                 ))}
               </div>

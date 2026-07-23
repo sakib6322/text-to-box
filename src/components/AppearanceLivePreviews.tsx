@@ -555,23 +555,36 @@ export function ProgressLivePreview({ section, prog }: { section: ProgressSectio
   const stepLabel = (id: 1 | 2 | 3 | 4) => progressStepLabel(steps, id, prog.preferBengaliStepLabels);
 
   if (section === "steps") {
+    const demoLocal = [20, 0, 40, 0]; // Learn 5% + Self-test 10% of 25 bands → 15% total
     return (
       <div className="space-y-3 max-w-md">
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>{prog.stepBarTitle}</span>
-          <span className="font-medium text-foreground">42{prog.progressPctSuffix ? `% ${prog.progressPctSuffix}` : "%"}</span>
+          <span className="font-medium text-foreground">15{prog.progressPctSuffix ? `% ${prog.progressPctSuffix}` : "%"}</span>
         </div>
-        <div className="grid grid-cols-4 gap-1">
-          {steps.slice(0, 4).map((s) => (
-            <div
-              key={s.id}
-              className={`rounded-lg border px-1 py-2 text-center ${s.id === 1 ? "border-primary bg-primary/10" : "border-border"}`}
-            >
-              <p className="text-[10px] font-semibold tabular-nums">{s.id}</p>
-              <p className="mt-0.5 line-clamp-2 text-[9px] leading-tight text-muted-foreground">{stepLabel(s.id as 1 | 2 | 3 | 4)}</p>
-            </div>
-          ))}
+        <div className="grid grid-cols-4 gap-1.5">
+          {steps.slice(0, 4).map((s, i) => {
+            const locked = s.id > 1 && s.lockUntilPrevious !== false && demoLocal[i - 1] !== undefined && false;
+            const local = demoLocal[i] ?? 0;
+            return (
+              <div
+                key={s.id}
+                className={`rounded-lg border px-1 py-1.5 text-center ${s.id === 1 ? "border-primary bg-primary/10" : "border-border"}`}
+              >
+                <p className="text-[10px] font-semibold tabular-nums">{s.id}</p>
+                <p className="mt-0.5 line-clamp-1 text-[8px] leading-tight text-muted-foreground">
+                  {stepLabel(s.id as 1 | 2 | 3 | 4)}
+                </p>
+                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-primary" style={{ width: `${local}%` }} />
+                </div>
+                <p className="mt-0.5 text-[8px] tabular-nums text-muted-foreground">{local}%</p>
+                {locked ? <p className="text-[8px] text-muted-foreground">locked</p> : null}
+              </div>
+            );
+          })}
         </div>
+        <p className="text-[10px] text-muted-foreground">Demo: Learn 5% + Self-test 10% (Key Points skipped) = 15% total.</p>
       </div>
     );
   }

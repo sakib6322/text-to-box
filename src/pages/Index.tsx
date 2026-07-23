@@ -446,7 +446,7 @@ const Index = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">Medical Concept Builder</h1>
             <p className="text-muted-foreground mt-1">
-             Feauture updated→ create exam → preview exam in Schedule→(next user can attend the exam) .
+            
               {/* Upload a book page → AI extracts concept detail, table, key points → match suggestions with board tags. */}
             </p>
           </div>

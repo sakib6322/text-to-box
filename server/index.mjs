@@ -1919,7 +1919,7 @@ app.get("/api/user/progress/study", async (req, res) => {
     const { data, error } = await db
       .from("user_study_progress")
       .select(
-        "concept_id, concept_name, studied_key_point_ids, total_key_points, last_studied_at, step1_completed_at, step2_completed_at, step3_completed_at, step4_completed_at, self_qa_seen_ids",
+        "concept_id, concept_name, studied_key_point_ids, total_key_points, last_studied_at, step1_completed_at, step2_completed_at, step3_completed_at, step4_completed_at, self_qa_seen_ids, step1_max_slide_index, step1_slide_total, resume_step, resume_key_point_id, resume_self_qa_id, resume_practice_set_id",
       )
       .eq("user_id", user.id);
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });
@@ -1961,6 +1961,19 @@ app.put("/api/user/progress/study", async (req, res) => {
       self_qa_seen_ids: Array.isArray(body.self_qa_seen_ids)
         ? body.self_qa_seen_ids
         : (existing?.self_qa_seen_ids ?? []),
+      step1_max_slide_index: Number(
+        body.step1_max_slide_index ?? existing?.step1_max_slide_index ?? 0,
+      ),
+      step1_slide_total: Number(body.step1_slide_total ?? existing?.step1_slide_total ?? 0),
+      resume_step: body.resume_step !== undefined ? body.resume_step : (existing?.resume_step ?? null),
+      resume_key_point_id:
+        body.resume_key_point_id !== undefined ? body.resume_key_point_id : (existing?.resume_key_point_id ?? null),
+      resume_self_qa_id:
+        body.resume_self_qa_id !== undefined ? body.resume_self_qa_id : (existing?.resume_self_qa_id ?? null),
+      resume_practice_set_id:
+        body.resume_practice_set_id !== undefined
+          ? body.resume_practice_set_id
+          : (existing?.resume_practice_set_id ?? null),
     };
     const { error } = await db.from("user_study_progress").upsert(row, { onConflict: "user_id,concept_id" });
     if (error) return res.status(500).json({ error: formatSupabaseError(error) });

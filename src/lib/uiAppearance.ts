@@ -475,6 +475,11 @@ export type ProgressStepConfig = {
   id: 1 | 2 | 3 | 4;
   label: string;
   labelBn: string;
+  /**
+   * When true, student must finish the previous step before entering this one.
+   * When false (Appearance unlock), step is free to open; progress still adds independently.
+   */
+  lockUntilPrevious: boolean;
 };
 
 export type ProgressPlanAppearance = {
@@ -1132,7 +1137,12 @@ export function defaultProgressPlan(overrides: Partial<ProgressPlanAppearance> =
   return {
     enabled: true,
     stepBarTitle: "Progress Plan",
-    steps: CONCEPT_STEPS.map((s) => ({ id: s.id, label: s.label, labelBn: s.labelBn })),
+    steps: CONCEPT_STEPS.map((s) => ({
+      id: s.id,
+      label: s.label,
+      labelBn: s.labelBn,
+      lockUntilPrevious: s.id !== 1,
+    })),
     defaultPassPercent: 70,
     examNightHoursBefore: 24,
     showProgressOnBrowse: true,
@@ -1196,14 +1206,24 @@ export function mergeProgressPlan(base: ProgressPlanAppearance, patch: unknown):
       const s = raw as Partial<ProgressStepConfig>;
       const id = s.id as 1 | 2 | 3 | 4;
       if (id < 1 || id > 4) continue;
-      const prev = byId.get(id) ?? { id, label: "", labelBn: "" };
+      const prev = byId.get(id) ?? { id, label: "", labelBn: "", lockUntilPrevious: id !== 1 };
       byId.set(id, {
         id,
         label: typeof s.label === "string" ? s.label : prev.label,
         labelBn: typeof s.labelBn === "string" ? s.labelBn : prev.labelBn,
+        lockUntilPrevious:
+          typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : prev.lockUntilPrevious,
       });
     }
-    steps = [1, 2, 3, 4].map((id) => byId.get(id as 1 | 2 | 3 | 4)!);
+    steps = [1, 2, 3, 4].map((id) => {
+      const s = byId.get(id as 1 | 2 | 3 | 4)!;
+      return {
+        id: s.id,
+        label: s.label,
+        labelBn: s.labelBn,
+        lockUntilPrevious: typeof s.lockUntilPrevious === "boolean" ? s.lockUntilPrevious : id !== 1,
+      };
+    });
   }
   const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
   const str = (v: unknown, fallback: string) => (typeof v === "string" ? v : fallback);

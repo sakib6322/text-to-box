@@ -2,13 +2,19 @@ import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders, getSession } from "@/lib/auth";
 import {
   conceptProgressPct,
+  conceptStepRatios,
   currentConceptStep,
   type ConceptProgressInput,
+  type ConceptStepRatios,
 } from "@/lib/progressEngine";
+import { CONCEPT_STEP_WEIGHT } from "@/lib/progressPlan";
+
+export type { ConceptProgressInput, ConceptStepRatios };
+export { conceptStepRatios, CONCEPT_STEP_WEIGHT };
 
 const PREFIX = "pgdiary_progress";
 
-function userKey(): string {
+function storageUserKey(): string {
   return getSession()?.userId ?? getSession()?.email ?? "guest";
 }
 
@@ -37,6 +43,12 @@ export type StudyProgress = {
   step2CompletedAt?: string | null;
   step3CompletedAt?: string | null;
   step4CompletedAt?: string | null;
+  step1MaxSlideIndex?: number;
+  step1SlideTotal?: number;
+  resumeStep?: 1 | 2 | 3 | 4 | null;
+  resumeKeyPointId?: string | null;
+  resumeSelfQaId?: string | null;
+  resumePracticeSetId?: string | null;
 };
 
 export type PracticeAnswer = {
@@ -61,7 +73,14 @@ export type PracticeSession = {
 
 let hydratePromise: Promise<void> | null = null;
 
+function numOr(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function rowToStudyProgress(r: Record<string, unknown>): StudyProgress {
+  const resumeStepRaw = r.resume_step ?? r.resumeStep;
+  const resumeStepNum = resumeStepRaw == null || resumeStepRaw === "" ? null : Number(resumeStepRaw);
   return {
     conceptId: String(r.concept_id ?? r.conceptId ?? ""),
     conceptName: String(r.concept_name ?? r.conceptName ?? ""),
@@ -73,6 +92,63 @@ function rowToStudyProgress(r: Record<string, unknown>): StudyProgress {
     step2CompletedAt: (r.step2_completed_at ?? r.step2CompletedAt) as string | null | undefined,
     step3CompletedAt: (r.step3_completed_at ?? r.step3CompletedAt) as string | null | undefined,
     step4CompletedAt: (r.step4_completed_at ?? r.step4CompletedAt) as string | null | undefined,
+    step1MaxSlideIndex: numOr(r.step1_max_slide_index ?? r.step1MaxSlideIndex, 0),
+    step1SlideTotal: numOr(r.step1_slide_total ?? r.step1SlideTotal, 0),
+    resumeStep:
+      resumeStepNum === 1 || resumeStepNum === 2 || resumeStepNum === 3 || resumeStepNum === 4
+        ? resumeStepNum
+        : null,
+    resumeKeyPointId: (r.resume_key_point_id ?? r.resumeKeyPointId ?? null) as string | null,
+    resumeSelfQaId: (r.resume_self_qa_id ?? r.resumeSelfQaId ?? null) as string | null,
+    resumePracticeSetId: (r.resume_practice_set_id ?? r.resumePracticeSetId ?? null) as string | null,
+  };
+}
+
+function studyPayload(entry: StudyProgress) {
+  return {
+    concept_id: entry.conceptId,
+    concept_name: entry.conceptName,
+    studied_key_point_ids: entry.studiedKeyPointIds,
+    total_key_points: entry.totalKeyPoints,
+    last_studied_at: entry.lastStudiedAt,
+    self_qa_seen_ids: entry.selfQaSeenIds,
+    step1_completed_at: entry.step1CompletedAt ?? null,
+    step2_completed_at: entry.step2CompletedAt ?? null,
+    step3_completed_at: entry.step3CompletedAt ?? null,
+    step4_completed_at: entry.step4CompletedAt ?? null,
+    step1_max_slide_index: entry.step1MaxSlideIndex ?? 0,
+    step1_slide_total: entry.step1SlideTotal ?? 0,
+    resume_step: entry.resumeStep ?? null,
+    resume_key_point_id: entry.resumeKeyPointId ?? null,
+    resume_self_qa_id: entry.resumeSelfQaId ?? null,
+    resume_practice_set_id: entry.resumePracticeSetId ?? null,
+  };
+}
+
+function preserveExtras(
+  existing: StudyProgress | null | undefined,
+  patch: Partial<StudyProgress>,
+): Pick<
+  StudyProgress,
+  | "step1MaxSlideIndex"
+  | "step1SlideTotal"
+  | "resumeStep"
+  | "resumeKeyPointId"
+  | "resumeSelfQaId"
+  | "resumePracticeSetId"
+> {
+  return {
+    step1MaxSlideIndex: patch.step1MaxSlideIndex ?? existing?.step1MaxSlideIndex ?? 0,
+    step1SlideTotal: patch.step1SlideTotal ?? existing?.step1SlideTotal ?? 0,
+    resumeStep: patch.resumeStep !== undefined ? patch.resumeStep : existing?.resumeStep ?? null,
+    resumeKeyPointId:
+      patch.resumeKeyPointId !== undefined ? patch.resumeKeyPointId : existing?.resumeKeyPointId ?? null,
+    resumeSelfQaId:
+      patch.resumeSelfQaId !== undefined ? patch.resumeSelfQaId : existing?.resumeSelfQaId ?? null,
+    resumePracticeSetId:
+      patch.resumePracticeSetId !== undefined
+        ? patch.resumePracticeSetId
+        : existing?.resumePracticeSetId ?? null,
   };
 }
 
@@ -81,18 +157,7 @@ async function syncStudyToServer(entry: StudyProgress) {
     await fetch(apiUrl("/api/user/progress/study"), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-      body: JSON.stringify({
-        concept_id: entry.conceptId,
-        concept_name: entry.conceptName,
-        studied_key_point_ids: entry.studiedKeyPointIds,
-        total_key_points: entry.totalKeyPoints,
-        last_studied_at: entry.lastStudiedAt,
-        self_qa_seen_ids: entry.selfQaSeenIds,
-        step1_completed_at: entry.step1CompletedAt ?? null,
-        step2_completed_at: entry.step2CompletedAt ?? null,
-        step3_completed_at: entry.step3CompletedAt ?? null,
-        step4_completed_at: entry.step4CompletedAt ?? null,
-      }),
+      body: JSON.stringify(studyPayload(entry)),
     });
   } catch {
     /* offline */
@@ -135,7 +200,7 @@ export async function hydrateProgressFromServer(): Promise<void> {
         const data = (await studyRes.json()) as { rows?: Record<string, unknown>[] };
         const map: Record<string, StudyProgress> = {};
         for (const r of data.rows ?? []) map[String(r.concept_id)] = rowToStudyProgress(r);
-        writeJson(`${PREFIX}_${userKey()}_study`, map);
+        writeJson(`${PREFIX}_${storageUserKey()}_study`, map);
       }
       if (practiceRes.ok) {
         const data = (await practiceRes.json()) as {
@@ -164,7 +229,7 @@ export async function hydrateProgressFromServer(): Promise<void> {
           createdAt: r.created_at,
           completedAt: r.completed_at,
         }));
-        writeJson(`${PREFIX}_${userKey()}_practice`, sessions);
+        writeJson(`${PREFIX}_${storageUserKey()}_practice`, sessions);
       }
     } catch {
       /* use cache */
@@ -174,7 +239,7 @@ export async function hydrateProgressFromServer(): Promise<void> {
 }
 
 export function getStudyProgressMap(): Record<string, StudyProgress> {
-  return readJson(`${PREFIX}_${userKey()}_study`, {});
+  return readJson(`${PREFIX}_${storageUserKey()}_study`, {});
 }
 
 export function getStudyProgress(conceptId: string): StudyProgress | null {
@@ -184,7 +249,7 @@ export function getStudyProgress(conceptId: string): StudyProgress | null {
 function saveStudyEntry(entry: StudyProgress) {
   const map = getStudyProgressMap();
   map[entry.conceptId] = entry;
-  writeJson(`${PREFIX}_${userKey()}_study`, map);
+  writeJson(`${PREFIX}_${storageUserKey()}_study`, map);
   void syncStudyToServer(entry);
 }
 
@@ -211,6 +276,10 @@ export function markKeyPointStudied(
     step2CompletedAt: step2Done ? existing?.step2CompletedAt ?? now : existing?.step2CompletedAt,
     step3CompletedAt: existing?.step3CompletedAt,
     step4CompletedAt: existing?.step4CompletedAt,
+    ...preserveExtras(existing, {
+      resumeStep: 2,
+      resumeKeyPointId: keyPointId,
+    }),
   });
 }
 
@@ -222,6 +291,8 @@ export async function markConceptStep(
     totalKeyPoints?: number;
     studiedKeyPointIds?: string[];
     selfQaSeenIds?: string[];
+    step1MaxSlideIndex?: number;
+    step1SlideTotal?: number;
   },
 ) {
   const existing = getStudyProgress(conceptId);
@@ -233,10 +304,15 @@ export async function markConceptStep(
     selfQaSeenIds: extra?.selfQaSeenIds ?? existing?.selfQaSeenIds ?? [],
     totalKeyPoints: extra?.totalKeyPoints ?? existing?.totalKeyPoints ?? 0,
     lastStudiedAt: now,
-    step1CompletedAt: step >= 1 ? existing?.step1CompletedAt ?? now : existing?.step1CompletedAt,
-    step2CompletedAt: step >= 2 ? existing?.step2CompletedAt ?? now : existing?.step2CompletedAt,
-    step3CompletedAt: step >= 3 ? existing?.step3CompletedAt ?? now : existing?.step3CompletedAt,
-    step4CompletedAt: step >= 4 ? existing?.step4CompletedAt ?? now : existing?.step4CompletedAt,
+    step1CompletedAt: existing?.step1CompletedAt,
+    step2CompletedAt: existing?.step2CompletedAt,
+    step3CompletedAt: existing?.step3CompletedAt,
+    step4CompletedAt: existing?.step4CompletedAt,
+    ...preserveExtras(existing, {
+      step1MaxSlideIndex: extra?.step1MaxSlideIndex,
+      step1SlideTotal: extra?.step1SlideTotal,
+      resumeStep: Math.min(4, (step + 1) as 1 | 2 | 3 | 4) as 1 | 2 | 3 | 4,
+    }),
   };
   if (step === 1) entry.step1CompletedAt = now;
   if (step === 2) entry.step2CompletedAt = now;
@@ -253,6 +329,8 @@ export async function markConceptStep(
         total_key_points: entry.totalKeyPoints,
         studied_key_point_ids: entry.studiedKeyPointIds,
         self_qa_seen_ids: entry.selfQaSeenIds,
+        step1_max_slide_index: entry.step1MaxSlideIndex ?? 0,
+        step1_slide_total: entry.step1SlideTotal ?? 0,
       }),
     });
   } catch {
@@ -260,16 +338,77 @@ export async function markConceptStep(
   }
 }
 
+/** Persist Step 1 heading-slide progress (partial credit toward 25%). */
+export function saveStep1SlideProgress(
+  conceptId: string,
+  conceptName: string,
+  slideIndex: number,
+  slideTotal: number,
+  opts?: { markComplete?: boolean; totalKeyPoints?: number },
+) {
+  const existing = getStudyProgress(conceptId);
+  const now = new Date().toISOString();
+  const maxIdx = Math.max(existing?.step1MaxSlideIndex ?? 0, Math.max(0, slideIndex));
+  const total = Math.max(0, slideTotal);
+  const reachedEnd = total > 0 && maxIdx >= total - 1;
+  const markComplete = Boolean(opts?.markComplete || reachedEnd);
+  saveStudyEntry({
+    conceptId,
+    conceptName,
+    studiedKeyPointIds: existing?.studiedKeyPointIds ?? [],
+    selfQaSeenIds: existing?.selfQaSeenIds ?? [],
+    lastStudiedAt: now,
+    totalKeyPoints: opts?.totalKeyPoints ?? existing?.totalKeyPoints ?? 0,
+    step1CompletedAt: markComplete ? existing?.step1CompletedAt ?? now : existing?.step1CompletedAt,
+    step2CompletedAt: existing?.step2CompletedAt,
+    step3CompletedAt: existing?.step3CompletedAt,
+    step4CompletedAt: existing?.step4CompletedAt,
+    ...preserveExtras(existing, {
+      step1MaxSlideIndex: maxIdx,
+      step1SlideTotal: total,
+      resumeStep: 1,
+    }),
+  });
+}
+
+export function saveResumeCursor(
+  conceptId: string,
+  conceptName: string,
+  patch: {
+    resumeStep?: 1 | 2 | 3 | 4;
+    resumeKeyPointId?: string | null;
+    resumeSelfQaId?: string | null;
+    resumePracticeSetId?: string | null;
+  },
+) {
+  const existing = getStudyProgress(conceptId);
+  if (!existing && !conceptId) return;
+  const now = new Date().toISOString();
+  saveStudyEntry({
+    conceptId,
+    conceptName: conceptName || existing?.conceptName || "",
+    studiedKeyPointIds: existing?.studiedKeyPointIds ?? [],
+    selfQaSeenIds: existing?.selfQaSeenIds ?? [],
+    lastStudiedAt: now,
+    totalKeyPoints: existing?.totalKeyPoints ?? 0,
+    step1CompletedAt: existing?.step1CompletedAt,
+    step2CompletedAt: existing?.step2CompletedAt,
+    step3CompletedAt: existing?.step3CompletedAt,
+    step4CompletedAt: existing?.step4CompletedAt,
+    ...preserveExtras(existing, patch),
+  });
+}
+
+/** Content complete for step 2 (does not require step 1 — unlock-safe). */
 export function isStep2Complete(progress: StudyProgress | null, totalKeyPoints: number): boolean {
-  if (!progress?.step1CompletedAt) return false;
-  if (progress.step2CompletedAt) return true;
+  if (progress?.step2CompletedAt) return true;
   if (totalKeyPoints <= 0) return true;
-  return (progress.studiedKeyPointIds?.length ?? 0) >= totalKeyPoints;
+  return (progress?.studiedKeyPointIds?.length ?? 0) >= totalKeyPoints;
 }
 
 export function isStep3Complete(progress: StudyProgress | null, totalSelfQa: number): boolean {
   if (progress?.step3CompletedAt) return true;
-  if (totalSelfQa <= 0) return isStep2Complete(progress, progress?.totalKeyPoints ?? 0);
+  if (totalSelfQa <= 0) return true;
   return (progress?.selfQaSeenIds?.length ?? 0) >= totalSelfQa;
 }
 
@@ -296,41 +435,21 @@ export function markSelfQaSeen(
     step2CompletedAt: existing?.step2CompletedAt,
     step3CompletedAt: step3Done ? existing?.step3CompletedAt ?? now : existing?.step3CompletedAt,
     step4CompletedAt: existing?.step4CompletedAt,
+    ...preserveExtras(existing, {
+      resumeStep: 3,
+      resumeSelfQaId: qaId,
+    }),
   };
   saveStudyEntry(entry);
-  void syncSelfQaProgress(entry);
-}
-
-async function syncSelfQaProgress(entry: StudyProgress) {
-  try {
-    await fetch(apiUrl("/api/user/progress/study"), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-      body: JSON.stringify({
-        concept_id: entry.conceptId,
-        concept_name: entry.conceptName,
-        studied_key_point_ids: entry.studiedKeyPointIds,
-        total_key_points: entry.totalKeyPoints,
-        last_studied_at: entry.lastStudiedAt,
-        self_qa_seen_ids: entry.selfQaSeenIds,
-        step1_completed_at: entry.step1CompletedAt ?? null,
-        step2_completed_at: entry.step2CompletedAt ?? null,
-        step3_completed_at: entry.step3CompletedAt ?? null,
-        step4_completed_at: entry.step4CompletedAt ?? null,
-      }),
-    });
-  } catch {
-    /* offline */
-  }
 }
 
 export function getPracticeSessions(): PracticeSession[] {
-  return readJson(`${PREFIX}_${userKey()}_practice`, []);
+  return readJson(`${PREFIX}_${storageUserKey()}_practice`, []);
 }
 
 export function savePracticeSession(session: PracticeSession) {
   const list = getPracticeSessions().filter((s) => s.id !== session.id);
-  writeJson(`${PREFIX}_${userKey()}_practice`, [session, ...list].slice(0, 100));
+  writeJson(`${PREFIX}_${storageUserKey()}_practice`, [session, ...list].slice(0, 100));
   void syncPracticeToServer(session);
 }
 
@@ -347,17 +466,18 @@ export function studyProgressInput(
   totalSelfQa: number,
   totalConceptSets: number,
   passedConceptSetIds: string[],
+  opts?: { totalKeyPoints?: number },
 ): ConceptProgressInput {
   const studied = p?.studiedKeyPointIds ?? [];
-  const totalKp = p?.totalKeyPoints ?? 0;
+  const totalKp = opts?.totalKeyPoints ?? p?.totalKeyPoints ?? 0;
   const step1Done = !!p?.step1CompletedAt;
-  const step2Done =
-    !!p?.step2CompletedAt || (totalKp > 0 ? studied.length >= totalKp : step1Done);
+  const step2Done = !!p?.step2CompletedAt || (totalKp > 0 ? studied.length >= totalKp : true);
   const seenQa = p?.selfQaSeenIds ?? [];
-  const step3Done =
-    !!p?.step3CompletedAt || (totalSelfQa > 0 ? seenQa.length >= totalSelfQa : step2Done);
+  const step3Done = !!p?.step3CompletedAt || (totalSelfQa > 0 ? seenQa.length >= totalSelfQa : true);
   return {
     step1Completed: step1Done,
+    step1MaxSlideIndex: p?.step1MaxSlideIndex ?? 0,
+    step1SlideTotal: p?.step1SlideTotal ?? 0,
     studiedKeyPointIds: studied,
     totalKeyPoints: totalKp,
     step2Completed: step2Done,
@@ -375,8 +495,19 @@ export function studyCompletionPct(
   totalSelfQa = 0,
   totalConceptSets = 0,
   passedConceptSetIds: string[] = [],
+  opts?: { totalKeyPoints?: number },
 ): number {
-  return conceptProgressPct(studyProgressInput(p, totalSelfQa, totalConceptSets, passedConceptSetIds));
+  return conceptProgressPct(studyProgressInput(p, totalSelfQa, totalConceptSets, passedConceptSetIds, opts));
+}
+
+export function studyStepRatios(
+  p: StudyProgress | null,
+  totalSelfQa = 0,
+  totalConceptSets = 0,
+  passedConceptSetIds: string[] = [],
+  opts?: { totalKeyPoints?: number },
+): ConceptStepRatios {
+  return conceptStepRatios(studyProgressInput(p, totalSelfQa, totalConceptSets, passedConceptSetIds, opts));
 }
 
 export function getCurrentConceptStep(
@@ -384,6 +515,14 @@ export function getCurrentConceptStep(
   totalSelfQa = 0,
   totalConceptSets = 0,
   passedConceptSetIds: string[] = [],
+  opts?: { totalKeyPoints?: number },
 ): 1 | 2 | 3 | 4 {
-  return currentConceptStep(studyProgressInput(p, totalSelfQa, totalConceptSets, passedConceptSetIds));
+  const input = studyProgressInput(p, totalSelfQa, totalConceptSets, passedConceptSetIds, opts);
+  const derived = currentConceptStep(input);
+  if (p?.resumeStep === 1 || p?.resumeStep === 2 || p?.resumeStep === 3 || p?.resumeStep === 4) {
+    const ratios = conceptStepRatios(input);
+    const local = [ratios.r1, ratios.r2, ratios.r3, ratios.r4][p.resumeStep - 1] ?? 1;
+    if (local < 1) return p.resumeStep;
+  }
+  return derived;
 }

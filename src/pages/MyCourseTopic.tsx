@@ -10,6 +10,11 @@ import { apiUrl } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
 import { fetchCourseProgress } from "@/lib/progressApi";
 import {
+  getStudyProgress,
+  hydrateProgressFromServer,
+  studyCompletionPct,
+} from "@/lib/userProgress";
+import {
   conceptDetailsLink,
   conceptLearnLink,
   courseBrowseNavFromTopicPath,
@@ -31,10 +36,12 @@ export default function MyCourseTopic() {
   const [conceptPctMap, setConceptPctMap] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [lockedMsg, setLockedMsg] = useState<string | null>(null);
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     void (async () => {
       try {
+        await hydrateProgressFromServer();
         const [conceptsRes, progressRes] = await Promise.all([
           fetch(apiUrl(`/api/me/courses/${courseId}/topics/${topicId}/concepts`), {
             headers: getAuthHeaders(),
@@ -61,10 +68,11 @@ export default function MyCourseTopic() {
           setTopicPct(topic?.pct ?? null);
           const map = new Map<string, number>();
           for (const c of progressRes.concepts) {
-            if (topic && c.topic_id === topicId) map.set(c.concept_id, c.pct);
+            if (c.topic_id === topicId) map.set(c.concept_id, c.pct);
           }
           setConceptPctMap(map);
         }
+        setTick((n) => n + 1);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Load failed");
       } finally {
@@ -78,6 +86,14 @@ export default function MyCourseTopic() {
     (): CourseBrowseNavState | null => readCourseBrowseNav(location.state) ?? courseBrowseNavFromTopicPath(topicPath),
     [location.state, topicPath],
   );
+
+  /** Server rollup + local additive (slides etc.) — each concept's total %. */
+  const conceptTotalPct = (conceptId: string): number => {
+    const server = conceptPctMap.get(conceptId);
+    const local = studyCompletionPct(getStudyProgress(conceptId));
+    if (server == null) return local;
+    return Math.max(server, local);
+  };
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-10">
@@ -119,17 +135,20 @@ export default function MyCourseTopic() {
       ) : (
         <div className="grid gap-2">
           {concepts.map((c) => {
-            const pct = conceptPctMap.get(c.id);
+            const pct = conceptTotalPct(c.id);
             return (
               <Card key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-3 sm:p-4">
-                <div className="min-w-0 flex-1 space-y-1">
-                  <p className="text-sm font-medium">{c.title}</p>
-                  {pct != null ? (
-                    <div className="flex items-center gap-2">
-                      <Progress value={pct} className="h-1 max-w-[120px]" />
-                      <span className="text-[10px] tabular-nums text-muted-foreground">{pct}%</span>
-                    </div>
-                  ) : null}
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <p className="min-w-0 flex-1 truncate text-sm font-medium">{c.title}</p>
+                    <ProgressPctBadge pct={pct} />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Progress value={pct} className="h-1.5 max-w-[140px] flex-1" />
+                    <span className="shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+                      {pct}%
+                    </span>
+                  </div>
                 </div>
                 <div className="flex gap-2">
                   <Button asChild size="sm" variant="outline" className="gap-1">

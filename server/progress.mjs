@@ -149,30 +149,38 @@ async function loadSelfTestCountMap(db, concepts) {
 
 function conceptProgressPct(row, selfQaTotal, conceptSetsTotal, passedSetIds) {
   const STEP = 25;
-  let pct = 0;
-  if (row.step1_completed_at) pct += STEP;
-  else return pct;
+  const clamp01 = (n) => (n <= 0 ? 0 : n >= 1 ? 1 : n);
+
+  const slideTotal = Number(row.step1_slide_total ?? 0);
+  const slideMax = Number(row.step1_max_slide_index ?? 0);
+  const r1 = row.step1_completed_at
+    ? 1
+    : slideTotal > 0
+      ? clamp01((Math.max(0, slideMax) + 1) / slideTotal)
+      : 0;
 
   const studied = Array.isArray(row.studied_key_point_ids) ? row.studied_key_point_ids : [];
   const totalKp = Number(row.total_key_points ?? 0);
-  if (totalKp > 0) {
-    pct += Math.min(1, studied.length / totalKp) * STEP;
-  } else if (row.step2_completed_at) pct += STEP;
-  if (row.step2_completed_at || (totalKp > 0 && studied.length >= totalKp)) {
-    pct = Math.max(pct, STEP * 2);
-  }
+  const r2 = row.step2_completed_at
+    ? 1
+    : totalKp > 0
+      ? clamp01(studied.length / totalKp)
+      : 1;
 
   const seenQa = Array.isArray(row.self_qa_seen_ids) ? row.self_qa_seen_ids : [];
-  if (row.step3_completed_at) pct = Math.max(pct, STEP * 3);
-  else if (selfQaTotal > 0) {
-    pct = Math.max(pct, STEP * 2 + Math.min(1, seenQa.length / selfQaTotal) * STEP);
-  }
+  const r3 = row.step3_completed_at
+    ? 1
+    : selfQaTotal > 0
+      ? clamp01(seenQa.length / selfQaTotal)
+      : 1;
 
-  if (row.step4_completed_at) return 100;
-  if (conceptSetsTotal > 0) {
-    pct = Math.max(pct, STEP * 3 + Math.min(1, passedSetIds.length / conceptSetsTotal) * STEP);
-  }
-  return Math.min(100, Math.round(pct));
+  const r4 = row.step4_completed_at
+    ? 1
+    : conceptSetsTotal > 0
+      ? clamp01(passedSetIds.length / conceptSetsTotal)
+      : 0;
+
+  return Math.min(100, Math.round((r1 + r2 + r3 + r4) * STEP));
 }
 
 export function registerProgressRoutes(app, { requireSupabase, requireAuthUser, requirePerm }) {
@@ -323,14 +331,24 @@ export function registerProgressRoutes(app, { requireSupabase, requireAuthUser, 
         user_id: user.id,
         concept_id: conceptId,
         concept_name: String(body.concept_name ?? existing?.concept_name ?? ""),
-        studied_key_point_ids: existing?.studied_key_point_ids ?? [],
+        studied_key_point_ids: Array.isArray(body.studied_key_point_ids)
+          ? body.studied_key_point_ids
+          : (existing?.studied_key_point_ids ?? []),
         total_key_points: Number(body.total_key_points ?? existing?.total_key_points ?? 0),
-        self_qa_seen_ids: existing?.self_qa_seen_ids ?? [],
+        self_qa_seen_ids: Array.isArray(body.self_qa_seen_ids)
+          ? body.self_qa_seen_ids
+          : (existing?.self_qa_seen_ids ?? []),
         last_studied_at: now,
         step1_completed_at: existing?.step1_completed_at ?? null,
         step2_completed_at: existing?.step2_completed_at ?? null,
         step3_completed_at: existing?.step3_completed_at ?? null,
         step4_completed_at: existing?.step4_completed_at ?? null,
+        step1_max_slide_index: Number(body.step1_max_slide_index ?? existing?.step1_max_slide_index ?? 0),
+        step1_slide_total: Number(body.step1_slide_total ?? existing?.step1_slide_total ?? 0),
+        resume_step: existing?.resume_step ?? null,
+        resume_key_point_id: existing?.resume_key_point_id ?? null,
+        resume_self_qa_id: existing?.resume_self_qa_id ?? null,
+        resume_practice_set_id: existing?.resume_practice_set_id ?? null,
       };
 
       if (step === 1) row.step1_completed_at = now;
