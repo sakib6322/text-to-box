@@ -36,6 +36,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { AppearanceOptionGuide } from "@/components/AppearanceOptionGuide";
 import { ColorField, FlexibleColorField, ThemeColorField } from "@/components/AppearanceColorFields";
+import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import {
   AllQuestionsLivePreview,
   AppearancePreviewPanel,
@@ -1479,24 +1480,24 @@ export default function AdminAppearance() {
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Mobile table</p>
               <p className="text-[11px] text-muted-foreground">
-                Phone (≤640px)-এ concept body-তে table থাকলে textbox card-এর padding / border আলাদা করে সেট করুন — table পুরো width নিতে পারে।
+                Phone (≤640px)-এ concept body-তে table থাকলে panel card-এর body padding / border / radius আলাদা — table পুরো width নিতে পারে।
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <BoolField
                   label="Full-bleed table on phone"
                   checked={c.mobileTableFullBleed !== false}
                   onChange={(v) => updateCd("mobileTableFullBleed", v)}
-                  hint="চালু = নিচের padding/border/radius table থাকলে apply হবে"
+                  hint="চালু = নিচের body padding/border/radius table থাকলে apply হবে"
                 />
                 <NumberField
-                  label="Card padding with table (px)"
+                  label="Body padding with table (px)"
                   value={c.mobileTableCardPaddingPx ?? 0}
                   min={0}
                   max={48}
                   onChange={(n) => updateCd("mobileTableCardPaddingPx", n)}
                 />
                 <NumberField
-                  label="Card border with table (px)"
+                  label="Panel border with table (px)"
                   value={c.mobileTableCardBorderWidthPx ?? 0}
                   min={0}
                   max={8}
@@ -1504,7 +1505,7 @@ export default function AdminAppearance() {
                   onChange={(n) => updateCd("mobileTableCardBorderWidthPx", n)}
                 />
                 <NumberField
-                  label="Card radius with table (px)"
+                  label="Panel radius with table (px)"
                   value={c.mobileTableCardBorderRadiusPx ?? 0}
                   min={0}
                   max={32}
@@ -1565,22 +1566,23 @@ export default function AdminAppearance() {
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox card</p>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Textbox card (panel)</p>
               <p className="text-[11px] text-muted-foreground">
-                Concept details-এর বাইরের কার্ড (`.concept-detail-card`) — Details / Learn / Suggestions preview।
+                Story panel-এর মতো একটা shell — title header + body (`ConceptDetailShell` / `.concept-detail-card`)।
+                Details / Learn / Suggestions read view। Nested glass-card নেই।
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <ColorField
-                  label="Card background"
+                  label="Panel background"
                   value={c.cardBg?.trim() || "#ffffff"}
                   onChange={(v) => updateCd("cardBg", v)}
                   hint="খালি = theme card color"
                 />
                 <ColorField
-                  label="Card border"
+                  label="Panel border"
                   value={c.cardBorderColor?.trim() || "#e2e8f0"}
                   onChange={(v) => updateCd("cardBorderColor", v)}
-                  hint="খালি = theme border"
+                  hint="খালি = theme border · header divider-ও এই রঙ"
                 />
                 <NumberField
                   label="Border width (px)"
@@ -1598,14 +1600,15 @@ export default function AdminAppearance() {
                   onChange={(n) => updateCd("cardBorderRadiusPx", n)}
                 />
                 <NumberField
-                  label="Padding (px)"
+                  label="Body padding (px)"
                   value={c.cardPaddingPx}
                   min={0}
                   max={48}
                   onChange={(n) => updateCd("cardPaddingPx", n)}
+                  hint="Content area padding — outer panel-এ padding 0 (Story-এর মতো)"
                 />
                 <BoolField
-                  label="Card shadow"
+                  label="Panel shadow"
                   checked={c.cardShadow !== false}
                   onChange={(v) => updateCd("cardShadow", v)}
                 />
@@ -1637,10 +1640,11 @@ export default function AdminAppearance() {
                   onChange={(n) => updateCd("cardShadowOpacity", n)}
                 />
               </div>
-              <div className="concept-detail-card max-w-md text-sm">
-                <p className="font-medium">Textbox card preview</p>
-                <p className="text-muted-foreground text-xs mt-1">Concept details outer card chrome</p>
-              </div>
+              <ConceptDetailShell className="max-w-md" title="Concept detail">
+                <p className="text-xs text-muted-foreground">
+                  Panel preview — header bar + body (Story-based learning panel-এর মতো)।
+                </p>
+              </ConceptDetailShell>
             </div>
 
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">

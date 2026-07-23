@@ -101,8 +101,8 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
     body: "কোথায়: Appearance → Concept details → Textbox shape — CKEditor radius/border/bg/height/padding (`--cd-textbox-*`)। Suggestions Edit-এ apply।",
   },
   {
-    title: "Textbox card",
-    body: "কোথায়: Appearance → Concept details → Textbox card — `.concept-detail-card` outer shell (bg, border, radius, padding, shadow)। Details / Learn / Suggestions preview।",
+    title: "Textbox card (panel)",
+    body: "কোথায়: Appearance → Concept details → Textbox card (panel) — Story panel-এর মতো `ConceptDetailShell` (`.concept-detail-card` + header + body)। Border/bg/radius = panel; Padding = body only। Details / Learn / Suggestions read view।",
   },
   {
     title: "Unset text color",
@@ -118,7 +118,7 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   },
   {
     title: "Mobile table",
-    body: "Phone (≤640px)-এ table থাকলে textbox card-এর padding/border/radius আলাদা (`mobileTableFullBleed` + `--cd-mobile-table-card-*`)। Default: padding/border/radius 0 = table পুরো card width।",
+    body: "Phone (≤640px)-এ table থাকলে panel body padding/border/radius আলাদা (`mobileTableFullBleed` + `--cd-mobile-table-card-*`)। Default: 0 = table পুরো panel width।",
   },
   {
     title: "Code background / Blockquote border",

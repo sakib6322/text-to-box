@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { ConceptDetailPreview } from "@/components/ConceptDetailPreview";
 import type { ConceptDetail, KeyPointWithBoards } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
@@ -269,9 +270,9 @@ export function ConceptDetailsInlinePanel({
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="concept-detail-card">
+          <ConceptDetailShell title={conceptName ? `Concept detail: ${conceptName}` : "Concept detail"}>
             <ConceptDetailBody detail={detail} showVerbatim={false} />
-          </div>
+          </ConceptDetailShell>
           {keyPointsSection}
           {showSelfQaEditor && conceptId ? (
             <ConceptSelfQaEditor conceptId={conceptId} conceptName={conceptName} />

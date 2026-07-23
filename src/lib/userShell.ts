@@ -15,7 +15,7 @@ export const userStickyHeaderActions =
   "flex items-center justify-end gap-1.5 w-full sm:w-auto sm:ml-auto shrink-0";
 
 export const userContentCard =
-  "concept-detail-card mx-3 md:mx-0 space-y-4 min-w-0 overflow-x-hidden";
+  "concept-detail-card mx-3 md:mx-0 min-w-0 overflow-hidden";
 
 export const userBottomBar =
   "fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 p-3 safe-area-pb md:static md:border-0 md:bg-transparent md:p-0 md:mt-4";

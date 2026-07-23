@@ -735,14 +735,20 @@ html[data-cd-bg="1"] .concept-detail-rich {
   border-radius: 0.5rem;
 }
 
-/* Concept details textbox outer card */
+/* Single shell: body bg must not look like a nested card inside `.concept-detail-card` */
+html[data-cd-bg="1"] .concept-detail-card .concept-detail-rich {
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Concept details textbox outer card — same shell pattern as story panel */
 .concept-detail-card {
   background: var(--cd-card-bg, hsl(var(--card))) !important;
   border-style: solid !important;
   border-width: var(--cd-card-border-width, 1px) !important;
   border-color: var(--cd-card-border, hsl(var(--ui-card-border-color, var(--border)))) !important;
   border-radius: var(--cd-card-radius, 10px) !important;
-  padding: var(--cd-card-padding, 16px) !important;
+  padding: 0 !important;
   color: hsl(var(--card-foreground));
   box-shadow: 0 var(--cd-card-shadow-y, 1px) var(--cd-card-shadow-blur, 6px)
     color-mix(in srgb, var(--cd-card-shadow-color, #0f172a) calc(var(--cd-card-shadow-opacity, 0.1) * 100%), transparent);
@@ -751,6 +757,28 @@ html[data-cd-bg="1"] .concept-detail-rich {
 
 html[data-cd-card-shadow="0"] .concept-detail-card {
   box-shadow: none !important;
+}
+
+.concept-detail-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--cd-card-border, hsl(var(--ui-card-border-color, var(--border))));
+  padding: 0.5rem 0.75rem;
+}
+
+@media (min-width: 640px) {
+  .concept-detail-card-header {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
+
+.concept-detail-card-body {
+  padding: var(--cd-card-padding, 16px);
+  min-width: 0;
 }
 
 .concept-detail-rich p,
@@ -906,9 +934,13 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
   /* Appearance: Mobile table — full-bleed / custom card chrome when table is present */
   html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-rich table),
   html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-table) {
-    padding: var(--cd-mobile-table-card-padding, 0px) !important;
     border-width: var(--cd-mobile-table-card-border-width, 0px) !important;
     border-radius: var(--cd-mobile-table-card-radius, 0px) !important;
+  }
+
+  html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-rich table) .concept-detail-card-body,
+  html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-table) .concept-detail-card-body {
+    padding: var(--cd-mobile-table-card-padding, 0px) !important;
   }
 
   html[data-cd-mobile-table-bleed="1"][data-cd-bg="1"] .concept-detail-rich:has(table) {

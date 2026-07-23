@@ -3,8 +3,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, HelpCircle, List, Loader2, Play, Target } from "lucide-react";
 import { ConceptKeyPointsPanel } from "@/components/ConceptKeyPointsPanel";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { KeyPointList } from "@/components/KeyPointList";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
@@ -12,7 +12,7 @@ import { emptyConceptDetail, fetchConceptByIdWithBoards, type KeyPointWithBoards
 import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
 import { useConceptHeadingSlideNav } from "@/hooks/useConceptHeadingSlideNav";
 import { sortKeyPointsByImportance } from "@/lib/progressEngine";
-import { userContentCard, userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
+import { userHeaderActionBtn, userPageShellTight, userPageTopBar, userStickyHeader, userStickyHeaderActions } from "@/lib/userShell";
 import { toast } from "sonner";
 
 export default function ConceptDetailPage() {
@@ -130,51 +130,48 @@ export default function ConceptDetailPage() {
           leadingAction={jumpFilter}
         />
         {!storyOpen ? (
-        <Card className={userContentCard}>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Concept detail</p>
-            </div>
+        <ConceptDetailShell className="mx-3 md:mx-0" title="Concept detail">
+          <div className="space-y-4">
             <ConceptDetailBody
               detail={detail}
               showVerbatim
               slideIndex={slideIndex}
               onSlideIndexChange={setSlideIndex}
             />
-          </div>
-          {csu.showKeyPointsOnDetails && keyPoints.length ? (
-            <div className="space-y-2 border-t pt-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
-                <div className="flex flex-wrap gap-2">
-                  {csu.showStudyButton ? (
-                    <Button asChild size="sm" className="h-8 text-xs">
-                      <Link to={`/concept/${conceptId}/learn`}>
-                        <Target className="mr-1 h-3 w-3" />
-                        Key Point Study
-                      </Link>
-                    </Button>
-                  ) : null}
-                  {csu.showPracticeButton ? (
-                    <Button asChild variant="outline" size="sm" className="h-8 text-xs">
-                      <Link to={`/practice/${conceptId}/setup`}>
-                        <Play className="mr-1 h-3 w-3" />
-                        Practice
-                      </Link>
-                    </Button>
-                  ) : null}
+            {csu.showKeyPointsOnDetails && keyPoints.length ? (
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">Key points</p>
+                  <div className="flex flex-wrap gap-2">
+                    {csu.showStudyButton ? (
+                      <Button asChild size="sm" className="h-8 text-xs">
+                        <Link to={`/concept/${conceptId}/learn`}>
+                          <Target className="mr-1 h-3 w-3" />
+                          Key Point Study
+                        </Link>
+                      </Button>
+                    ) : null}
+                    {csu.showPracticeButton ? (
+                      <Button asChild variant="outline" size="sm" className="h-8 text-xs">
+                        <Link to={`/practice/${conceptId}/setup`}>
+                          <Play className="mr-1 h-3 w-3" />
+                          Practice
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
+                <KeyPointList
+                  keyPoints={keyPoints}
+                  onBoardClick={(board) => {
+                    setBoardFilter(board);
+                    setQuestionsOpen(true);
+                  }}
+                />
               </div>
-            <KeyPointList
-              keyPoints={keyPoints}
-              onBoardClick={(board) => {
-                setBoardFilter(board);
-                setQuestionsOpen(true);
-              }}
-            />
+            ) : null}
           </div>
-        ) : null}
-      </Card>
+        </ConceptDetailShell>
         ) : null}
       </div>
 

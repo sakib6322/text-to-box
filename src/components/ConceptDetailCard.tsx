@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { StoryBasedLearningButton } from "@/components/StoryBasedLearning";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasConceptDetailContent } from "@/lib/conceptDetail";
@@ -39,26 +39,31 @@ export function ConceptDetailCard({
         leadingAction={jumpFilter}
       />
       {!storyOpen ? (
-      <Card className="concept-detail-card space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">Concept detail</p>
-            <h2 className="mt-1 text-lg font-bold text-primary">{conceptName || "Untitled concept"}</h2>
-            <p className="mt-1 text-[11px] text-muted-foreground">Source textbox-এর exact format preview</p>
-          </div>
-          <Button variant="outline" size="sm" className="shrink-0" onClick={onOpenDetails}>
-            <BookOpen className="mr-2 h-4 w-4" />
-            Concept details
-          </Button>
-        </div>
-
-        <ConceptDetailBody
-          detail={detail}
-          showVerbatim={false}
-          slideIndex={slideIndex}
-          onSlideIndexChange={setSlideIndex}
-        />
-      </Card>
+        <ConceptDetailShell
+          title={
+            <span className="block min-w-0">
+              <span className="block text-xs font-normal uppercase tracking-wide text-muted-foreground">
+                Concept detail
+              </span>
+              <span className="mt-0.5 block truncate text-sm font-semibold text-primary">
+                {conceptName || "Untitled concept"}
+              </span>
+            </span>
+          }
+          titleExtra={
+            <Button variant="outline" size="sm" className="shrink-0" onClick={onOpenDetails}>
+              <BookOpen className="mr-2 h-4 w-4" />
+              Concept details
+            </Button>
+          }
+        >
+          <ConceptDetailBody
+            detail={detail}
+            showVerbatim={false}
+            slideIndex={slideIndex}
+            onSlideIndexChange={setSlideIndex}
+          />
+        </ConceptDetailShell>
       ) : null}
     </div>
   );

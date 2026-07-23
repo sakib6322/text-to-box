@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
 import { ConceptDetailBody } from "@/components/ConceptDetailBody";
+import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { ConceptStepBar } from "@/components/ConceptProgressSteps";
 import { ConceptSelfTestExam } from "@/components/ConceptSelfTestExam";
 import { countPracticeAnswerUnits, type PracticeQuestionFull } from "@/components/PracticeQuestionBlock";
@@ -288,14 +289,14 @@ export default function ConceptLearn() {
               leadingAction={jumpFilter}
             />
             {!storyOpen ? (
-            <Card className="concept-detail-card">
+            <ConceptDetailShell title="Concept detail">
               <ConceptDetailBody
                 detail={detail}
                 showVerbatim
                 slideIndex={slideIndex}
                 onSlideIndexChange={setSlideIndex}
               />
-            </Card>
+            </ConceptDetailShell>
             ) : null}
             <div className="flex justify-center">
               <Button onClick={() => void completeStep1()}>{pp.step1CompleteButton}</Button>
