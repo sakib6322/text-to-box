@@ -101,7 +101,6 @@ export function StoryBasedLearningButton({
   };
 
   const empty = isHtmlEmpty(draftStory) && isHtmlEmpty(detail.storyHtml);
-  const previewHtml = editable ? draftStory : detail.storyHtml;
 
   return (
     <Collapsible
@@ -139,17 +138,19 @@ export function StoryBasedLearningButton({
               {sbl.buttonLabel}
               {conceptName ? `: ${conceptName}` : ""}
             </p>
-            <Button
-              type="button"
-              variant={showPreview ? "default" : "outline"}
-              size="sm"
-              className="h-8 shrink-0 gap-1.5 text-xs"
-              onClick={() => setShowPreview((v) => !v)}
-              aria-pressed={showPreview}
-            >
-              {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-              {showPreview ? "Hide preview" : "Preview"}
-            </Button>
+            {editable ? (
+              <Button
+                type="button"
+                variant={showPreview ? "default" : "outline"}
+                size="sm"
+                className="h-8 shrink-0 gap-1.5 text-xs"
+                onClick={() => setShowPreview((v) => !v)}
+                aria-pressed={showPreview}
+              >
+                {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                {showPreview ? "Hide preview" : "Preview"}
+              </Button>
+            ) : null}
           </div>
 
           {editable ? (
@@ -219,30 +220,16 @@ export function StoryBasedLearningButton({
                 )}
               </div>
             </div>
-          ) : showPreview ? (
-            empty ? (
-              <p className="story-based-learning-empty p-3 text-sm sm:p-4">{sbl.emptyMessage}</p>
-            ) : (
-              <div className="p-3 sm:p-4">
-                <StoryPreviewBody
-                  html={previewHtml}
-                  emptyMessage={sbl.emptyMessage}
-                  storyEnabled={hs.storyEnabled}
-                  headingSlides={hs}
-                />
-              </div>
-            )
+          ) : empty ? (
+            <p className="story-based-learning-empty p-3 text-sm sm:p-4">{sbl.emptyMessage}</p>
           ) : (
-            <div className="flex flex-col items-center gap-3 px-3 py-8 text-center sm:px-4">
-              <p className="text-sm text-muted-foreground">
-                {empty ? sbl.emptyMessage : "Preview দেখতে উপরের Preview বাটনে ক্লিক করুন।"}
-              </p>
-              {!empty ? (
-                <Button type="button" variant="secondary" size="sm" className="gap-1.5" onClick={() => setShowPreview(true)}>
-                  <Eye className="h-3.5 w-3.5" />
-                  Preview
-                </Button>
-              ) : null}
+            <div className="p-3 sm:p-4">
+              <StoryPreviewBody
+                html={detail.storyHtml}
+                emptyMessage={sbl.emptyMessage}
+                storyEnabled={hs.storyEnabled}
+                headingSlides={hs}
+              />
             </div>
           )}
         </div>
