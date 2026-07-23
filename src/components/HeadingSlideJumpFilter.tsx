@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Check, ChevronDown, ListTree } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -7,12 +6,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  levelsFromFlags,
-  splitHtmlByHeadings,
-  type HeadingSlide,
-} from "@/lib/headingSlides";
+import type { HeadingSlide } from "@/lib/headingSlides";
 import type { HeadingSlidesAppearance } from "@/lib/uiAppearance";
+import { useHeadingSlides } from "@/hooks/useHeadingSlides";
 import { cn } from "@/lib/utils";
 
 function slideLabel(slide: HeadingSlide, index: number): string {
@@ -30,6 +26,8 @@ type Props = {
   className?: string;
   /** Compact trigger for mobile toolbars */
   size?: "sm" | "default";
+  /** Pre-parsed slides — avoids a second splitHtmlByHeadings when shared with HeadingSlideReader */
+  slides?: HeadingSlide[];
 };
 
 export function HeadingSlideJumpFilter({
@@ -39,21 +37,11 @@ export function HeadingSlideJumpFilter({
   onIndexChange,
   className,
   size = "sm",
+  slides: slidesProp,
 }: Props) {
-  const levels = useMemo(
-    () => levelsFromFlags(config),
-    [config.splitH1, config.splitH2, config.splitH3, config.splitH4, config.splitH5, config.splitH6],
-  );
-
-  const slides = useMemo(
-    () =>
-      splitHtmlByHeadings(html, {
-        levels,
-        preHeadingMode: config.preHeadingMode,
-        minCharsPerSlide: config.minCharsPerSlide,
-      }),
-    [html, levels, config.preHeadingMode, config.minCharsPerSlide],
-  );
+  // Skip DOM parse when parent already shared slides
+  const parsedSlides = useHeadingSlides(slidesProp ? "" : html, config);
+  const slides = slidesProp ?? parsedSlides;
 
   if (slides.length <= 1) return null;
 

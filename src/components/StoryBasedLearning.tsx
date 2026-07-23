@@ -1,19 +1,24 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { BookMarked, ChevronDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { CKEditorField } from "@/components/CKEditorField";
 import { HeadingSlideJumpFilter } from "@/components/HeadingSlideJumpFilter";
 import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
+import { useHeadingSlides } from "@/hooks/useHeadingSlides";
 import { isHtmlEmpty } from "@/lib/htmlContent";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasStoryContent, withStoryHtml } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
+import type { HeadingSlide } from "@/lib/headingSlides";
 import { cn } from "@/lib/utils";
 import type { HeadingSlidesAppearance } from "@/lib/uiAppearance";
 import { resolveDeviceTheme } from "@/lib/uiAppearance";
+
+const CKEditorField = lazy(() =>
+  import("@/components/CKEditorField").then((m) => ({ default: m.CKEditorField })),
+);
 
 type StoryBasedLearningButtonProps = {
   detail: ConceptDetail;
@@ -38,6 +43,7 @@ function StoryPreviewBody({
   headingSlides,
   slideIndex,
   onSlideIndexChange,
+  slides,
 }: {
   html: string;
   emptyMessage: string;
@@ -45,6 +51,7 @@ function StoryPreviewBody({
   headingSlides: HeadingSlidesAppearance;
   slideIndex?: number;
   onSlideIndexChange?: (index: number) => void;
+  slides?: HeadingSlide[];
 }) {
   if (isHtmlEmpty(html)) {
     return <p className="story-based-learning-empty text-sm">{emptyMessage}</p>;
@@ -58,6 +65,7 @@ function StoryPreviewBody({
         className="story-based-learning"
         index={slideIndex}
         onIndexChange={onSlideIndexChange}
+        slides={slides}
       />
     );
   }
@@ -101,6 +109,7 @@ export function StoryBasedLearningButton({
   }, [open, detail.storyHtml]);
 
   const storyHtmlForSlides = editable ? draftStory : detail.storyHtml;
+  const storySlides = useHeadingSlides(storyHtmlForSlides, hs);
 
   useEffect(() => {
     setSlideIndex(0);
@@ -128,6 +137,7 @@ export function StoryBasedLearningButton({
     <HeadingSlideJumpFilter
       html={storyHtmlForSlides}
       config={hs}
+      slides={storySlides}
       index={slideIndex}
       onIndexChange={setSlideIndex}
     />
@@ -215,13 +225,15 @@ export function StoryBasedLearningButton({
                     </p>
                   </div>
                   <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto p-3">
-                    <CKEditorField
-                      value={draftStory}
-                      onChange={handleStoryChange}
-                      placeholder="Story লিখুন — heading, bold, list, table…"
-                      appearanceScope="story"
-                      className="w-full"
-                    />
+                    <Suspense fallback={<div className="min-h-[12rem] animate-pulse rounded-md bg-muted/60" />}>
+                      <CKEditorField
+                        value={draftStory}
+                        onChange={handleStoryChange}
+                        placeholder="Story লিখুন — heading, bold, list, table…"
+                        appearanceScope="story"
+                        className="w-full"
+                      />
+                    </Suspense>
                   </div>
                 </div>
 
@@ -246,6 +258,7 @@ export function StoryBasedLearningButton({
                         headingSlides={hs}
                         slideIndex={slideIndex}
                         onSlideIndexChange={setSlideIndex}
+                        slides={storySlides}
                       />
                     </div>
                   </div>
@@ -279,6 +292,7 @@ export function StoryBasedLearningButton({
                 headingSlides={hs}
                 slideIndex={slideIndex}
                 onSlideIndexChange={setSlideIndex}
+                slides={storySlides}
               />
             </div>
           )}

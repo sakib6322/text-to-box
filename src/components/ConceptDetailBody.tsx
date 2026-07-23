@@ -1,4 +1,4 @@
-import { CKEditorField } from "@/components/CKEditorField";
+import { lazy, Suspense } from "react";
 import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/table";
 import type { ConceptDetail, DetailTable } from "@/lib/conceptDetail";
 import { conceptDetailFromSourceHtml, resolveBodyHtml } from "@/lib/conceptDetail";
+import type { HeadingSlide } from "@/lib/headingSlides";
 import { conceptAdminPreviewHeadingSlidesEnabled } from "@/lib/uiAppearance";
+
+const CKEditorField = lazy(() =>
+  import("@/components/CKEditorField").then((m) => ({ default: m.CKEditorField })),
+);
 
 export type ConceptDetailUpdater = (prev: ConceptDetail) => ConceptDetail;
 
@@ -26,6 +31,8 @@ type Props = {
   /** Controlled heading-slide index (jump filter) */
   slideIndex?: number;
   onSlideIndexChange?: (index: number) => void;
+  /** Pre-parsed slides from jump filter parent */
+  slides?: HeadingSlide[];
 };
 
 function defaultHeaders(table: DetailTable | null): string[] {
@@ -104,6 +111,7 @@ export function ConceptDetailBody({
   adminPreview = false,
   slideIndex,
   onSlideIndexChange,
+  slides,
 }: Props) {
   const { appearance, activeDevice } = useUiAppearance();
   const hs = appearance.headingSlides;
@@ -111,20 +119,22 @@ export function ConceptDetailBody({
   if (editable) {
     return (
       <div className="space-y-2 text-sm leading-relaxed">
-        <CKEditorField
-          value={resolveBodyHtml(detail)}
-          onChange={(bodyHtml) =>
-            onChange?.((prev) =>
-              conceptDetailFromSourceHtml(bodyHtml, {
-                storyHtml: prev.storyHtml,
-                verbatimText: prev.verbatimText,
-              }),
-            )
-          }
-          placeholder="Concept detail — heading, bold, underline, list, table…"
-          appearanceScope="concept"
-          className="w-full"
-        />
+        <Suspense fallback={<div className="min-h-[12rem] animate-pulse rounded-md bg-muted/60" />}>
+          <CKEditorField
+            value={resolveBodyHtml(detail)}
+            onChange={(bodyHtml) =>
+              onChange?.((prev) =>
+                conceptDetailFromSourceHtml(bodyHtml, {
+                  storyHtml: prev.storyHtml,
+                  verbatimText: prev.verbatimText,
+                }),
+              )
+            }
+            placeholder="Concept detail — heading, bold, underline, list, table…"
+            appearanceScope="concept"
+            className="w-full"
+          />
+        </Suspense>
       </div>
     );
   }
@@ -144,6 +154,7 @@ export function ConceptDetailBody({
             richClassName="concept-detail-rich"
             index={slideIndex}
             onIndexChange={onSlideIndexChange}
+            slides={slides}
           />
         ) : (
           <div className="concept-detail-rich">

@@ -1,14 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
-import {
-  formatSlideTemplate,
-  levelsFromFlags,
-  splitHtmlByHeadings,
-  type HeadingSlide,
-} from "@/lib/headingSlides";
+import { formatSlideTemplate, type HeadingSlide } from "@/lib/headingSlides";
 import type { HeadingSlidesAppearance } from "@/lib/uiAppearance";
+import { useHeadingSlides } from "@/hooks/useHeadingSlides";
 import { cn } from "@/lib/utils";
 
 function HeadingSlideProgress({
@@ -77,6 +73,8 @@ type Props = {
   /** Controlled slide index (e.g. heading jump filter) */
   index?: number;
   onIndexChange?: (index: number) => void;
+  /** Pre-parsed slides — share with HeadingSlideJumpFilter to avoid double parse */
+  slides?: HeadingSlide[];
 };
 
 export function HeadingSlideReader({
@@ -87,21 +85,11 @@ export function HeadingSlideReader({
   onReachLastSlide,
   index: indexProp,
   onIndexChange,
+  slides: slidesProp,
 }: Props) {
-  const levels = useMemo(
-    () => levelsFromFlags(config),
-    [config.splitH1, config.splitH2, config.splitH3, config.splitH4, config.splitH5, config.splitH6],
-  );
-
-  const slides = useMemo(
-    () =>
-      splitHtmlByHeadings(html, {
-        levels,
-        preHeadingMode: config.preHeadingMode,
-        minCharsPerSlide: config.minCharsPerSlide,
-      }),
-    [html, levels, config.preHeadingMode, config.minCharsPerSlide],
-  );
+  // Skip DOM parse when parent already shared slides
+  const parsedSlides = useHeadingSlides(slidesProp ? "" : html, config);
+  const slides = slidesProp ?? parsedSlides;
 
   const scrollMode = config.scrollMode === "nested" ? "nested" : "page";
   const controlled = indexProp !== undefined;
@@ -131,7 +119,7 @@ export function HeadingSlideReader({
     else setUncontrolledIndex(0);
     // Reset only when content/split config changes — not when onIndexChange identity changes
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
-  }, [html, levels.join(","), controlled]);
+  }, [html, slides.length, controlled]);
 
   // Nested mode: measure scroll inside the box
   useEffect(() => {

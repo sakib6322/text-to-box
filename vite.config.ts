@@ -35,4 +35,17 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "@tanstack/query-core"],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("@ckeditor") || id.includes("ckeditor5")) return "ckeditor";
+          if (id.includes("jspdf") || id.includes("html2canvas")) return "pdf";
+          if (id.includes("@radix-ui")) return "radix";
+          if (id.includes("@tanstack")) return "query";
+        },
+      },
+    },
+  },
 }));

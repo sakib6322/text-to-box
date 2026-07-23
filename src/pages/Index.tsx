@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CKEditorField } from "@/components/CKEditorField";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { htmlToPlainText, isHtmlEmpty } from "@/lib/htmlContent";
 import { Input } from "@/components/ui/input";
@@ -18,6 +17,10 @@ import { ConceptDetailCard } from "@/components/ConceptDetailCard";
 import { ConceptSuggestionsPanel } from "@/components/ConceptSuggestionsPanel";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
+
+const CKEditorField = lazy(() =>
+  import("@/components/CKEditorField").then((m) => ({ default: m.CKEditorField })),
+);
 import {
   ACCEPTED_SOURCE_TYPES,
   fileFromPasteEvent,
@@ -463,13 +466,15 @@ const Index = () => {
                 Close
               </Button>
             </div>
-            <CKEditorField
-              value={sourceText}
-              onChange={applySourceText}
-              placeholder="Textbook notes লিখুন — heading, bold, underline, list…"
-              minHeight="360px"
-              className="w-full"
-            />
+            <Suspense fallback={<div className="min-h-[360px] animate-pulse rounded-md bg-muted/60" />}>
+              <CKEditorField
+                value={sourceText}
+                onChange={applySourceText}
+                placeholder="Textbook notes লিখুন — heading, bold, underline, list…"
+                minHeight="360px"
+                className="w-full"
+              />
+            </Suspense>
           </Card>
         ) : null}
 

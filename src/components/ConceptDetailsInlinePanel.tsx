@@ -5,7 +5,6 @@ import { ConceptDetailShell } from "@/components/ConceptDetailShell";
 import { ConceptDetailPreview } from "@/components/ConceptDetailPreview";
 import type { ConceptDetail, KeyPointWithBoards } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
-import { downloadConceptDetailPdf } from "@/lib/downloadConceptDetailPdf";
 import { richHtmlImageOptionsFromEditor } from "@/lib/richHtmlImages";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { conceptAdminPreviewHeadingSlidesEnabled } from "@/lib/uiAppearance";
@@ -116,6 +115,7 @@ export function ConceptDetailsInlinePanel({
     const payload = editable ? draft : detail;
     setDownloadingPdf(true);
     try {
+      const { downloadConceptDetailPdf } = await import("@/lib/downloadConceptDetailPdf");
       await downloadConceptDetailPdf(
         conceptName,
         payload,

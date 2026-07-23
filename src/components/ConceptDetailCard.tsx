@@ -25,7 +25,7 @@ export function ConceptDetailCard({
   onDetailChange,
 }: Props) {
   const [storyOpen, setStoryOpen] = useState(false);
-  const { slideIndex, setSlideIndex, jumpFilter } = useConceptHeadingSlideNav(detail, !editable);
+  const { slideIndex, setSlideIndex, jumpFilter, slides } = useConceptHeadingSlideNav(detail, !editable);
   if (!hasConceptDetailContent(detail)) return null;
 
   return (
@@ -62,6 +62,7 @@ export function ConceptDetailCard({
             showVerbatim={false}
             slideIndex={slideIndex}
             onSlideIndexChange={setSlideIndex}
+            slides={slides}
           />
         </ConceptDetailShell>
       ) : null}

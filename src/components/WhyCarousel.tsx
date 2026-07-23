@@ -1,10 +1,46 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { ChevronLeft, ChevronRight, icons, type LucideIcon } from "lucide-react";
+import {
+  Award,
+  BookOpen,
+  Brain,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  GraduationCap,
+  Lightbulb,
+  PencilRuler,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+  Users,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 import type { LandingWhyItem } from "@/lib/uiAppearance";
+
+/** Explicit allowlist — never import lucide `icons` (pulls entire registry ~650KB). */
+const WHY_ICONS: Record<string, LucideIcon> = {
+  Award,
+  BookOpen,
+  Brain,
+  CheckCircle2,
+  ClipboardCheck,
+  GraduationCap,
+  Lightbulb,
+  PencilRuler,
+  Sparkles,
+  Star,
+  Target,
+  Trophy,
+  Users,
+  Zap,
+};
 
 function WhyIcon({ name, color }: { name: string; color: string }) {
   const key = name.trim();
-  const Lucide = (icons as Record<string, LucideIcon | undefined>)[key];
+  const Lucide = WHY_ICONS[key] ?? (key ? null : Sparkles);
   if (Lucide) {
     return <Lucide className="h-7 w-7 sm:h-8 sm:w-8" style={{ color }} strokeWidth={1.75} aria-hidden />;
   }
@@ -84,121 +120,99 @@ export function WhyCarousel({ items, autoplay, intervalSec, transitionSec }: Pro
   }, []);
 
   useEffect(() => {
-    setIndex(0);
-    setPaused(false);
-  }, [count, visible]);
+    if (!autoplay || count <= visible || paused || !inView || !tabVisible) return;
+    const ms = Math.max(2, intervalSec) * 1000;
+    const id = window.setInterval(() => {
+      setIndex((i) => i + 1);
+    }, ms);
+    return () => window.clearInterval(id);
+  }, [autoplay, count, visible, paused, inView, tabVisible, intervalSec]);
 
   useEffect(() => {
-    if (!autoplay || paused || count <= 1 || !inView || !tabVisible) return;
-    const ms = Math.max(1800, (intervalSec || 3) * 1000);
-    const t = window.setInterval(() => setIndex((n) => n + 1), ms);
-    return () => window.clearInterval(t);
-  }, [autoplay, paused, count, intervalSec, inView, tabVisible]);
-
-  // Click outside carousel → resume autoplay
-  useEffect(() => {
-    if (!paused) return;
-    const onPointerDown = (e: PointerEvent) => {
-      const root = rootRef.current;
-      if (!root) return;
-      if (e.target instanceof Node && root.contains(e.target)) return;
-      setPaused(false);
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [paused]);
-
-  useEffect(() => {
-    if (count === 0 || index < count || jumpingRef.current) return;
-    const dur = Math.max(150, (transitionSec || 0.55) * 1000);
-    const t = window.setTimeout(() => {
-      setInstant(true);
-      setIndex(0);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => setInstant(false));
-      });
-    }, dur);
-    return () => window.clearTimeout(t);
-  }, [index, count, transitionSec]);
-
-  const goNext = () => {
-    if (count <= 1 || jumpingRef.current) return;
-    setPaused(true);
-    setIndex((n) => n + 1);
-  };
-
-  const goPrev = () => {
-    if (count <= 1 || jumpingRef.current) return;
-    setPaused(true);
-    if (index > 0) {
-      setIndex((n) => n - 1);
-      return;
-    }
-    // Seamless wrap: jump to duplicate set, then step back one
+    if (count <= 0) return;
+    if (index < count) return;
     jumpingRef.current = true;
     setInstant(true);
-    setIndex(count);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setInstant(false);
-        setIndex(count - 1);
-        window.setTimeout(() => {
-          jumpingRef.current = false;
-        }, Math.max(150, (transitionSec || 0.55) * 1000) + 40);
-      });
-    });
+    setIndex(index - count);
+    const t = window.setTimeout(() => {
+      setInstant(false);
+      jumpingRef.current = false;
+    }, 40);
+    return () => window.clearTimeout(t);
+  }, [index, count]);
+
+  const go = (dir: -1 | 1) => {
+    if (jumpingRef.current || count <= 0) return;
+    setIndex((i) => Math.max(0, i + dir));
   };
 
-  if (count === 0) return null;
+  if (!count) return null;
 
   const trackStyle: CSSProperties = {
-    transform: cardW > 0 ? `translate3d(-${index * cardW}px, 0, 0)` : undefined,
-    transition: instant ? "none" : `transform var(--pg-why-transition-sec, ${transitionSec || 0.55}s) ease`,
+    width: cardW > 0 ? cardW * loop.length : undefined,
+    transform: cardW > 0 ? `translate3d(${-index * cardW}px,0,0)` : undefined,
+    transition: instant ? "none" : `transform ${Math.max(0.2, transitionSec)}s ease`,
   };
 
   return (
-    <div ref={rootRef} className={`pg-why-carousel${paused ? " is-paused" : ""}`}>
-      <button type="button" className="pg-why-nav pg-why-nav-prev" aria-label="Previous" onClick={goPrev}>
-        <ChevronLeft className="h-5 w-5" strokeWidth={2.25} />
-      </button>
-
-      <div
-        ref={viewportRef}
-        className="pg-why-viewport"
-        style={{ ["--pg-why-visible" as string]: String(visible) }}
-        aria-roledescription="carousel"
-        aria-label={
-          paused
-            ? "Carousel paused — use arrows, or click outside to resume"
-            : "Carousel playing — click to pause"
-        }
-        onClick={() => setPaused(true)}
-        role="group"
-      >
-        <div className="pg-why-track" style={trackStyle}>
+    <div
+      ref={rootRef}
+      className="relative"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setPaused(false);
+      }}
+    >
+      <div ref={viewportRef} className="overflow-hidden">
+        <div className="flex will-change-transform" style={trackStyle}>
           {loop.map((item, i) => (
-            <article
+            <div
               key={`${item.id}-${i}`}
-              className="pg-why-card"
-              style={{
-                width: cardW > 0 ? cardW : undefined,
-                flex: cardW > 0 ? `0 0 ${cardW}px` : `0 0 calc(100% / ${visible})`,
-                background: item.cardBg,
-                color: item.textColor,
-              }}
+              className="box-border shrink-0 px-1.5 sm:px-2"
+              style={{ width: cardW > 0 ? cardW : `${100 / visible}%` }}
             >
-              <div className="pg-why-icon" style={{ background: item.iconBg, color: item.iconColor }}>
-                <WhyIcon name={item.iconClass} color={item.iconColor} />
+              <div
+                className="flex h-full flex-col items-center gap-3 rounded-2xl border border-white/15 px-3 py-5 text-center sm:px-4 sm:py-6"
+                style={{
+                  background: item.cardBg && item.cardBg !== "transparent" ? item.cardBg : "rgba(255,255,255,0.06)",
+                }}
+              >
+                <div
+                  className="flex h-14 w-14 items-center justify-center rounded-2xl sm:h-16 sm:w-16"
+                  style={{ background: item.iconBg }}
+                >
+                  <WhyIcon name={item.iconClass} color={item.iconColor} />
+                </div>
+                <p className="text-sm font-medium leading-snug sm:text-base" style={{ color: item.textColor }}>
+                  {item.text}
+                </p>
               </div>
-              <p className="pg-why-text">{item.text}</p>
-            </article>
+            </div>
           ))}
         </div>
       </div>
-
-      <button type="button" className="pg-why-nav pg-why-nav-next" aria-label="Next" onClick={goNext}>
-        <ChevronRight className="h-5 w-5" strokeWidth={2.25} />
-      </button>
+      {count > visible ? (
+        <>
+          <button
+            type="button"
+            className="absolute left-0 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/40 p-2 text-white backdrop-blur-sm hover:bg-black/55"
+            onClick={() => go(-1)}
+            aria-label="Previous"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            className="absolute right-0 top-1/2 z-10 translate-x-1/2 -translate-y-1/2 rounded-full border border-white/20 bg-black/40 p-2 text-white backdrop-blur-sm hover:bg-black/55"
+            onClick={() => go(1)}
+            aria-label="Next"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }

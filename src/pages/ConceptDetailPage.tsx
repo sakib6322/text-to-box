@@ -29,7 +29,7 @@ export default function ConceptDetailPage() {
   const [boardFilter, setBoardFilter] = useState<{ id: string; name: string } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
   const csu = useConceptStudentUi();
-  const { slideIndex, setSlideIndex, jumpFilter } = useConceptHeadingSlideNav(detail);
+  const { slideIndex, setSlideIndex, jumpFilter, slides } = useConceptHeadingSlideNav(detail);
 
   useEffect(() => {
     if (!conceptId) return;
@@ -136,6 +136,7 @@ export default function ConceptDetailPage() {
               showVerbatim
               slideIndex={slideIndex}
               onSlideIndexChange={setSlideIndex}
+              slides={slides}
             />
             {csu.showKeyPointsOnDetails && keyPoints.length ? (
               <div className="space-y-2 border-t pt-4">
