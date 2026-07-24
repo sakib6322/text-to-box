@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ChevronRight, Lock, Moon, Play, Star, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,9 @@ import type { TaxonomyItem } from "@/lib/taxonomy";
 import { fetchProgressSets, type CourseProgressRollup, type ProgressPracticeSet } from "@/lib/progressApi";
 import { formatProgressPct, useProgressAppearance } from "@/hooks/useProgressAppearance";
 import {
+  persistCourseBrowseNav,
   readCourseBrowseNav,
+  readPersistedCourseBrowseNav,
   topicConceptsLink,
   type CourseBrowseNavState,
   type CourseBrowseStep,
@@ -71,7 +73,9 @@ export default function MyCourseBrowse() {
   const navigate = useNavigate();
   const location = useLocation();
   const pp = useProgressAppearance();
-  const pendingNavRef = useRef(readCourseBrowseNav(location.state));
+  const initialNav =
+    readCourseBrowseNav(location.state) ?? (courseId ? readPersistedCourseBrowseNav(courseId) : null);
+  const pendingNavRef = useRef(initialNav);
   const cachedBrowse = courseId ? getCachedCourseBrowse(courseId) : null;
   const cachedProgress = courseId ? getCachedCourseProgress(courseId) : null;
   const [name, setName] = useState(cachedBrowse?.course?.name ?? "Course");
@@ -83,10 +87,29 @@ export default function MyCourseBrowse() {
   const [finalMockSets, setFinalMockSets] = useState<ProgressPracticeSet[]>([]);
   const [, startTransition] = useTransition();
 
-  const [step, setStep] = useState<BrowseStep>("subjects");
-  const [subjectId, setSubjectId] = useState<string | null>(null);
-  const [systemId, setSystemId] = useState<string | null>(null);
-  const [chapterId, setChapterId] = useState<string | null>(null);
+  const [step, setStep] = useState<BrowseStep>(() => initialNav?.step ?? "subjects");
+  const [subjectId, setSubjectId] = useState<string | null>(() => initialNav?.subjectId ?? null);
+  const [systemId, setSystemId] = useState<string | null>(() => initialNav?.systemId ?? null);
+  const [chapterId, setChapterId] = useState<string | null>(() => initialNav?.chapterId ?? null);
+
+  const applyNav = (nav: CourseBrowseNavState | null | undefined) => {
+    if (!nav) return;
+    setStep(nav.step);
+    setSubjectId(nav.subjectId ?? null);
+    setSystemId(nav.systemId ?? null);
+    setChapterId(nav.chapterId ?? null);
+    if (courseId) persistCourseBrowseNav(courseId, nav);
+  };
+
+  // Restore hierarchy when returning from Topic Concepts (location state / session)
+  useEffect(() => {
+    const nav =
+      readCourseBrowseNav(location.state) ?? (courseId ? readPersistedCourseBrowseNav(courseId) : null);
+    if (!nav) return;
+    applyNav(nav);
+    pendingNavRef.current = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only when router location changes
+  }, [courseId, location.key, location.state]);
 
   useEffect(() => {
     if (!courseId) return;
@@ -99,18 +122,13 @@ export default function MyCourseBrowse() {
         setName(j.course?.name ?? "Course");
         setToday(j.today ?? "");
         setSystems((j.systems as SystemBlock[]) ?? []);
-        const pending = pendingNavRef.current;
+        const pending =
+          pendingNavRef.current ??
+          readCourseBrowseNav(location.state) ??
+          readPersistedCourseBrowseNav(courseId);
         if (pending && (j.systems ?? []).length) {
-          setStep(pending.step);
-          setSubjectId(pending.subjectId ?? null);
-          setSystemId(pending.systemId ?? null);
-          setChapterId(pending.chapterId ?? null);
+          applyNav(pending);
           pendingNavRef.current = null;
-        } else if (!getCachedCourseBrowse(courseId)) {
-          setStep("subjects");
-          setSubjectId(null);
-          setSystemId(null);
-          setChapterId(null);
         }
       } catch (e) {
         if (!cancelled) toast.error(e instanceof Error ? e.message : "Load failed");
@@ -121,7 +139,14 @@ export default function MyCourseBrowse() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
+
+  // Keep session nav in sync while browsing
+  useEffect(() => {
+    if (!courseId) return;
+    persistCourseBrowseNav(courseId, browseNavState(step, subjectId, systemId, chapterId));
+  }, [courseId, step, subjectId, systemId, chapterId]);
 
   // Progress badges — never block the hierarchy UI
   useEffect(() => {
@@ -273,7 +298,9 @@ export default function MyCourseBrowse() {
     }
     if (step === "systems") {
       goStep("subjects", { subjectId: null, systemId: null, chapterId: null });
+      return;
     }
+    navigate("/my-courses");
   };
 
   const stepTitle =
@@ -287,10 +314,8 @@ export default function MyCourseBrowse() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-10">
-      <Button asChild variant="ghost" size="sm">
-        <Link to="/my-courses">
-          <ArrowLeft className="mr-1 h-4 w-4" /> My courses
-        </Link>
+      <Button type="button" variant="ghost" size="sm" onClick={goBack}>
+        <ArrowLeft className="mr-1 h-4 w-4" /> Back
       </Button>
 
       <div>
@@ -438,14 +463,7 @@ export default function MyCourseBrowse() {
             ) : null}
           </div>
 
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold">{stepTitle}</h2>
-            {step !== "subjects" ? (
-              <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={goBack}>
-                <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
-              </Button>
-            ) : null}
-          </div>
+          <h2 className="text-base font-semibold">{stepTitle}</h2>
         </div>
       ) : null}
 

@@ -20,9 +20,8 @@ import {
 import {
   conceptDetailsLink,
   conceptLearnLink,
-  courseBrowseNavFromTopicPath,
-  courseFlowBackLink,
-  readCourseBrowseNav,
+  courseBrowseLink,
+  resolveBrowseBackNav,
   type CourseBrowseNavState,
   type CourseTopicPath,
 } from "@/lib/courseBrowseNav";
@@ -110,8 +109,9 @@ export default function MyCourseTopic() {
 
   const pathLabel = topicPath?.path ?? "";
   const browseNav = useMemo(
-    (): CourseBrowseNavState | null => readCourseBrowseNav(location.state) ?? courseBrowseNavFromTopicPath(topicPath),
-    [location.state, topicPath],
+    (): CourseBrowseNavState =>
+      resolveBrowseBackNav({ courseId, locationState: location.state, topicPath }),
+    [courseId, location.state, topicPath],
   );
 
   /** Server rollup + local additive (slides etc.) — each concept's total %. */
@@ -122,22 +122,21 @@ export default function MyCourseTopic() {
     return Math.max(server, local);
   };
 
+  const goBackToTopics = () => {
+    const nav = resolveBrowseBackNav({ courseId, locationState: location.state, topicPath });
+    // Always land on the topics list for this chapter — never jump to subjects
+    const backNav: CourseBrowseNavState = {
+      step: "topics",
+      subjectId: nav.subjectId ?? topicPath?.subject_id ?? null,
+      systemId: nav.systemId ?? topicPath?.system_id ?? null,
+      chapterId: nav.chapterId ?? topicPath?.chapter_id ?? null,
+    };
+    navigate(courseBrowseLink(courseId, backNav));
+  };
+
   return (
     <div className="mx-auto max-w-3xl space-y-4 pb-10">
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        onClick={() =>
-          navigate(
-            courseFlowBackLink({
-              courseId,
-              locationState: location.state,
-              topicPath,
-            }),
-          )
-        }
-      >
+      <Button type="button" variant="ghost" size="sm" onClick={goBackToTopics}>
         <ArrowLeft className="mr-1 h-4 w-4" /> Back
       </Button>
       <div>

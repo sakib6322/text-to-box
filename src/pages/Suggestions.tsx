@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -157,6 +157,7 @@ function apiKpToWithBoards(kp: {
 
 const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const adminView = mode === "admin";
+  const navigate = useNavigate();
   const canAdd = useCan("suggestions.add");
   const canEdit = useCan("suggestions.edit");
   const canDelete = useCan("suggestions.delete");
@@ -1469,6 +1470,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     else if (browseStep === "topics") goBrowse("chapters");
     else if (browseStep === "chapters") goBrowse("systems");
     else if (browseStep === "systems") goBrowse("subjects");
+    else navigate("/my-courses");
   };
 
   const browseTitle =
@@ -1490,10 +1492,17 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
     <div className="min-h-screen app-mesh-bg text-foreground antialiased">
       <header className="app-header-bar border-b">
         <div className="app-mesh-content container mx-auto px-4 py-6 flex items-center gap-4">
-          <Button asChild variant="ghost" size="icon" aria-label="Back">
-            <Link to={homeLink}>
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label="Back"
+            onClick={() => {
+              if (!adminView && browseStep !== "subjects") browseBack();
+              else navigate(homeLink);
+            }}
+          >
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-balance page-title">
@@ -1551,8 +1560,8 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                     </Select>
                   )}
                 </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/my-courses">My courses</Link>
+                <Button type="button" variant="outline" size="sm" onClick={browseBack}>
+                  <ArrowLeft className="mr-1 h-4 w-4" /> Back
                 </Button>
               </Card>
             )}
@@ -1764,15 +1773,11 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             </div>
             <div className="flex items-start justify-between gap-2">
               <h2 className="min-w-0 flex-1 break-words text-base font-semibold leading-snug">{browseTitle}</h2>
-              {browseStep !== "subjects" ? (
-                <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={browseBack}>
-                  <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Back
-                </Button>
-              ) : (
+              {browseStep === "subjects" ? (
                 <Button asChild variant="ghost" size="sm" className="h-8 text-xs">
                   <Link to="/study/progress">My progress →</Link>
                 </Button>
-              )}
+              ) : null}
             </div>
           </div>
         ) : null}
