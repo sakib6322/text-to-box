@@ -619,6 +619,20 @@ export type UiAppearance = {
   conceptStudentUi: ConceptStudentUiAppearance;
   /** Admin Suggestions/Details edit preview panel */
   conceptAdminPreview: ConceptAdminPreviewAppearance;
+  /**
+   * Details / Add box / Story button presentation.
+   * Modal on → Dialog; Modal off → current inline/dropdown collapsible.
+   */
+  panelModes: PanelModesAppearance;
+};
+
+export type PanelModesAppearance = {
+  /** Suggestions admin Details button */
+  detailsAsModal: boolean;
+  /** Suggestions admin Add box button */
+  addBoxAsModal: boolean;
+  /** Story-based learning button (admin + student) */
+  storyAsModal: boolean;
 };
 
 export const UI_APPEARANCE_KEY = "ui_appearance";
@@ -1539,6 +1553,26 @@ export function landingPageStyleVars(lp: LandingPageAppearance): Record<string, 
   };
 }
 
+export function defaultPanelModes(overrides: Partial<PanelModesAppearance> = {}): PanelModesAppearance {
+  return {
+    detailsAsModal: false,
+    addBoxAsModal: false,
+    storyAsModal: false,
+    ...overrides,
+  };
+}
+
+export function mergePanelModes(base: PanelModesAppearance, patch: unknown): PanelModesAppearance {
+  if (!patch || typeof patch !== "object") return base;
+  const p = patch as Partial<PanelModesAppearance>;
+  const bool = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    detailsAsModal: bool(p.detailsAsModal, base.detailsAsModal),
+    addBoxAsModal: bool(p.addBoxAsModal, base.addBoxAsModal),
+    storyAsModal: bool(p.storyAsModal, base.storyAsModal),
+  };
+}
+
 export function defaultConceptStudentUi(
   overrides: Partial<ConceptStudentUiAppearance> = {},
 ): ConceptStudentUiAppearance {
@@ -1759,6 +1793,7 @@ export function defaultUiAppearance(): UiAppearance {
     headingSlides: defaultHeadingSlides(),
     conceptStudentUi: defaultConceptStudentUi(),
     conceptAdminPreview: defaultConceptAdminPreview(),
+    panelModes: defaultPanelModes(),
   };
 }
 
@@ -1932,6 +1967,7 @@ function fromV1(raw: Record<string, unknown>): UiAppearance {
     headingSlides: mergeHeadingSlides(base.headingSlides, raw.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw.conceptStudentUi),
     conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, raw.conceptAdminPreview),
+    panelModes: mergePanelModes(base.panelModes, raw.panelModes),
   };
 }
 
@@ -1954,6 +1990,7 @@ export function mergeUiAppearance(partial: unknown): UiAppearance {
     headingSlides: mergeHeadingSlides(base.headingSlides, p.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, p.conceptStudentUi),
     conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, p.conceptAdminPreview),
+    panelModes: mergePanelModes(base.panelModes, p.panelModes),
   };
 }
 

@@ -1,6 +1,7 @@
 import {
   defaultConceptAdminPreview,
   defaultConceptStudentUi,
+  defaultPanelModes,
   defaultUiAppearance,
   type DeviceKey,
   type LandingPageAppearance,
@@ -303,11 +304,16 @@ export function resetAppearanceSection(
       };
       next.conceptStudentUi = structuredClone(defaultConceptStudentUi());
       next.conceptAdminPreview = structuredClone(defaultConceptAdminPreview());
+      next.panelModes = structuredClone(defaultPanelModes());
       break;
     case "story":
       next[editDevice] = {
         ...next[editDevice],
         storyBasedLearning: structuredClone(defaults[editDevice].storyBasedLearning),
+      };
+      next.panelModes = {
+        ...next.panelModes,
+        storyAsModal: defaultPanelModes().storyAsModal,
       };
       break;
     case "questions":

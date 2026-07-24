@@ -28,6 +28,7 @@ import { getStudyProgress, getPracticeSessionsForConcept, studyCompletionPct } f
 import { mentionForBoard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 import { ConceptSuggestionGroupCard } from "@/components/ConceptSuggestionGroupCard";
 import { TaxonomyBrowseList } from "@/components/TaxonomyBrowseList";
+import { usePanelModes } from "@/hooks/usePanelModes";
 import type { KeyPointSavePayload } from "@/components/EditableKeyPointSection";
 import { KeyPointQuestionsEditor } from "@/components/KeyPointQuestionsEditor";
 import { ConceptQuestionsPanel } from "@/components/ConceptQuestionsPanel";
@@ -161,6 +162,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
   const canAdd = useCan("suggestions.add");
   const canEdit = useCan("suggestions.edit");
   const canDelete = useCan("suggestions.delete");
+  const panelModes = usePanelModes();
   type BrowseStep = "subjects" | "systems" | "chapters" | "topics" | "concepts";
 
   const [rows, setRows] = useState<Row[]>([]);
@@ -1850,6 +1852,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   deleting={deleting}
                   onDetailsToggle={adminView ? () => void toggleConceptDetails(g.conceptId, g.title) : undefined}
                   detailsOpen={detailsConceptId === g.conceptId}
+                  detailsAsModal={panelModes.detailsAsModal}
                   detailsPanel={
                     detailsConceptId === g.conceptId ? (
                       <Suspense
@@ -1861,7 +1864,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                       >
                         <ConceptDetailsInlinePanel
                           active
-                          variant="inline"
+                          variant={panelModes.detailsAsModal ? "dialog" : "inline"}
                           conceptName={detailsConceptName}
                           detail={detailsConceptDetail}
                           keyPoints={detailsKeyPoints}
@@ -1901,6 +1904,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                   }
                   onAdd={adminView && canAdd ? () => openAdd(g.conceptId, g.title) : undefined}
                   addOpen={addTarget?.conceptId === g.conceptId}
+                  addAsModal={panelModes.addBoxAsModal}
                   addPanel={
                     addTarget?.conceptId === g.conceptId ? (
                       <div className="space-y-4">

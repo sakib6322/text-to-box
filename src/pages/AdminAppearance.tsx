@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Home, Loader2, Monitor, Plus, RotateCcw, Save, Smartphone, Tablet, Trash2 } from "lucide-react";
+import { ChevronRight, Eye, Home, Loader2, Monitor, Plus, RotateCcw, Save, Smartphone, Tablet, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import {
   applyUiAppearance,
@@ -30,6 +36,7 @@ import {
   type HeadingSlidesAppearance,
   type ConceptStudentUiAppearance,
   type ConceptAdminPreviewAppearance,
+  type PanelModesAppearance,
   type RichEditorAppearance,
   type UiAppearance,
 } from "@/lib/uiAppearance";
@@ -216,6 +223,7 @@ export default function AdminAppearance() {
     "colors" | "nav" | "hero" | "featured" | "courses" | "about" | "faq" | "footer"
   >("colors");
   const [progressSection, setProgressSection] = useState<"steps" | "copy" | "features" | "colors">("steps");
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const savedRef = useRef(appearance);
   savedRef.current = appearance;
 
@@ -351,6 +359,7 @@ export default function AdminAppearance() {
   const re = theme.richEditor;
   const csu = theme.conceptStudentUi;
   const cap = theme.conceptAdminPreview;
+  const panelModes = theme.panelModes;
 
   const updateProgressPlan = <K extends keyof ProgressPlanAppearance>(key: K, value: ProgressPlanAppearance[K]) => {
     commit({ ...theme, progressPlan: { ...theme.progressPlan, [key]: value } });
@@ -372,6 +381,13 @@ export default function AdminAppearance() {
     value: ConceptAdminPreviewAppearance[K],
   ) => {
     commit({ ...theme, conceptAdminPreview: { ...theme.conceptAdminPreview, [key]: value } });
+  };
+
+  const updatePanelModes = <K extends keyof PanelModesAppearance>(
+    key: K,
+    value: PanelModesAppearance[K],
+  ) => {
+    commit({ ...theme, panelModes: { ...theme.panelModes, [key]: value } });
   };
 
   const applyConceptAdminPreviewTo = (targets: DeviceKey[]) => {
@@ -710,6 +726,118 @@ export default function AdminAppearance() {
     [g, s, aq.explanationTitle],
   );
 
+  const landingPreviewTitle =
+    landingSection === "colors"
+      ? "Colors"
+      : landingSection === "nav"
+        ? "Header & nav"
+        : landingSection === "hero"
+          ? "Hero"
+          : landingSection === "featured"
+            ? "Featured"
+            : landingSection === "courses"
+              ? "Courses"
+              : landingSection === "about"
+                ? "About"
+                : landingSection === "faq"
+                  ? "FAQ"
+                  : "Footer";
+
+  const progressPreviewTitle =
+    progressSection === "steps"
+      ? "4-step labels"
+      : progressSection === "copy"
+        ? "Messages"
+        : progressSection === "features"
+          ? "Toggles"
+          : "Colors";
+
+  const sectionLivePreview = useMemo((): { title: string; body: ReactNode } => {
+    switch (activeTab) {
+      case "global":
+        return {
+          title: "Live preview · Website UI",
+          body: <GlobalWebsiteLivePreview g={g} sb={sb} hdr={hdr} />,
+        };
+      case "concept":
+        return {
+          title: "Live preview · Concept details",
+          body: (
+            <ConceptDetailsLivePreview
+              studentUi={csu}
+              adminPreview={cap}
+              headingSlides={hs}
+              previewDevice={editDevice}
+            />
+          ),
+        };
+      case "story":
+        return {
+          title: "Live preview · Story learning",
+          body: <StoryLivePreview s={s} />,
+        };
+      case "questions":
+        return {
+          title: "Live preview · All questions",
+          body: <AllQuestionsLivePreview explanationTitle={aq.explanationTitle || "Explanations"} />,
+        };
+      case "landing":
+        return {
+          title: `Live preview · Landing · ${landingPreviewTitle}`,
+          body: <LandingLivePreview section={landingSection} lp={lp} faq={faq} />,
+        };
+      case "progress":
+        return {
+          title: `Live preview · Progress · ${progressPreviewTitle}`,
+          body: <ProgressLivePreview section={progressSection} prog={prog} />,
+        };
+      case "headingSlides":
+        return {
+          title: "Live preview · Heading slides",
+          body: <HeadingSlidesLivePreview config={hs} />,
+        };
+      case "richEditor":
+        return {
+          title: "Live preview · Rich editor images",
+          body: <RichEditorLivePreview re={re} />,
+        };
+      case "performance":
+        return {
+          title: "Live preview · Performance",
+          body: <PerformanceLivePreview smoothScroll={p.smoothScroll} reduceMotion={p.reduceMotion} />,
+        };
+      case "preview":
+        return {
+          title: "Live preview · Combined",
+          body: preview,
+        };
+      default:
+        return { title: "Live preview", body: null };
+    }
+  }, [
+    activeTab,
+    g,
+    sb,
+    hdr,
+    csu,
+    cap,
+    hs,
+    editDevice,
+    s,
+    aq.explanationTitle,
+    landingSection,
+    landingPreviewTitle,
+    lp,
+    faq,
+    progressSection,
+    progressPreviewTitle,
+    prog,
+    re,
+    p.smoothScroll,
+    p.reduceMotion,
+    preview,
+  ]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-20 text-muted-foreground">
@@ -720,46 +848,86 @@ export default function AdminAppearance() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
-        <div className="flex items-center gap-1">
-          <Link to="/admin" className="inline-flex items-center gap-1 hover:text-foreground">
-            <Home className="h-4 w-4" />
-            Home
-          </Link>
-          <ChevronRight className="h-4 w-4" />
-          <Link to="/admin/settings" className="hover:text-foreground">
-            Settings
-          </Link>
-          <ChevronRight className="h-4 w-4" />
-          <span className="text-foreground">Appearance</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {dirty ? (
-            <span className="rounded-md bg-amber-500/15 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-              Unsaved changes
-            </span>
-          ) : null}
-          {dirty ? (
-            <Button type="button" variant="ghost" size="sm" onClick={discardDraft}>
-              Discard
+      <div className="sticky top-0 z-40 -mx-1 border-b border-border/60 bg-background/95 px-1 py-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/85">
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex min-w-0 items-center gap-0.5 text-[11px] text-muted-foreground">
+            <Link to="/admin" className="inline-flex items-center gap-0.5 hover:text-foreground">
+              <Home className="h-3 w-3" />
+              Home
+            </Link>
+            <ChevronRight className="h-3 w-3 shrink-0" />
+            <Link to="/admin/settings" className="hover:text-foreground">
+              Settings
+            </Link>
+            <ChevronRight className="h-3 w-3 shrink-0" />
+            <span className="truncate text-foreground">Appearance</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-1">
+            {dirty ? (
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium leading-none text-amber-700 dark:text-amber-400">
+                Unsaved
+              </span>
+            ) : null}
+            {dirty ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={discardDraft}
+              >
+                Discard
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={handleResetSection}
+              disabled={resetting || activeTab === "preview"}
+              title={`Reset · ${resetSectionLabel}`}
+            >
+              {resetting ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+              Reset
             </Button>
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleResetSection}
-            disabled={resetting || activeTab === "preview"}
-          >
-            {resetting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
-            Reset · {resetSectionLabel}
-          </Button>
-          <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving || !dirty}>
-            {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            Save to database
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={() => setPreviewModalOpen(true)}
+            >
+              <Eye className="h-3 w-3" />
+              Live preview
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 gap-1 px-2 text-[11px]"
+              onClick={() => void handleSave()}
+              disabled={saving || !dirty}
+            >
+              {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
+              Save
+            </Button>
+          </div>
         </div>
       </div>
+
+      <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
+        <DialogContent className="flex max-h-[88vh] max-w-3xl flex-col gap-3 overflow-hidden p-4 sm:p-5">
+          <DialogHeader className="shrink-0 space-y-1 pr-6 text-left">
+            <DialogTitle className="text-base">{sectionLivePreview.title}</DialogTitle>
+            <p className="text-[11px] text-muted-foreground">
+              Current tab draft · {deviceMeta[editDevice].label}. Inline preview below the form still available.
+            </p>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-md border bg-muted/20 p-3">
+            {sectionLivePreview.body}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Card className="space-y-4 p-6">
         <div>
@@ -1694,6 +1862,33 @@ export default function AdminAppearance() {
                   checked={csu.showStudyAndPracticeButton}
                   onChange={(v) => updateConceptStudentUi("showStudyAndPracticeButton", v)}
                   hint="My Suggestions concept card"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Modal management</p>
+              <p className="text-[11px] text-muted-foreground">
+                On = button opens a modal. Off = current dropdown / inline panel. Save to database to publish.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <BoolField
+                  label="Details → Modal"
+                  checked={panelModes.detailsAsModal}
+                  onChange={(v) => updatePanelModes("detailsAsModal", v)}
+                  hint="Suggestions admin Details button"
+                />
+                <BoolField
+                  label="Add box → Modal"
+                  checked={panelModes.addBoxAsModal}
+                  onChange={(v) => updatePanelModes("addBoxAsModal", v)}
+                  hint="Suggestions admin Add box button"
+                />
+                <BoolField
+                  label="Story learning → Modal"
+                  checked={panelModes.storyAsModal}
+                  onChange={(v) => updatePanelModes("storyAsModal", v)}
+                  hint="Story-based learning button (admin + student)"
                 />
               </div>
             </div>

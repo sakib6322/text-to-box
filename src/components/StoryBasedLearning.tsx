@@ -2,18 +2,25 @@ import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { BookMarked, ChevronDown, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { HeadingSlideJumpFilter } from "@/components/HeadingSlideJumpFilter";
 import { HeadingSlideReader } from "@/components/HeadingSlideReader";
 import { RichHtmlContent } from "@/components/RichHtmlContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { useHeadingSlides } from "@/hooks/useHeadingSlides";
+import { usePanelModes } from "@/hooks/usePanelModes";
 import { isHtmlEmpty } from "@/lib/htmlContent";
 import type { ConceptDetail } from "@/lib/conceptDetail";
 import { hasStoryContent, withStoryHtml } from "@/lib/conceptDetail";
 import type { ConceptDetailUpdater } from "@/components/ConceptDetailBody";
 import type { HeadingSlide } from "@/lib/headingSlides";
 import { cn } from "@/lib/utils";
-import type { HeadingSlidesAppearance } from "@/lib/uiAppearance";
+import type { HeadingSlidesAppearance, StoryDialogWidth } from "@/lib/uiAppearance";
 import { resolveDeviceTheme } from "@/lib/uiAppearance";
 
 const CKEditorField = lazy(() =>
@@ -35,6 +42,14 @@ type StoryBasedLearningButtonProps = {
   /** Opposite side of the Story button (e.g. concept heading jump filter). */
   leadingAction?: ReactNode;
 };
+
+function dialogWidthClass(w: StoryDialogWidth): string {
+  if (w === "md") return "max-w-md";
+  if (w === "xl") return "max-w-xl";
+  if (w === "2xl") return "max-w-2xl";
+  if (w === "full") return "max-w-[min(96vw,72rem)]";
+  return "max-w-lg";
+}
 
 function StoryPreviewBody({
   html,
@@ -90,6 +105,8 @@ export function StoryBasedLearningButton({
   leadingAction,
 }: StoryBasedLearningButtonProps) {
   const { appearance, activeDevice } = useUiAppearance();
+  const panelModes = usePanelModes();
+  const asModal = panelModes.storyAsModal;
   const sbl = resolveDeviceTheme(appearance, activeDevice).storyBasedLearning;
   const hs = appearance.headingSlides;
   const [open, setOpen] = useState(false);
@@ -142,9 +159,179 @@ export function StoryBasedLearningButton({
       onIndexChange={setSlideIndex}
     />
   ) : null;
-  /** Left of Story button: concept filter when closed, story filter when open. */
-  const toolbarStart = open ? storyJumpFilter : leadingAction;
+  /** Left of Story button: concept filter when closed, story filter when open (dropdown mode). */
+  const toolbarStart = !asModal && open ? storyJumpFilter : leadingAction;
   const showToolbarStart = toolbarStart != null;
+
+  const panelBody = (
+    <>
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4"
+        style={{ borderColor: "var(--sbl-border)" }}
+        data-sbl-title
+      >
+        <p className="min-w-0 flex-1 text-sm font-semibold">
+          {sbl.buttonLabel}
+          {conceptName ? `: ${conceptName}` : ""}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {asModal && storyJumpFilter ? <div className="min-w-0">{storyJumpFilter}</div> : null}
+          {editable ? (
+            <Button
+              type="button"
+              variant={showPreview ? "default" : "outline"}
+              size="sm"
+              className="h-8 shrink-0 gap-1.5 text-xs"
+              onClick={() => setShowPreview((v) => !v)}
+              aria-pressed={showPreview}
+            >
+              {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+              {showPreview ? "Hide preview" : "Preview"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      {editable ? (
+        <div className="space-y-3 p-3 sm:p-4">
+          <div className={cn("grid gap-3", showPreview ? "lg:grid-cols-2" : "grid-cols-1")}>
+            <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
+              <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Edit</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  যেভাবে লিখবেন সেভাবেই সেভ হবে — কোনো AI পরিবর্তন নেই
+                </p>
+              </div>
+              <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto p-3">
+                <Suspense fallback={<div className="min-h-[12rem] animate-pulse rounded-md bg-muted/60" />}>
+                  <CKEditorField
+                    value={draftStory}
+                    onChange={handleStoryChange}
+                    placeholder="Story লিখুন — heading, bold, list, table…"
+                    appearanceScope="story"
+                    className="w-full"
+                  />
+                </Suspense>
+              </div>
+            </div>
+
+            {showPreview ? (
+              <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
+                <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {hs.storyEnabled ? "Heading slides + progress" : "Plain HTML"}
+                  </p>
+                </div>
+                <div
+                  className={cn(
+                    "flex-1 p-3",
+                    hs.storyEnabled ? "min-h-0" : "max-h-[min(58vh,28rem)] overflow-y-auto",
+                  )}
+                >
+                  <StoryPreviewBody
+                    html={draftStory}
+                    emptyMessage={sbl.emptyMessage}
+                    storyEnabled={hs.storyEnabled}
+                    headingSlides={hs}
+                    slideIndex={slideIndex}
+                    onSlideIndexChange={setSlideIndex}
+                    slides={storySlides}
+                  />
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" size="sm" onClick={() => setOpenAndNotify(false)} disabled={saving}>
+              Close
+            </Button>
+            {onSave ? (
+              <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save story
+              </Button>
+            ) : (
+              <Button type="button" size="sm" onClick={() => setOpenAndNotify(false)}>
+                Done
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : empty ? (
+        <p className="story-based-learning-empty p-3 text-sm sm:p-4">{sbl.emptyMessage}</p>
+      ) : (
+        <div className="p-3 sm:p-4">
+          <StoryPreviewBody
+            html={detail.storyHtml}
+            emptyMessage={sbl.emptyMessage}
+            storyEnabled={hs.storyEnabled}
+            headingSlides={hs}
+            slideIndex={slideIndex}
+            onSlideIndexChange={setSlideIndex}
+            slides={storySlides}
+          />
+        </div>
+      )}
+    </>
+  );
+
+  const triggerButton = (
+    <Button
+      type="button"
+      variant={variant}
+      size={size}
+      className="shrink-0 gap-1.5"
+      aria-expanded={open}
+      onClick={asModal ? () => setOpenAndNotify(!open) : undefined}
+    >
+      {sbl.showButtonIcon ? <BookMarked className="h-4 w-4" /> : null}
+      <span className="truncate">{sbl.buttonLabel}</span>
+      {hasStoryContent(detail) ? (
+        <span
+          className="h-1.5 w-1.5 rounded-full story-based-learning-accent"
+          style={{ background: "var(--sbl-accent, hsl(var(--primary)))" }}
+          aria-hidden
+        />
+      ) : null}
+      {!asModal ? (
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 opacity-70 transition-transform", open && "rotate-180")} />
+      ) : null}
+    </Button>
+  );
+
+  if (asModal) {
+    return (
+      <div className={cn("story-based-learning-root w-full", className)}>
+        <div
+          className={cn(
+            "flex w-full items-center gap-2",
+            leadingAction != null ? "justify-between" : "justify-end",
+          )}
+        >
+          {leadingAction != null ? <div className="min-w-0">{leadingAction}</div> : null}
+          {triggerButton}
+        </div>
+        <Dialog open={open} onOpenChange={setOpenAndNotify}>
+          <DialogContent
+            className={cn(
+              "flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0",
+              dialogWidthClass(sbl.dialogMaxWidth),
+            )}
+          >
+            <DialogHeader className="sr-only">
+              <DialogTitle>
+                {sbl.buttonLabel}
+                {conceptName ? `: ${conceptName}` : ""}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="story-based-learning-panel min-h-0 flex-1 overflow-y-auto">{panelBody}</div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
     <Collapsible
@@ -159,144 +346,11 @@ export function StoryBasedLearningButton({
         )}
       >
         {showToolbarStart ? <div className="min-w-0">{toolbarStart}</div> : null}
-        <CollapsibleTrigger asChild>
-          <Button
-            type="button"
-            variant={variant}
-            size={size}
-            className="shrink-0 gap-1.5"
-            aria-expanded={open}
-          >
-            {sbl.showButtonIcon ? <BookMarked className="h-4 w-4" /> : null}
-            <span className="truncate">{sbl.buttonLabel}</span>
-            {hasStoryContent(detail) ? (
-              <span
-                className="h-1.5 w-1.5 rounded-full story-based-learning-accent"
-                style={{ background: "var(--sbl-accent, hsl(var(--primary)))" }}
-                aria-hidden
-              />
-            ) : null}
-            <ChevronDown
-              className={cn("h-3.5 w-3.5 shrink-0 opacity-70 transition-transform", open && "rotate-180")}
-            />
-          </Button>
-        </CollapsibleTrigger>
+        <CollapsibleTrigger asChild>{triggerButton}</CollapsibleTrigger>
       </div>
 
       <CollapsibleContent className="story-based-learning-dropdown data-[state=open]:animate-in data-[state=closed]:animate-out">
-        <div className="story-based-learning-panel mt-2 overflow-hidden">
-          <div
-            className="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 sm:px-4"
-            style={{ borderColor: "var(--sbl-border)" }}
-            data-sbl-title
-          >
-            <p className="min-w-0 flex-1 text-sm font-semibold">
-              {sbl.buttonLabel}
-              {conceptName ? `: ${conceptName}` : ""}
-            </p>
-            {editable ? (
-              <Button
-                type="button"
-                variant={showPreview ? "default" : "outline"}
-                size="sm"
-                className="h-8 shrink-0 gap-1.5 text-xs"
-                onClick={() => setShowPreview((v) => !v)}
-                aria-pressed={showPreview}
-              >
-                {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                {showPreview ? "Hide preview" : "Preview"}
-              </Button>
-            ) : null}
-          </div>
-
-          {editable ? (
-            <div className="space-y-3 p-3 sm:p-4">
-              <div
-                className={cn(
-                  "grid gap-3",
-                  showPreview ? "lg:grid-cols-2" : "grid-cols-1",
-                )}
-              >
-                <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
-                  <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Edit</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      যেভাবে লিখবেন সেভাবেই সেভ হবে — কোনো AI পরিবর্তন নেই
-                    </p>
-                  </div>
-                  <div className="max-h-[min(58vh,28rem)] flex-1 overflow-y-auto p-3">
-                    <Suspense fallback={<div className="min-h-[12rem] animate-pulse rounded-md bg-muted/60" />}>
-                      <CKEditorField
-                        value={draftStory}
-                        onChange={handleStoryChange}
-                        placeholder="Story লিখুন — heading, bold, list, table…"
-                        appearanceScope="story"
-                        className="w-full"
-                      />
-                    </Suspense>
-                  </div>
-                </div>
-
-                {showPreview ? (
-                  <div className="flex min-h-0 flex-col rounded-md border" style={{ borderColor: "var(--sbl-border)" }}>
-                    <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--sbl-border)" }}>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Preview</p>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground">
-                        {hs.storyEnabled ? "Heading slides + progress" : "Plain HTML"}
-                      </p>
-                    </div>
-                    <div
-                      className={cn(
-                        "flex-1 p-3",
-                        hs.storyEnabled ? "min-h-0" : "max-h-[min(58vh,28rem)] overflow-y-auto",
-                      )}
-                    >
-                      <StoryPreviewBody
-                        html={draftStory}
-                        emptyMessage={sbl.emptyMessage}
-                        storyEnabled={hs.storyEnabled}
-                        headingSlides={hs}
-                        slideIndex={slideIndex}
-                        onSlideIndexChange={setSlideIndex}
-                        slides={storySlides}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={() => setOpenAndNotify(false)} disabled={saving}>
-                  Close
-                </Button>
-                {onSave ? (
-                  <Button type="button" size="sm" onClick={() => void handleSave()} disabled={saving}>
-                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Save story
-                  </Button>
-                ) : (
-                  <Button type="button" size="sm" onClick={() => setOpenAndNotify(false)}>
-                    Done
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : empty ? (
-            <p className="story-based-learning-empty p-3 text-sm sm:p-4">{sbl.emptyMessage}</p>
-          ) : (
-            <div className="p-3 sm:p-4">
-              <StoryPreviewBody
-                html={detail.storyHtml}
-                emptyMessage={sbl.emptyMessage}
-                storyEnabled={hs.storyEnabled}
-                headingSlides={hs}
-                slideIndex={slideIndex}
-                onSlideIndexChange={setSlideIndex}
-                slides={storySlides}
-              />
-            </div>
-          )}
-        </div>
+        <div className="story-based-learning-panel mt-2 overflow-hidden">{panelBody}</div>
       </CollapsibleContent>
     </Collapsible>
   );

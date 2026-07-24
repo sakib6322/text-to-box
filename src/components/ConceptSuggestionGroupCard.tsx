@@ -4,6 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { BookOpen, ChevronDown, ChevronRight, GraduationCap, Plus } from "lucide-react";
 import { SuggestionKeyPointCard, type SuggestionBoardLink } from "@/components/SuggestionKeyPointCard";
 import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
@@ -36,6 +42,8 @@ type Props = {
   /** Toggle inline details dropdown (not a modal) */
   onDetailsToggle?: () => void;
   detailsOpen?: boolean;
+  /** When true, Details opens as modal — hide inline panel chevron rotate cue slightly */
+  detailsAsModal?: boolean;
   /** Inline concept details panel under Details button */
   detailsPanel?: ReactNode;
   onEdit?: (row: ConceptSuggestionRow) => void;
@@ -43,6 +51,7 @@ type Props = {
   /** Toggle inline add panel (not a modal) */
   onAdd?: () => void;
   addOpen?: boolean;
+  addAsModal?: boolean;
   /** Inline add form rendered under Add box */
   addPanel?: ReactNode;
   onBoardClick?: (board: { id: string; name: string }) => void;
@@ -59,11 +68,13 @@ export function ConceptSuggestionGroupCard({
   deleting,
   onDetailsToggle,
   detailsOpen = false,
+  detailsAsModal = false,
   detailsPanel,
   onEdit,
   onDelete,
   onAdd,
   addOpen = false,
+  addAsModal = false,
   addPanel,
   onBoardClick,
 }: Props) {
@@ -125,7 +136,9 @@ export function ConceptSuggestionGroupCard({
                 >
                   <BookOpen className="mr-1 h-3.5 w-3.5" />
                   Details
-                  <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
+                  {!detailsAsModal ? (
+                    <ChevronDown className={cn("ml-1 h-3.5 w-3.5 transition-transform", detailsOpen && "rotate-180")} />
+                  ) : null}
                 </Button>
               ) : null}
               <Button asChild variant="outline" size="sm" className="h-8 text-xs flex-1 sm:flex-none">
@@ -159,7 +172,23 @@ export function ConceptSuggestionGroupCard({
       </div>
 
       {detailsOpen && detailsPanel ? (
-        <div className="border-t bg-muted/10 px-4 pb-4 pt-3 sm:px-5">{detailsPanel}</div>
+        detailsAsModal ? (
+          <Dialog
+            open={detailsOpen}
+            onOpenChange={(next) => {
+              if (!next) onDetailsToggle?.();
+            }}
+          >
+            <DialogContent className="flex max-h-[90vh] max-w-6xl flex-col overflow-hidden p-0 sm:p-0">
+              <DialogHeader className="sr-only">
+                <DialogTitle>Concept details · {group.title}</DialogTitle>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">{detailsPanel}</div>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <div className="border-t bg-muted/10 px-4 pb-4 pt-3 sm:px-5">{detailsPanel}</div>
+        )
       ) : null}
 
       {expanded ? (
@@ -200,10 +229,28 @@ export function ConceptSuggestionGroupCard({
               >
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Add box
-                <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", addOpen && "rotate-180")} />
+                {!addAsModal ? (
+                  <ChevronDown className={cn("ml-1.5 h-3.5 w-3.5 transition-transform", addOpen && "rotate-180")} />
+                ) : null}
               </Button>
               {addOpen && addPanel ? (
-                <div className="rounded-lg border bg-background p-3 shadow-sm sm:p-4">{addPanel}</div>
+                addAsModal ? (
+                  <Dialog
+                    open={addOpen}
+                    onOpenChange={(next) => {
+                      if (!next) onAdd?.();
+                    }}
+                  >
+                    <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col overflow-hidden">
+                      <DialogHeader>
+                        <DialogTitle>Add key points · {group.title}</DialogTitle>
+                      </DialogHeader>
+                      <div className="min-h-0 flex-1 overflow-y-auto pr-1">{addPanel}</div>
+                    </DialogContent>
+                  </Dialog>
+                ) : (
+                  <div className="rounded-lg border bg-background p-3 shadow-sm sm:p-4">{addPanel}</div>
+                )
               ) : null}
             </div>
           ) : null}

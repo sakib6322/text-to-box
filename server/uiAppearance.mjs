@@ -433,6 +433,26 @@ export function getDefaultUiAppearance() {
     headingSlides: defaultHeadingSlides(),
     conceptStudentUi: defaultConceptStudentUi(),
     conceptAdminPreview: defaultConceptAdminPreview(),
+    panelModes: defaultPanelModes(),
+  };
+}
+
+function defaultPanelModes(overrides = {}) {
+  return {
+    detailsAsModal: false,
+    addBoxAsModal: false,
+    storyAsModal: false,
+    ...overrides,
+  };
+}
+
+function mergePanelModes(base, patch) {
+  if (!patch || typeof patch !== "object") return base;
+  const bool = (v, fallback) => (typeof v === "boolean" ? v : fallback);
+  return {
+    detailsAsModal: bool(patch.detailsAsModal, base.detailsAsModal),
+    addBoxAsModal: bool(patch.addBoxAsModal, base.addBoxAsModal),
+    storyAsModal: bool(patch.storyAsModal, base.storyAsModal),
   };
 }
 
@@ -1106,6 +1126,7 @@ function fromV1(raw) {
     headingSlides: mergeHeadingSlides(base.headingSlides, raw?.headingSlides),
     conceptStudentUi: mergeConceptStudentUi(base.conceptStudentUi, raw?.conceptStudentUi),
     conceptAdminPreview: mergeConceptAdminPreview(base.conceptAdminPreview, raw?.conceptAdminPreview),
+    panelModes: mergePanelModes(base.panelModes, raw?.panelModes),
   };
 }
 
@@ -1129,6 +1150,7 @@ export function parseUiAppearance(raw) {
       headingSlides: mergeHeadingSlides(defaults.headingSlides, parsed.headingSlides),
       conceptStudentUi: mergeConceptStudentUi(defaults.conceptStudentUi, parsed.conceptStudentUi),
       conceptAdminPreview: mergeConceptAdminPreview(defaults.conceptAdminPreview, parsed.conceptAdminPreview),
+      panelModes: mergePanelModes(defaults.panelModes, parsed.panelModes),
     };
   } catch {
     return defaults;
