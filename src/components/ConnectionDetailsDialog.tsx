@@ -60,8 +60,13 @@ const EMBEDDINGS: EmbeddingRow[] = [
     table: "concepts",
     column: "detail_embedding",
     embeds: "detail_summary + paragraphs + table (title, headers, cells)",
-    whenCreated: ["Concept save", "Concept detail edit (PATCH /api/concepts/:id)"],
-    features: ["DB-তে ivfflat index আছে", "Search / match UI-তে এখনো ব্যবহার হয় না"],
+    whenCreated: [
+      "Generate বন্ধ (ডিফল্ট) — EMBED_UNUSED_CONTENT=true হলে Concept save / detail edit",
+    ],
+    features: [
+      "UI match/search-এ ব্যবহার হয় না",
+      "Column/index রাখা আছে; পরে feature চাইলে flag চালু করুন",
+    ],
     active: false,
   },
   {
@@ -69,8 +74,13 @@ const EMBEDDINGS: EmbeddingRow[] = [
     table: "questions",
     column: "embedding",
     embeds: "MCQ / SBA question stem",
-    whenCreated: ["Question save (/api/save-question)", "Question edit (PATCH /api/questions/:id)"],
-    features: ["Vector সংরক্ষিত", "Similar / duplicate question search এখনো নেই"],
+    whenCreated: [
+      "Generate বন্ধ (ডিফল্ট) — EMBED_UNUSED_CONTENT=true হলে question save/edit",
+    ],
+    features: [
+      "UI-তে similar/duplicate search নেই",
+      "নতুন save-এ আর vector লেখা হয় না",
+    ],
     active: false,
   },
   {
@@ -78,8 +88,13 @@ const EMBEDDINGS: EmbeddingRow[] = [
     table: "questions",
     column: "explanation_embedding",
     embeds: "MCQ: T/F statement + explanation · SBA: option + explanation",
-    whenCreated: ["Question save (explanation থাকলে)", "Question edit"],
-    features: ["Vector সংরক্ষিত", "Explanation-based search এখনো নেই"],
+    whenCreated: [
+      "Generate বন্ধ (ডিফল্ট) — EMBED_UNUSED_CONTENT=true হলে explanation সহ save",
+    ],
+    features: [
+      "UI-তে explanation search নেই",
+      "নতুন save-এ আর vector লেখা হয় না",
+    ],
     active: false,
   },
   {
@@ -87,8 +102,13 @@ const EMBEDDINGS: EmbeddingRow[] = [
     table: "exams",
     column: "title_embedding",
     embeds: "Exam title + description",
-    whenCreated: ["Exam create", "Exam update"],
-    features: ["Vector সংরক্ষিত", "Similar exam search এখনো নেই"],
+    whenCreated: [
+      "Generate বন্ধ (ডিফল্ট) — EMBED_UNUSED_CONTENT=true হলে exam create/update",
+    ],
+    features: [
+      "UI-তে similar exam search নেই",
+      "নতুন save-এ আর vector লেখা হয় না",
+    ],
     active: false,
   },
 ];
@@ -138,7 +158,7 @@ function EmbeddingCard({ row }: { row: EmbeddingRow }) {
           </div>
         </div>
         <Badge variant={row.active ? "default" : "secondary"} className="shrink-0">
-          {row.active ? "Active — search/match" : "Save only"}
+          {row.active ? "Active — search/match" : "Generate off"}
         </Badge>
       </div>
 
@@ -206,7 +226,7 @@ export function ConnectionDetailsDialog() {
               </div>
               <div className="rounded-lg border p-3 text-center">
                 <p className="text-2xl font-semibold">{storedCount}</p>
-                <p className="text-xs text-muted-foreground">Save only (future)</p>
+                <p className="text-xs text-muted-foreground">Generate off (kept)</p>
               </div>
             </div>
 
@@ -284,8 +304,8 @@ export function ConnectionDetailsDialog() {
               <GraduationCap className="h-4 w-4 shrink-0 mt-0.5" />
               <p>
                 <strong className="text-foreground">সংক্ষেপ:</strong> এখন শুধু{" "}
-                <code className="text-[11px]">key_points.embedding</code> দিয়ে suggestion matching চলে। বাকি ৪টি
-                column save হয় — index DB-তে ready, UI search feature পরে যোগ করা যাবে।
+                <code className="text-[11px]">key_points.embedding</code> generate + match হয়। Detail / question /
+                exam vectors ডিফল্টে বন্ধ (`EMBED_UNUSED_CONTENT=false`) — column রাখা আছে পরে চালু করার জন্য।
               </p>
             </div>
           </div>

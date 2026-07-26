@@ -156,10 +156,23 @@ export function applyConnectionConfig(config, source = "manual") {
   return { ok: Boolean(supabaseAdmin), config: normalized };
 }
 
+async function isSupabaseConfigReachable(config) {
+  const client = createSupabaseClientFromConfig(config);
+  if (!client) return { ok: false, error: "missing url or service role key" };
+  const { error } = await client.from("app_settings").select("key").limit(1);
+  if (error) return { ok: false, error: error.message || String(error) };
+  return { ok: true };
+}
+
 export async function initDbConnection() {
   const fileConfig = loadConfigFromFile();
   if (fileConfig?.supabase?.url && fileConfig?.supabase?.serviceRoleKey) {
-    return applyConnectionConfig(fileConfig, "file");
+    const fileCheck = await isSupabaseConfigReachable(fileConfig);
+    if (fileCheck.ok) return applyConnectionConfig(fileConfig, "file");
+    console.warn(
+      "database-connection.json failed validation — falling back to env:",
+      fileCheck.error,
+    );
   }
 
   const envConfig = getEnvDefaults();
@@ -169,7 +182,14 @@ export async function initDbConnection() {
       try {
         const dbConfig = await loadConfigFromAppSettings(supabaseAdmin);
         if (dbConfig?.supabase?.url && dbConfig?.supabase?.serviceRoleKey) {
-          return applyConnectionConfig(dbConfig, "app_settings");
+          const dbCheck = await isSupabaseConfigReachable(dbConfig);
+          if (dbCheck.ok) {
+            return applyConnectionConfig(dbConfig, "app_settings");
+          }
+          console.warn(
+            "app_settings database_connection is unreachable (bad URL/key). Keeping .env config:",
+            dbCheck.error,
+          );
         }
       } catch {
         /* app_settings may not exist yet */
