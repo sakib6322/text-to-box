@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CKEditor } from "@ckeditor/ckeditor5-react";
 import { ImagePlus, ChevronDown } from "lucide-react";
 import {
@@ -43,6 +43,8 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveImageInsertUrl } from "@/lib/richHtmlImages";
 import { compressImage } from "@/lib/sourceInput";
+import { resolveConceptTextColor } from "@/lib/uiAppearance";
+import { getLocalColorScheme, resolveLocalIsDark } from "@/lib/colorSchemeLocal";
 
 type Props = {
   value: string;
@@ -286,9 +288,10 @@ export function CKEditorField({
   variant = "default",
   appearanceScope,
 }: Props) {
-  const { appearance } = useUiAppearance();
+  const { appearance, activeDevice } = useUiAppearance();
   const re = appearance.richEditor;
   const editorRef = useRef<ClassicEditor | null>(null);
+  const imageToolbarSlotRef = useRef<HTMLDivElement | null>(null);
   const lastEmitted = useRef(value);
   const [imageLink, setImageLink] = useState("");
   const [imageLinkError, setImageLinkError] = useState("");
@@ -310,6 +313,16 @@ export function CKEditorField({
     editor.setData(value || "");
     lastEmitted.current = value;
   }, [value]);
+
+  const mountImageButtonInToolbar = (editor: ClassicEditor) => {
+    if (!re.googleDriveEmbeds) return;
+    const slot = imageToolbarSlotRef.current;
+    const items = editor.ui.view.toolbar.element?.querySelector(".ck-toolbar__items");
+    if (!slot || !items) return;
+    if (slot.parentElement !== items) {
+      items.appendChild(slot);
+    }
+  };
 
   const insertImageFromLink = async () => {
     const editor = editorRef.current;
@@ -338,6 +351,53 @@ export function CKEditorField({
     }
   };
 
+  const scopeStyle = useMemo(() => {
+    const device = appearance[activeDevice] ?? appearance.desktop;
+    const c = device.conceptDetails;
+    const s = device.storyBasedLearning;
+    const isDark = resolveLocalIsDark(getLocalColorScheme());
+    const unsetCd = (c.unsetTextColor?.trim() || "#ffffff");
+    const base: CSSProperties & Record<string, string> = {
+      "--ck-editor-min-height":
+        appearanceScope === "concept"
+          ? "var(--cd-textbox-min-height, 360px)"
+          : appearanceScope === "story"
+            ? "var(--sbl-textbox-min-height, 280px)"
+            : minHeight,
+    };
+    if (appearanceScope === "concept") {
+      const toolbarBg = c.textboxToolbarBg?.trim();
+      const toolbarIcon = c.textboxToolbarIconColor?.trim();
+      const textboxBg = c.textboxBg?.trim();
+      if (toolbarBg) base["--cd-textbox-toolbar-bg"] = toolbarBg;
+      if (toolbarIcon) base["--cd-textbox-toolbar-icon"] = toolbarIcon;
+      if (textboxBg) base["--cd-textbox-bg"] = textboxBg;
+      base["--cd-unset-text"] = unsetCd;
+      base["--cd-paragraph"] = resolveConceptTextColor(c.paragraphColor, unsetCd, isDark);
+      base["--cd-heading"] = resolveConceptTextColor(c.headingColor, unsetCd, isDark);
+      base["--cd-h1-color"] = resolveConceptTextColor(c.heading1Color, unsetCd, isDark);
+      base["--cd-h2-color"] = resolveConceptTextColor(c.heading2Color, unsetCd, isDark);
+      base["--cd-h3-color"] = resolveConceptTextColor(c.heading3Color, unsetCd, isDark);
+    }
+    if (appearanceScope === "story") {
+      const toolbarBg = s.textboxToolbarBg?.trim() || c.textboxToolbarBg?.trim();
+      const toolbarIcon = s.textboxToolbarIconColor?.trim() || c.textboxToolbarIconColor?.trim();
+      const textboxBg = s.textboxBg?.trim() || c.textboxBg?.trim();
+      if (toolbarBg) base["--sbl-textbox-toolbar-bg"] = toolbarBg;
+      if (toolbarIcon) base["--sbl-textbox-toolbar-icon"] = toolbarIcon;
+      if (textboxBg) base["--sbl-textbox-bg"] = textboxBg;
+      // Content/text area colors (Unset text color from Concept details in dark mode)
+      base["--cd-unset-text"] = unsetCd;
+      base["--sbl-body-color"] = resolveConceptTextColor(s.bodyColor, unsetCd, isDark);
+      base["--sbl-heading-color"] = resolveConceptTextColor(s.headingColor, unsetCd, isDark);
+      base["--sbl-link-color"] = s.linkColor?.trim() || "#0d9488";
+      base["--sbl-font-family"] = s.fontFamily || "inherit";
+      base["--sbl-font-size"] = `${s.fontSizePx ?? 16}px`;
+      base["--sbl-line-height"] = String(s.lineHeight ?? 1.75);
+    }
+    return base;
+  }, [appearance, activeDevice, appearanceScope, minHeight]);
+
   return (
     <div
       className={cn(
@@ -348,33 +408,26 @@ export function CKEditorField({
         variant === "compact" && "ckeditor-field--compact",
         className,
       )}
-      style={
-        {
-          "--ck-editor-min-height":
-            appearanceScope === "concept"
-              ? "var(--cd-textbox-min-height, 360px)"
-              : appearanceScope === "story"
-                ? "var(--sbl-textbox-min-height, 280px)"
-                : minHeight,
-        } as React.CSSProperties
-      }
+      style={scopeStyle}
     >
       {re.googleDriveEmbeds ? (
-        <div className="flex justify-end border-b bg-muted/20 px-2 py-1">
+        <div ref={imageToolbarSlotRef} className="ck-insert-image-link-slot">
           <Popover open={imageMenuOpen} onOpenChange={setImageMenuOpen}>
             <PopoverTrigger asChild>
-              <Button
+              <button
                 type="button"
-                variant="outline"
-                size="sm"
-                className="h-6 gap-0.5 px-1.5 text-[10px] font-medium"
+                className="ck-insert-image-link-btn"
+                aria-label="Insert image from link"
+                title="Insert image from link"
               >
-                <ImagePlus className="h-3 w-3" />
-                Image
-                <ChevronDown className={cn("h-2.5 w-2.5 transition-transform", imageMenuOpen && "rotate-180")} />
-              </Button>
+                <ImagePlus className="h-4 w-4" strokeWidth={2} />
+                <span className="ck-insert-image-link-label">Image</span>
+                <ChevronDown
+                  className={cn("h-3 w-3 transition-transform", imageMenuOpen && "rotate-180")}
+                />
+              </button>
             </PopoverTrigger>
-            <PopoverContent className="w-72 p-3" align="end" sideOffset={4}>
+            <PopoverContent className="w-72 p-3" align="end" sideOffset={6}>
               <div className="space-y-2">
                 <p className="text-xs font-medium">Insert image from link</p>
                 <Input
@@ -417,6 +470,7 @@ export function CKEditorField({
         onReady={(editor) => {
           editorRef.current = editor;
           lastEmitted.current = editor.getData();
+          mountImageButtonInToolbar(editor);
 
           if (re.directImageUpload && re.imageCompression) {
             editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({

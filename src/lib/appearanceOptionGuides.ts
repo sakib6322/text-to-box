@@ -98,7 +98,7 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   },
   {
     title: "Textbox shape",
-    body: "কোথায়: Appearance → Concept details → Textbox shape — CKEditor radius/border/bg/height/padding (`--cd-textbox-*`)। Suggestions Edit-এ apply।",
+    body: "কোথায়: Appearance → Concept details → Textbox shape — CKEditor radius/border/bg/height/padding + Toolbar background / icon color (`--cd-textbox-*`)। Suggestions Edit-এ apply।",
   },
   {
     title: "Textbox card (panel)",
@@ -106,7 +106,7 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   },
   {
     title: "Unset text color",
-    body: "Textbox/HTML-এ font color না দিলে এই রঙ (ডিফল্ট `#ffffff`)। Dark mode-এ Appearance-এর গাঢ় paragraph/heading থাকলেও এটা ব্যবহার হয়। Save to database দিয়ে সেভ হয়।",
+    body: "Appearance → Concept details। Textbox/HTML-এ font color না দিলে (বা dark mode-এ গাঢ় paragraph/heading) এই রঙ — Details ও Story CKEditor edit + read view। ডিফল্ট `#ffffff`। Save appearance দিয়ে সেভ করুন।",
   },
   {
     title: "Paragraph / Heading / Link / Bullet colors",
@@ -147,7 +147,7 @@ export const GUIDE_STORY: AppearanceGuideItem[] = [
   { title: "Dialog max width", body: "কোথায়: Story panel/dialog — `data-sbl-dialog-width` (sm/md/lg/full)।" },
   { title: "Show button icon", body: "কোথায়: Story CTA button-এ book icon।" },
   { title: "Font / sizes", body: "কোথায়: story reader content — `--sbl-*` typography।" },
-  { title: "Textbox shape", body: "কোথায়: Appearance → Story → Textbox shape — Story edit CKEditor (`--sbl-textbox-*`)." },
+  { title: "Textbox shape", body: "কোথায়: Appearance → Story → Textbox shape — Story edit CKEditor (`--sbl-textbox-*`) incl. toolbar bg/icon." },
   { title: "Textbox card (panel)", body: "কোথায়: Appearance → Story → Textbox card — `.story-based-learning-panel` bg, border, width, radius, padding, shadow।" },
   { title: "Title / Body / Heading / Link / Accent colors", body: "রঙ picker। কোথায়: story panel text elements।" },
   { title: "Set to Phone / Tablet / …", body: "Story design device间 copy — Save পর্যন্ত draft।" },

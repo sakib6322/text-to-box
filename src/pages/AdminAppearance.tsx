@@ -1622,13 +1622,13 @@ export default function AdminAppearance() {
                 label="Unset text color"
                 value={c.unsetTextColor || "#ffffff"}
                 onChange={(v) => updateCd("unsetTextColor", v)}
-                hint="Textbox-এ color না দিলে এই রঙ (ডিফল্ট white)। Dark mode-এ গাঢ় paragraph/heading হলেও এটা।"
+                hint="Details + Story editor/read — textbox-এ color না দিলে বা dark mode-এ গাঢ় paragraph/heading হলে এই রঙ (ডিফল্ট #ffffff)। Save appearance প্রয়োজন।"
               />
               <ColorField
                 label="Paragraph color"
                 value={c.paragraphColor}
                 onChange={(v) => updateCd("paragraphColor", v)}
-                hint="খালি রাখলে Unset text color"
+                hint="খালি রাখলে Unset text color — editor ও read view দুটোতেই"
               />
               <ColorField label="H1 color" value={c.heading1Color} onChange={(v) => updateCd("heading1Color", v)} />
               <ColorField label="H2 color" value={c.heading2Color} onChange={(v) => updateCd("heading2Color", v)} />
@@ -1714,6 +1714,18 @@ export default function AdminAppearance() {
                   value={c.textboxBg?.trim() || "#ffffff"}
                   onChange={(v) => updateCd("textboxBg", v)}
                   hint="খালি = page background"
+                />
+                <ColorField
+                  label="Toolbar background"
+                  value={c.textboxToolbarBg?.trim() || "#f1f5f9"}
+                  onChange={(v) => updateCd("textboxToolbarBg", v)}
+                  hint="CKEditor উপরের icon row — dark mode-এ গাঢ় রঙ দিন। খালি = theme muted"
+                />
+                <ColorField
+                  label="Toolbar icon color"
+                  value={c.textboxToolbarIconColor?.trim() || "#0f172a"}
+                  onChange={(v) => updateCd("textboxToolbarIconColor", v)}
+                  hint="Bold/Italic ইত্যাদি icon রঙ। Dark mode-এ সাদা (#ffffff) দিতে পারেন। খালি = theme foreground"
                 />
                 <NumberField
                   label="Min height (px)"
@@ -2083,7 +2095,19 @@ export default function AdminAppearance() {
                   label="Textbox background"
                   value={s.textboxBg?.trim() || "#ffffff"}
                   onChange={(v) => updateSbl("textboxBg", v)}
-                  hint="খালি = page background"
+                  hint="Story edit content area bg। খালি = Concept textbox bg / page bg"
+                />
+                <ColorField
+                  label="Toolbar background"
+                  value={s.textboxToolbarBg?.trim() || "#f1f5f9"}
+                  onChange={(v) => updateSbl("textboxToolbarBg", v)}
+                  hint="Story CKEditor icon row। খালি = Concept details toolbar bg, নইলে theme muted"
+                />
+                <ColorField
+                  label="Toolbar icon color"
+                  value={s.textboxToolbarIconColor?.trim() || "#0f172a"}
+                  onChange={(v) => updateSbl("textboxToolbarIconColor", v)}
+                  hint="Story toolbar icons। খালি = Concept details icon color। Dark: #ffffff"
                 />
                 <NumberField
                   label="Min height (px)"
@@ -2167,7 +2191,12 @@ export default function AdminAppearance() {
 
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               <ColorField label="Title color" value={s.titleColor} onChange={(v) => updateSbl("titleColor", v)} />
-              <ColorField label="Body color" value={s.bodyColor} onChange={(v) => updateSbl("bodyColor", v)} />
+              <ColorField
+                label="Body color"
+                value={s.bodyColor}
+                onChange={(v) => updateSbl("bodyColor", v)}
+                hint="Story editor content text। Dark mode-এ গাঢ় হলে Concept → Unset text color ব্যবহার হয়"
+              />
               <ColorField label="Heading color" value={s.headingColor} onChange={(v) => updateSbl("headingColor", v)} />
               <ColorField label="Link color" value={s.linkColor} onChange={(v) => updateSbl("linkColor", v)} />
               <ColorField label="Accent" value={s.accentColor} onChange={(v) => updateSbl("accentColor", v)} />

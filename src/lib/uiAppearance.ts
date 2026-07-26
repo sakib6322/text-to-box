@@ -204,6 +204,10 @@ export type ConceptDetailsAppearance = {
   textboxBg: string;
   textboxMinHeightPx: number;
   textboxPaddingPx: number;
+  /** CKEditor top toolbar strip (icons row) — empty = theme muted */
+  textboxToolbarBg: string;
+  /** Toolbar icon / button label color — empty = theme foreground */
+  textboxToolbarIconColor: string;
   boldWeight: number;
   linkColor: string;
   bulletColor: string;
@@ -284,6 +288,8 @@ export type StoryBasedLearningAppearance = {
   textboxBg: string;
   textboxMinHeightPx: number;
   textboxPaddingPx: number;
+  textboxToolbarBg: string;
+  textboxToolbarIconColor: string;
   dialogMaxWidth: StoryDialogWidth;
   buttonLabel: string;
   showButtonIcon: boolean;
@@ -900,6 +906,8 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     textboxBg: "",
     textboxMinHeightPx: 360,
     textboxPaddingPx: 12,
+    textboxToolbarBg: "",
+    textboxToolbarIconColor: "",
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
@@ -949,6 +957,8 @@ function defaultStory(overrides: Partial<StoryBasedLearningAppearance> = {}): St
     textboxBg: "",
     textboxMinHeightPx: 280,
     textboxPaddingPx: 12,
+    textboxToolbarBg: "",
+    textboxToolbarIconColor: "",
     dialogMaxWidth: "lg",
     buttonLabel: "Story-based learning",
     showButtonIcon: true,
@@ -2079,7 +2089,7 @@ function cssColorLuminance(color: string): number | null {
  * Concept details / textbox text: empty → unsetTextColor (default white).
  * Dark mode + dark-looking saved color → unsetTextColor so content stays readable.
  */
-function resolveConceptTextColor(saved: unknown, unsetTextColor: string, isDark: boolean): string {
+export function resolveConceptTextColor(saved: unknown, unsetTextColor: string, isDark: boolean): string {
   const fallback = (typeof unsetTextColor === "string" && unsetTextColor.trim()) || "#ffffff";
   const raw = typeof saved === "string" ? saved.trim() : "";
   if (!raw) return fallback;
@@ -2366,14 +2376,26 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   );
   root.style.setProperty("--cd-textbox-min-height", `${c.textboxMinHeightPx ?? 360}px`);
   root.style.setProperty("--cd-textbox-padding", `${c.textboxPaddingPx ?? 12}px`);
+  root.style.setProperty(
+    "--cd-textbox-toolbar-bg",
+    typeof c.textboxToolbarBg === "string" && c.textboxToolbarBg.trim()
+      ? c.textboxToolbarBg.trim()
+      : "hsl(var(--muted))",
+  );
+  root.style.setProperty(
+    "--cd-textbox-toolbar-icon",
+    typeof c.textboxToolbarIconColor === "string" && c.textboxToolbarIconColor.trim()
+      ? c.textboxToolbarIconColor.trim()
+      : "hsl(var(--foreground))",
+  );
 
   root.style.setProperty("--sbl-font-family", s.fontFamily);
   root.style.setProperty("--sbl-font-size", `${s.fontSizePx}px`);
   root.style.setProperty("--sbl-line-height", String(s.lineHeight));
   root.style.setProperty("--sbl-title-size", `${s.titleSizePx}px`);
-  root.style.setProperty("--sbl-title-color", s.titleColor);
-  root.style.setProperty("--sbl-body-color", s.bodyColor);
-  root.style.setProperty("--sbl-heading-color", s.headingColor);
+  root.style.setProperty("--sbl-title-color", resolveConceptTextColor(s.titleColor, unsetCd, isDark));
+  root.style.setProperty("--sbl-body-color", resolveConceptTextColor(s.bodyColor, unsetCd, isDark));
+  root.style.setProperty("--sbl-heading-color", resolveConceptTextColor(s.headingColor, unsetCd, isDark));
   root.style.setProperty("--sbl-link-color", s.linkColor);
   root.style.setProperty("--sbl-bg", s.backgroundColor);
   root.style.setProperty("--sbl-panel-bg", s.panelBg);
@@ -2400,10 +2422,24 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   );
   root.style.setProperty(
     "--sbl-textbox-bg",
-    typeof s.textboxBg === "string" && s.textboxBg.trim() ? s.textboxBg.trim() : "hsl(var(--background))",
+    (typeof s.textboxBg === "string" && s.textboxBg.trim()) ||
+      (typeof c.textboxBg === "string" && c.textboxBg.trim()) ||
+      "hsl(var(--background))",
   );
   root.style.setProperty("--sbl-textbox-min-height", `${s.textboxMinHeightPx ?? 280}px`);
   root.style.setProperty("--sbl-textbox-padding", `${s.textboxPaddingPx ?? 12}px`);
+  root.style.setProperty(
+    "--sbl-textbox-toolbar-bg",
+    (typeof s.textboxToolbarBg === "string" && s.textboxToolbarBg.trim()) ||
+      (typeof c.textboxToolbarBg === "string" && c.textboxToolbarBg.trim()) ||
+      "hsl(var(--muted))",
+  );
+  root.style.setProperty(
+    "--sbl-textbox-toolbar-icon",
+    (typeof s.textboxToolbarIconColor === "string" && s.textboxToolbarIconColor.trim()) ||
+      (typeof c.textboxToolbarIconColor === "string" && c.textboxToolbarIconColor.trim()) ||
+      "hsl(var(--foreground))",
+  );
   root.dataset.sblDialogWidth = s.dialogMaxWidth;
 
   root.style.setProperty("--aq-list-max", `${aq.listMaxWidthPx}px`);

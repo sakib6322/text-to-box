@@ -638,6 +638,65 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   overflow: visible !important;
 }
 
+/* Image-from-link control — mounted into .ck-toolbar__items after editor ready */
+.ck-insert-image-link-slot {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  margin-left: 0.15rem;
+}
+
+.ck-insert-image-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 2rem;
+  min-width: 2rem;
+  padding: 0.25rem 0.45rem;
+  border: 0;
+  border-radius: 0.25rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.ck-insert-image-link-btn:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.ck-insert-image-link-btn:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+.ck-insert-image-link-label {
+  max-width: 3.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Before mount, keep off-layout so it doesn't flash above the editor */
+.ckeditor-field > .ck-insert-image-link-slot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.ckeditor-field .ck-toolbar__items > .ck-insert-image-link-slot {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+}
+
 .ckeditor-field .ck.ck-toolbar .ck-toolbar__items {
   flex-wrap: wrap !important;
   row-gap: 0.15rem;
@@ -676,14 +735,70 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   border-radius: var(--cd-textbox-radius, 8px) var(--cd-textbox-radius, 8px) 0 0;
   border: var(--cd-textbox-border-width, 1px) solid var(--cd-textbox-border, hsl(var(--border)));
   border-bottom-width: 0;
+  background: var(--cd-textbox-toolbar-bg, hsl(var(--muted))) !important;
+  color: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-base-background: var(--cd-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-text: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-default-color: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-on-color: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-on-background: color-mix(in srgb, var(--cd-textbox-toolbar-icon, hsl(var(--foreground))) 14%, transparent);
+  --ck-color-button-default-hover-background: color-mix(in srgb, var(--cd-textbox-toolbar-icon, hsl(var(--foreground))) 10%, transparent);
+  --ck-color-button-on-hover-background: color-mix(in srgb, var(--cd-textbox-toolbar-icon, hsl(var(--foreground))) 18%, transparent);
+  --ck-color-dropdown-panel-background: var(--cd-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-list-background: var(--cd-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-panel-background: var(--cd-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-toolbar-background: var(--cd-textbox-toolbar-bg, hsl(var(--muted)));
 }
 
-.ckeditor-field--concept .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable) {
-  min-height: var(--cd-textbox-min-height, 360px);
-  background: var(--cd-textbox-bg, hsl(var(--background)));
+.ckeditor-field--concept .ck.ck-toolbar .ck-button .ck-icon,
+.ckeditor-field--concept .ck.ck-toolbar .ck-button .ck-button__label {
+  color: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+}
+
+.ckeditor-field--concept .ck.ck-toolbar .ck-icon {
+  color: var(--cd-textbox-toolbar-icon, hsl(var(--foreground)));
+}
+
+.ckeditor-field--concept .ck.ck-toolbar .ck-toolbar__separator {
+  background: color-mix(in srgb, var(--cd-textbox-toolbar-icon, hsl(var(--foreground))) 28%, transparent);
+}
+
+.ckeditor-field--concept .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable),
+.ckeditor-field--concept .ck.ck-editor__editable.ck-content:not(.ck-editor__nested-editable) {
+  min-height: var(--cd-textbox-min-height, 360px) !important;
+  background: var(--cd-textbox-bg, hsl(var(--background))) !important;
   border: var(--cd-textbox-border-width, 1px) solid var(--cd-textbox-border, hsl(var(--border)));
   border-radius: 0 0 var(--cd-textbox-radius, 8px) var(--cd-textbox-radius, 8px);
-  padding: var(--cd-textbox-padding, 12px);
+  padding: var(--cd-textbox-padding, 12px) !important;
+  font-family: var(--cd-font-family, inherit) !important;
+  font-size: var(--cd-font-size, 14px) !important;
+  line-height: var(--cd-line-height, 1.65) !important;
+  /* Appearance → Concept details → Unset / Paragraph (dark mode–safe) */
+  color: var(--cd-paragraph, var(--cd-unset-text, #ffffff)) !important;
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable p {
+  color: var(--cd-paragraph, var(--cd-unset-text, #ffffff));
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable h1 {
+  color: var(--cd-h1-color, var(--cd-heading, var(--cd-unset-text, #ffffff)));
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable h2 {
+  color: var(--cd-h2-color, var(--cd-heading, var(--cd-unset-text, #ffffff)));
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable h3 {
+  color: var(--cd-h3-color, var(--cd-heading, var(--cd-unset-text, #ffffff)));
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable li {
+  color: var(--cd-bullet, var(--cd-unset-text, #ffffff));
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable a {
+  color: var(--cd-link, #2563eb);
 }
 
 .ckeditor-field--concept .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
@@ -691,23 +806,114 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
 }
 
 /* Story-based learning textbox shape */
+.ckeditor-field--story {
+  --ck-color-base-background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-toolbar-background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-text: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-base-text: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-default-color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-on-color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground)));
+  --ck-color-button-on-background: color-mix(
+    in srgb,
+    var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) 14%,
+    transparent
+  );
+  --ck-color-button-default-hover-background: color-mix(
+    in srgb,
+    var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) 10%,
+    transparent
+  );
+  --ck-color-button-on-hover-background: color-mix(
+    in srgb,
+    var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) 18%,
+    transparent
+  );
+  --ck-color-dropdown-panel-background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-list-background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-panel-background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted)));
+  --ck-color-engine-placeholder-text: color-mix(
+    in srgb,
+    var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) 45%,
+    transparent
+  );
+}
+
 .ckeditor-field--story .ck.ck-editor {
   border-radius: var(--sbl-textbox-radius, 8px);
   overflow: hidden;
 }
 
-.ckeditor-field--story .ck.ck-toolbar {
+.ckeditor-field--story .ck.ck-toolbar,
+.ckeditor-field--story .ck.ck-toolbar.ck-reset_all {
   border-radius: var(--sbl-textbox-radius, 8px) var(--sbl-textbox-radius, 8px) 0 0;
   border: var(--sbl-textbox-border-width, 1px) solid var(--sbl-textbox-border, hsl(var(--border)));
   border-bottom-width: 0;
+  background: var(--sbl-textbox-toolbar-bg, hsl(var(--muted))) !important;
+  color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) !important;
 }
 
-.ckeditor-field--story .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable) {
-  min-height: var(--sbl-textbox-min-height, 280px);
-  background: var(--sbl-textbox-bg, hsl(var(--background)));
+.ckeditor-field--story .ck.ck-toolbar .ck-button,
+.ckeditor-field--story .ck.ck-toolbar .ck-dropdown__button {
+  color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) !important;
+}
+
+.ckeditor-field--story .ck.ck-toolbar .ck-button .ck-button__label,
+.ckeditor-field--story .ck.ck-toolbar .ck-icon,
+.ckeditor-field--story .ck.ck-toolbar .ck-button .ck-icon {
+  color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) !important;
+}
+
+.ckeditor-field--story .ck.ck-toolbar .ck-icon svg,
+.ckeditor-field--story .ck.ck-toolbar .ck-button svg {
+  color: var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) !important;
+  fill: currentColor !important;
+}
+
+.ckeditor-field--story .ck.ck-toolbar .ck-icon svg *,
+.ckeditor-field--story .ck.ck-toolbar .ck-button svg * {
+  fill: currentColor !important;
+}
+
+.ckeditor-field--story .ck.ck-toolbar .ck-toolbar__separator {
+  background: color-mix(in srgb, var(--sbl-textbox-toolbar-icon, hsl(var(--foreground))) 28%, transparent) !important;
+}
+
+.ckeditor-field--story .ck.ck-editor__main > .ck-editor__editable:not(.ck-editor__nested-editable),
+.ckeditor-field--story .ck.ck-editor__editable.ck-content:not(.ck-editor__nested-editable) {
+  min-height: var(--sbl-textbox-min-height, 280px) !important;
+  background: var(--sbl-textbox-bg, hsl(var(--background))) !important;
   border: var(--sbl-textbox-border-width, 1px) solid var(--sbl-textbox-border, hsl(var(--border)));
   border-radius: 0 0 var(--sbl-textbox-radius, 8px) var(--sbl-textbox-radius, 8px);
-  padding: var(--sbl-textbox-padding, 12px);
+  padding: var(--sbl-textbox-padding, 12px) !important;
+  font-family: var(--sbl-font-family, inherit) !important;
+  font-size: var(--sbl-font-size, 15px) !important;
+  line-height: var(--sbl-line-height, 1.65) !important;
+  /* Content/text area — Appearance Story body / Concept Unset text color */
+  color: var(--sbl-body-color, var(--cd-unset-text, #ffffff)) !important;
+}
+
+.ckeditor-field--story .ck.ck-editor__editable p,
+.ckeditor-field--story .ck.ck-editor__editable li,
+.ckeditor-field--story .ck.ck-editor__editable td,
+.ckeditor-field--story .ck.ck-editor__editable th {
+  color: var(--sbl-body-color, var(--cd-unset-text, #ffffff));
+}
+
+.ckeditor-field--story .ck.ck-editor__editable h1,
+.ckeditor-field--story .ck.ck-editor__editable h2,
+.ckeditor-field--story .ck.ck-editor__editable h3 {
+  color: var(--sbl-heading-color, var(--cd-unset-text, #ffffff));
+}
+
+.ckeditor-field--story .ck.ck-editor__editable a {
+  color: var(--sbl-link-color, #0d9488);
+}
+
+/* Unstyled spans inherit editable color; keep intentional Font Color plugin spans */
+.ckeditor-field--story .ck.ck-editor__editable > *:not([style*="color"]),
+.ckeditor-field--story .ck.ck-editor__editable p > span:not([style*="color"]),
+.ckeditor-field--story .ck.ck-editor__editable li > span:not([style*="color"]) {
+  color: inherit;
 }
 
 .ckeditor-field--story .ck.ck-editor__editable:not(.ck-editor__nested-editable).ck-focused {
