@@ -358,7 +358,7 @@ export function AccessManagementPanel() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
+            <Button variant="modalCancel" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button onClick={save} disabled={saving}>

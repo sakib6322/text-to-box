@@ -2154,7 +2154,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
                         <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
                           <Button
                             type="button"
-                            variant="outline"
+                            variant="modalCancel"
                             size="sm"
                             onClick={closeAddPanel}
                             disabled={savingAdd}
@@ -2274,7 +2274,7 @@ const Suggestions = ({ mode = "admin" }: { mode?: "admin" | "user" }) => {
             ) : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+            <Button type="button" variant="modalCancel" onClick={() => setEditTarget(null)} disabled={savingEdit}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit || !editContent.trim()}>

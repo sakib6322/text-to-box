@@ -304,7 +304,7 @@ export function ConceptsPanel() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={savingEdit}>
+            <Button type="button" variant="modalCancel" onClick={() => setEditOpen(false)} disabled={savingEdit}>
               Cancel
             </Button>
             <Button type="button" onClick={saveEdit} disabled={savingEdit || !editTitle.trim()}>

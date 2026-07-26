@@ -271,7 +271,7 @@ export default function AdminCourses() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="modalCancel" onClick={() => setOpen(false)}>
               Cancel
             </Button>
             <Button type="button" onClick={() => void save()} disabled={saving}>

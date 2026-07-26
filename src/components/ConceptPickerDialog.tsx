@@ -147,7 +147,7 @@ export function ConceptPickerDialog({ open, onOpenChange, filters, selectedId, o
         </div>
 
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button type="button" variant="modalCancel" onClick={() => onOpenChange(false)}>
             Close
           </Button>
         </DialogFooter>

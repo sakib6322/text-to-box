@@ -283,7 +283,7 @@ export function ConceptDetailsInlinePanel({
       {editable && !loading && !storyOpen && onSave ? (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-3">
           {onClose && isDialog ? (
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            <Button type="button" variant="modalCancel" onClick={onClose} disabled={saving}>
               Close
             </Button>
           ) : null}

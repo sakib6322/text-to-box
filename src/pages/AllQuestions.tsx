@@ -756,7 +756,7 @@ export default function AllQuestions() {
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+            <Button type="button" variant="modalCancel" onClick={() => setEditTarget(null)} disabled={savingEdit}>
               Cancel
             </Button>
             <Button type="button" onClick={saveEdit} disabled={savingEdit || !editStem.trim()}>

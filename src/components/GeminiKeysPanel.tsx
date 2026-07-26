@@ -654,7 +654,7 @@ export function GeminiKeysPanel() {
             ) : null}
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+            <Button type="button" variant="modalCancel" onClick={() => setEditOpen(false)}>
               বাতিল
             </Button>
             <Button type="button" onClick={saveEdit} disabled={savingEdit}>

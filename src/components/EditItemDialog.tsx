@@ -51,7 +51,7 @@ export function EditItemDialog({
           )}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+          <Button type="button" variant="modalCancel" onClick={() => onOpenChange(false)} disabled={saving}>
             Cancel
           </Button>
           <Button type="button" onClick={() => void Promise.resolve(onSave())} disabled={saving || !value.trim()}>
