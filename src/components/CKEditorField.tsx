@@ -43,7 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveImageInsertUrl } from "@/lib/richHtmlImages";
 import { compressImage } from "@/lib/sourceInput";
-import { resolveConceptTextColor } from "@/lib/uiAppearance";
+import { resolveConceptBackgroundColor, resolveConceptTextColor } from "@/lib/uiAppearance";
 import { getLocalColorScheme, resolveLocalIsDark } from "@/lib/colorSchemeLocal";
 
 type Props = {
@@ -356,7 +356,8 @@ export function CKEditorField({
     const c = device.conceptDetails;
     const s = device.storyBasedLearning;
     const isDark = resolveLocalIsDark(getLocalColorScheme());
-    const unsetCd = (c.unsetTextColor?.trim() || "#ffffff");
+    const unsetCd = c.unsetTextColor?.trim() || "#ffffff";
+    const unsetBg = c.unsetBackgroundColor?.trim() || "#0f172a";
     const base: CSSProperties & Record<string, string> = {
       "--ck-editor-min-height":
         appearanceScope === "concept"
@@ -368,11 +369,15 @@ export function CKEditorField({
     if (appearanceScope === "concept") {
       const toolbarBg = c.textboxToolbarBg?.trim();
       const toolbarIcon = c.textboxToolbarIconColor?.trim();
-      const textboxBg = c.textboxBg?.trim();
       if (toolbarBg) base["--cd-textbox-toolbar-bg"] = toolbarBg;
       if (toolbarIcon) base["--cd-textbox-toolbar-icon"] = toolbarIcon;
-      if (textboxBg) base["--cd-textbox-bg"] = textboxBg;
       base["--cd-unset-text"] = unsetCd;
+      base["--cd-unset-bg"] = unsetBg;
+      base["--cd-textbox-bg"] = resolveConceptBackgroundColor(
+        c.textboxBg?.trim() || c.backgroundColor,
+        unsetBg,
+        isDark,
+      );
       base["--cd-paragraph"] = resolveConceptTextColor(c.paragraphColor, unsetCd, isDark);
       base["--cd-heading"] = resolveConceptTextColor(c.headingColor, unsetCd, isDark);
       base["--cd-h1-color"] = resolveConceptTextColor(c.heading1Color, unsetCd, isDark);
@@ -382,12 +387,16 @@ export function CKEditorField({
     if (appearanceScope === "story") {
       const toolbarBg = s.textboxToolbarBg?.trim() || c.textboxToolbarBg?.trim();
       const toolbarIcon = s.textboxToolbarIconColor?.trim() || c.textboxToolbarIconColor?.trim();
-      const textboxBg = s.textboxBg?.trim() || c.textboxBg?.trim();
       if (toolbarBg) base["--sbl-textbox-toolbar-bg"] = toolbarBg;
       if (toolbarIcon) base["--sbl-textbox-toolbar-icon"] = toolbarIcon;
-      if (textboxBg) base["--sbl-textbox-bg"] = textboxBg;
-      // Content/text area colors (Unset text color from Concept details in dark mode)
       base["--cd-unset-text"] = unsetCd;
+      base["--cd-unset-bg"] = unsetBg;
+      base["--sbl-textbox-bg"] = resolveConceptBackgroundColor(
+        s.textboxBg?.trim() || c.textboxBg?.trim() || "",
+        unsetBg,
+        isDark,
+      );
+      // Content/text area colors (Unset text color from Concept details in dark mode)
       base["--sbl-body-color"] = resolveConceptTextColor(s.bodyColor, unsetCd, isDark);
       base["--sbl-heading-color"] = resolveConceptTextColor(s.headingColor, unsetCd, isDark);
       base["--sbl-link-color"] = s.linkColor?.trim() || "#0d9488";

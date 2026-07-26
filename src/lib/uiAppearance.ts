@@ -184,7 +184,12 @@ export type ConceptDetailsAppearance = {
    * Appearance থেকে manage — default white.
    */
   unsetTextColor: string;
-  /** Concept detail read body background — empty = transparent */
+  /**
+   * Body / textbox background খালি বা dark mode-এ খুব হালকা হলে এই bg।
+   * Appearance থেকে manage — default dark slate (pairs with white unset text).
+   */
+  unsetBackgroundColor: string;
+  /** Concept detail read body background — empty = Unset background / transparent (light) */
   backgroundColor: string;
   /** Outer textbox card shell (around concept detail content) */
   cardBg: string;
@@ -889,6 +894,7 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     heading3Color: "#1e293b",
     paragraphColor: "#1e293b",
     unsetTextColor: "#ffffff",
+    unsetBackgroundColor: "#0f172a",
     backgroundColor: "",
     cardBg: "",
     cardBorderColor: "",
@@ -2099,6 +2105,27 @@ export function resolveConceptTextColor(saved: unknown, unsetTextColor: string, 
   return raw;
 }
 
+/**
+ * Concept body / textbox background: empty/transparent → unset in dark, transparent in light.
+ * Dark mode + light-looking saved bg → unset so it doesn't wash out.
+ */
+export function resolveConceptBackgroundColor(
+  saved: unknown,
+  unsetBackgroundColor: string,
+  isDark: boolean,
+): string {
+  const fallback =
+    (typeof unsetBackgroundColor === "string" && unsetBackgroundColor.trim()) || "#0f172a";
+  const raw = typeof saved === "string" ? saved.trim() : "";
+  if (!raw || raw.toLowerCase() === "transparent") {
+    return isDark ? fallback : "transparent";
+  }
+  if (!isDark) return raw;
+  const L = cssColorLuminance(raw);
+  if (L != null && L > 0.65) return fallback;
+  return raw;
+}
+
 function resolveMutedForeground(token: unknown, isDark: boolean): string {
   const raw = typeof token === "string" ? token.trim() : "";
   if (isDark) {
@@ -2297,6 +2324,8 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--ui-section-gap", `${g.sectionGapPx}px`);
 
   const unsetCd = (typeof c.unsetTextColor === "string" && c.unsetTextColor.trim()) || "#ffffff";
+  const unsetBg =
+    (typeof c.unsetBackgroundColor === "string" && c.unsetBackgroundColor.trim()) || "#0f172a";
   const cdParagraph = resolveConceptTextColor(c.paragraphColor, unsetCd, isDark);
   const cdHeading = resolveConceptTextColor(c.headingColor, unsetCd, isDark);
   const cdH1 = resolveConceptTextColor(c.heading1Color, unsetCd, isDark);
@@ -2312,7 +2341,8 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-h2-size", `${c.heading2SizePx}px`);
   root.style.setProperty("--cd-h3-size", `${c.heading3SizePx}px`);
   root.style.setProperty("--cd-unset-text", unsetCd);
-  const cdBg = (typeof c.backgroundColor === "string" && c.backgroundColor.trim()) || "transparent";
+  root.style.setProperty("--cd-unset-bg", unsetBg);
+  const cdBg = resolveConceptBackgroundColor(c.backgroundColor, unsetBg, isDark);
   root.style.setProperty("--cd-bg", cdBg);
   root.dataset.cdBg = cdBg !== "transparent" ? "1" : "0";
   root.style.setProperty("--cd-heading", cdHeading);
@@ -2328,7 +2358,11 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--cd-table-header-bg", c.tableHeaderBg);
   root.style.setProperty("--cd-table-header-color", c.tableHeaderColor);
   root.style.setProperty("--cd-table-border", c.tableBorderColor);
-  root.style.setProperty("--cd-table-even", c.tableEvenRowBg);
+  // Dark mode: skip Appearance table even-row + panel bg (use theme / transparent)
+  root.style.setProperty(
+    "--cd-table-even",
+    isDark ? "transparent" : c.tableEvenRowBg,
+  );
   root.style.setProperty("--cd-table-font-size", `${c.tableFontSizePx}px`);
   root.style.setProperty("--cd-table-pad", `${c.tableCellPaddingPx}px`);
   root.style.setProperty(
@@ -2349,7 +2383,10 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   const cdCardBg = typeof c.cardBg === "string" && c.cardBg.trim() ? c.cardBg.trim() : "";
   const cdCardBorder =
     typeof c.cardBorderColor === "string" && c.cardBorderColor.trim() ? c.cardBorderColor.trim() : "";
-  root.style.setProperty("--cd-card-bg", cdCardBg || "hsl(var(--card))");
+  root.style.setProperty(
+    "--cd-card-bg",
+    isDark ? "hsl(var(--card))" : cdCardBg || "hsl(var(--card))",
+  );
   root.style.setProperty("--cd-card-border", cdCardBorder || "hsl(var(--ui-card-border-color, var(--border)))");
   root.style.setProperty("--cd-card-border-width", `${c.cardBorderWidthPx ?? 1}px`);
   root.style.setProperty("--cd-card-radius", `${c.cardBorderRadiusPx ?? 10}px`);
@@ -2372,7 +2409,11 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   );
   root.style.setProperty(
     "--cd-textbox-bg",
-    typeof c.textboxBg === "string" && c.textboxBg.trim() ? c.textboxBg.trim() : "hsl(var(--background))",
+    resolveConceptBackgroundColor(
+      (typeof c.textboxBg === "string" && c.textboxBg.trim()) || c.backgroundColor,
+      unsetBg,
+      isDark,
+    ),
   );
   root.style.setProperty("--cd-textbox-min-height", `${c.textboxMinHeightPx ?? 360}px`);
   root.style.setProperty("--cd-textbox-padding", `${c.textboxPaddingPx ?? 12}px`);
@@ -2397,8 +2438,12 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   root.style.setProperty("--sbl-body-color", resolveConceptTextColor(s.bodyColor, unsetCd, isDark));
   root.style.setProperty("--sbl-heading-color", resolveConceptTextColor(s.headingColor, unsetCd, isDark));
   root.style.setProperty("--sbl-link-color", s.linkColor);
-  root.style.setProperty("--sbl-bg", s.backgroundColor);
-  root.style.setProperty("--sbl-panel-bg", s.panelBg);
+  // Dark mode: Story content bg transparent; panel uses theme card (same as Concept panel)
+  root.style.setProperty("--sbl-bg", isDark ? "transparent" : s.backgroundColor);
+  root.style.setProperty(
+    "--sbl-panel-bg",
+    isDark ? "hsl(var(--card))" : s.panelBg,
+  );
   root.style.setProperty("--sbl-accent", s.accentColor);
   root.style.setProperty("--sbl-border", s.borderColor);
   root.style.setProperty("--sbl-radius", `${s.borderRadiusPx}px`);
@@ -2422,9 +2467,13 @@ export function applyUiAppearance(theme: UiAppearance, device: DeviceKey = detec
   );
   root.style.setProperty(
     "--sbl-textbox-bg",
-    (typeof s.textboxBg === "string" && s.textboxBg.trim()) ||
-      (typeof c.textboxBg === "string" && c.textboxBg.trim()) ||
-      "hsl(var(--background))",
+    resolveConceptBackgroundColor(
+      (typeof s.textboxBg === "string" && s.textboxBg.trim()) ||
+        (typeof c.textboxBg === "string" && c.textboxBg.trim()) ||
+        "",
+      unsetBg,
+      isDark,
+    ),
   );
   root.style.setProperty("--sbl-textbox-min-height", `${s.textboxMinHeightPx ?? 280}px`);
   root.style.setProperty("--sbl-textbox-padding", `${s.textboxPaddingPx ?? 12}px`);

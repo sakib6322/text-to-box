@@ -1616,13 +1616,19 @@ export default function AdminAppearance() {
                 label="Body background"
                 value={c.backgroundColor?.trim() || "#ffffff"}
                 onChange={(v) => updateCd("backgroundColor", v)}
-                hint="শুধু rich text body। খালি/transparent = পেজ bg।"
+                hint="শুধু rich text body। খালি = Unset background (dark) / transparent (light)।"
               />
               <ColorField
                 label="Unset text color"
                 value={c.unsetTextColor || "#ffffff"}
                 onChange={(v) => updateCd("unsetTextColor", v)}
                 hint="Details + Story editor/read — textbox-এ color না দিলে বা dark mode-এ গাঢ় paragraph/heading হলে এই রঙ (ডিফল্ট #ffffff)। Save appearance প্রয়োজন।"
+              />
+              <ColorField
+                label="Unset background color"
+                value={c.unsetBackgroundColor || "#0f172a"}
+                onChange={(v) => updateCd("unsetBackgroundColor", v)}
+                hint="Body / textbox bg খালি বা dark mode-এ খুব হালকা হলে এই bg (ডিফল্ট #0f172a)। Editor content area-এও apply।"
               />
               <ColorField
                 label="Paragraph color"
@@ -1638,7 +1644,12 @@ export default function AdminAppearance() {
               <ColorField label="Table header BG" value={c.tableHeaderBg} onChange={(v) => updateCd("tableHeaderBg", v)} />
               <ColorField label="Table header text" value={c.tableHeaderColor} onChange={(v) => updateCd("tableHeaderColor", v)} />
               <ColorField label="Table border" value={c.tableBorderColor} onChange={(v) => updateCd("tableBorderColor", v)} />
-              <ColorField label="Table even row" value={c.tableEvenRowBg} onChange={(v) => updateCd("tableEvenRowBg", v)} />
+              <ColorField
+                label="Table even row"
+                value={c.tableEvenRowBg}
+                onChange={(v) => updateCd("tableEvenRowBg", v)}
+                hint="শুধু light mode — dark mode-এ apply হয় না"
+              />
               <ColorField label="Code background" value={c.codeBg} onChange={(v) => updateCd("codeBg", v)} />
               <ColorField label="Blockquote border" value={c.blockquoteBorder} onChange={(v) => updateCd("blockquoteBorder", v)} />
               <NumberField label="Table font size (px)" value={c.tableFontSizePx} min={10} max={16} onChange={(n) => updateCd("tableFontSizePx", n)} />
@@ -1713,7 +1724,7 @@ export default function AdminAppearance() {
                   label="Textbox background"
                   value={c.textboxBg?.trim() || "#ffffff"}
                   onChange={(v) => updateCd("textboxBg", v)}
-                  hint="খালি = page background"
+                  hint="খালি = Unset background color (dark) / page bg (light)"
                 />
                 <ColorField
                   label="Toolbar background"
@@ -1756,7 +1767,7 @@ export default function AdminAppearance() {
                   label="Panel background"
                   value={c.cardBg?.trim() || "#ffffff"}
                   onChange={(v) => updateCd("cardBg", v)}
-                  hint="খালি = theme card color"
+                  hint="খালি = theme card · শুধু light mode — dark mode-এ theme card ব্যবহার হয়"
                 />
                 <ColorField
                   label="Panel border"
@@ -2133,8 +2144,18 @@ export default function AdminAppearance() {
                 Story open করলে যে প্যানেল/কার্ড দেখায় (`.story-based-learning-panel`)।
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <ColorField label="Panel background" value={s.panelBg} onChange={(v) => updateSbl("panelBg", v)} />
-                <ColorField label="Card / content background" value={s.backgroundColor} onChange={(v) => updateSbl("backgroundColor", v)} />
+                <ColorField
+                  label="Panel background"
+                  value={s.panelBg}
+                  onChange={(v) => updateSbl("panelBg", v)}
+                  hint="শুধু light mode — dark mode-এ theme card"
+                />
+                <ColorField
+                  label="Card / content background"
+                  value={s.backgroundColor}
+                  onChange={(v) => updateSbl("backgroundColor", v)}
+                  hint="শুধু light mode — dark mode-এ transparent"
+                />
                 <ColorField label="Border color" value={s.borderColor} onChange={(v) => updateSbl("borderColor", v)} />
                 <NumberField
                   label="Border width (px)"

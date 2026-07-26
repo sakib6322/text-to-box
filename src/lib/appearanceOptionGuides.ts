@@ -109,6 +109,10 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
     body: "Appearance → Concept details। Textbox/HTML-এ font color না দিলে (বা dark mode-এ গাঢ় paragraph/heading) এই রঙ — Details ও Story CKEditor edit + read view। ডিফল্ট `#ffffff`। Save appearance দিয়ে সেভ করুন।",
   },
   {
+    title: "Unset background color",
+    body: "Appearance → Concept details। Body / textbox background খালি বা dark mode-এ খুব হালকা হলে এই bg (`--cd-unset-bg`) — read view + CKEditor content area। ডিফল্ট `#0f172a`।",
+  },
+  {
     title: "Paragraph / Heading / Link / Bullet colors",
     body: "রঙ picker (#hex)। কোথায়: `.concept-detail-rich` text, h1–h3, a, li markers। Paragraph খালি = Unset text color।",
   },

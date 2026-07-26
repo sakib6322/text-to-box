@@ -246,6 +246,7 @@ function defaultConcept(overrides = {}) {
     heading3Color: "#1e293b",
     paragraphColor: "#1e293b",
     unsetTextColor: "#ffffff",
+    unsetBackgroundColor: "#0f172a",
     backgroundColor: "",
     cardBg: "",
     cardBorderColor: "",
