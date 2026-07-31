@@ -122,7 +122,7 @@ export const GUIDE_CONCEPT: AppearanceGuideItem[] = [
   },
   {
     title: "Mobile table",
-    body: "Phone (≤640px)-এ table থাকলে panel body padding/border/radius আলাদা (`mobileTableFullBleed` + `--cd-mobile-table-card-*`)। Default: 0 = table পুরো panel width।",
+    body: "Phone (≤640px)-এ wide Concept tables horizontal scroll (Story parity) — columns squeeze হয় না। `mobileTableFullBleed` + `--cd-mobile-table-card-*` দিয়ে panel chrome। Story tables Concept `--cd-table-*` border/header ব্যবহার করে।",
   },
   {
     title: "Code background / Blockquote border",

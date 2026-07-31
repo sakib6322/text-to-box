@@ -1090,7 +1090,13 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 .concept-detail-table th,
 .concept-detail-table td,
 .concept-detail-rich table th,
-.concept-detail-rich table td {
+.concept-detail-rich table td,
+.story-based-learning-rich table th,
+.story-based-learning-rich table td,
+.story-based-learning .prose table th,
+.story-based-learning .prose table td,
+.ckeditor-field--story .ck-editor__editable table th,
+.ckeditor-field--story .ck-editor__editable table td {
   border: 1px solid var(--cd-table-border, #cbd5e1);
   padding: var(--cd-table-pad, 8px);
   vertical-align: top;
@@ -1111,7 +1117,10 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 }
 
 .concept-detail-table th,
-.concept-detail-rich table th {
+.concept-detail-rich table th,
+.story-based-learning-rich table th,
+.story-based-learning .prose table th,
+.ckeditor-field--story .ck-editor__editable table th {
   background: var(--cd-table-header-bg, #fbbf24);
   color: var(--cd-table-header-color, #1e293b);
   font-weight: 700;
@@ -1126,7 +1135,9 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 }
 
 .concept-detail-table thead tr,
-.concept-detail-rich table thead tr {
+.concept-detail-rich table thead tr,
+.story-based-learning-rich table thead tr,
+.story-based-learning .prose table thead tr {
   border-bottom: none;
 }
 
@@ -1138,7 +1149,36 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
   margin-bottom: 0;
 }
 
-/* Mobile: wrap inside screen, keep editor column proportions when present */
+/* Story tables — same chrome + horizontal scroll as Concept figure.table */
+.story-based-learning-rich table,
+.story-based-learning .prose table,
+.ckeditor-field--story .ck-editor__editable table {
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  border-collapse: collapse;
+  table-layout: auto;
+  font-size: var(--cd-table-font-size, 12px);
+}
+
+.story-based-learning-rich figure.table,
+.story-based-learning-rich .table,
+.story-based-learning .prose figure.table,
+.ckeditor-field--story .ck-editor__editable figure.table {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.story-based-learning-rich:has(table),
+.story-based-learning .prose:has(table) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mobile: horizontal scroll for wide Concept tables (Story parity) — do not squeeze columns */
 @media (max-width: 640px) {
   /* Appearance: Mobile table — full-bleed / custom card chrome when table is present */
   html[data-cd-mobile-table-bleed="1"] .concept-detail-card:has(.concept-detail-rich table),
@@ -1157,45 +1197,45 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
     border-radius: var(--cd-mobile-table-card-radius, 0px);
   }
 
-  .concept-detail-rich,
-  .concept-detail-card {
-    overflow-x: hidden;
+  .concept-detail-card-body:has(.concept-detail-rich table),
+  .concept-detail-card-body:has(.concept-detail-table),
+  .concept-detail-rich:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .concept-detail-rich figure.table,
   .concept-detail-rich .table {
-    overflow-x: hidden;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     margin: 0;
     border-radius: 0;
+    /* Soft edge hint that more columns exist to the right */
+    background:
+      linear-gradient(to right, hsl(var(--background)) 30%, transparent) left / 1.25rem 100% no-repeat,
+      linear-gradient(to left, hsl(var(--background)) 30%, transparent) right / 1.25rem 100% no-repeat;
+    background-attachment: local, local;
   }
 
   .concept-detail-table,
   .concept-detail-rich table,
   .concept-detail-rich figure.table > table,
   .concept-detail-rich .table > table {
-    width: 100% !important;
-    max-width: 100% !important;
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
     margin: 0;
-    /* Content-weighted when no saved widths (not equal columns) */
     table-layout: auto;
-  }
-
-  /* Editor col/% widths → keep those ratios while fitting the screen */
-  .concept-detail-rich table:has(colgroup col[style]),
-  .concept-detail-rich table:has(col[style]),
-  .concept-detail-rich table:has(th[style*="width"]),
-  .concept-detail-rich table:has(td[style*="width"]) {
-    table-layout: fixed !important;
   }
 
   .concept-detail-table th,
   .concept-detail-table td,
   .concept-detail-rich table th,
   .concept-detail-rich table td {
-    min-width: 0 !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-    overflow-wrap: anywhere !important;
+    min-width: 6rem;
+    white-space: normal;
+    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 }
 

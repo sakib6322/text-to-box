@@ -1659,7 +1659,8 @@ export default function AdminAppearance() {
             <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase text-muted-foreground">Mobile table</p>
               <p className="text-[11px] text-muted-foreground">
-                Phone (≤640px)-এ concept body-তে table থাকলে panel card-এর body padding / border / radius আলাদা — table পুরো width নিতে পারে।
+                Phone (≤640px)-এ wide table (৪–৫+ কলাম) horizontal scroll করে — squeeze হয় না। Panel padding /
+                border / radius আলাদা করে full-bleed করা যায়। Story table-ও একই border colors ব্যবহার করে।
               </p>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <BoolField
