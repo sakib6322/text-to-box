@@ -7,12 +7,32 @@ SUBDOMAIN="blood.pgdiary.cloud"
 APP_DIR="/var/www/blood"
 REPO_URL="https://github.com/final164/blood-connect-pro.git"
 APP_PORT="8790"
-NODE_BIN="$(command -v node || true)"
 
-if [[ -z "${NODE_BIN}" ]]; then
-  echo "Install Node 20+ first (e.g. nodesource / nvm), then re-run."
-  exit 1
-fi
+ensure_node_22() {
+  local major
+  if command -v node >/dev/null 2>&1; then
+    major="$(node -p "process.versions.node.split('.')[0]")"
+    if [[ "${major}" -ge 22 ]]; then
+      return 0
+    fi
+    echo "==> Node $(node -v) is too old (need >= 22 for Vite/Rolldown)"
+  else
+    echo "==> Node.js not found"
+  fi
+  echo "==> Installing Node.js 22.x (NodeSource)"
+  curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  apt-get install -y nodejs
+  hash -r || true
+  echo "==> Now Node $(node -v)"
+  major="$(node -p "process.versions.node.split('.')[0]")"
+  if [[ "${major}" -lt 22 ]]; then
+    echo "Still on Node $(node -v). Aborting."
+    exit 1
+  fi
+}
+
+ensure_node_22
+NODE_BIN="$(command -v node)"
 echo "==> Node $(node -v) at ${NODE_BIN}"
 
 mkdir -p "${APP_DIR}"
@@ -37,9 +57,12 @@ if [[ ! -f "${APP_DIR}/.env" ]]; then
 fi
 
 export NITRO_PRESET=node-server
-# blood-connect-pro lockfile is often out of sync with package.json — use install, not ci
-echo "==> npm install && build (NITRO_PRESET=node-server)"
+# Fresh install: broken lockfile + missing @rolldown/binding-linux-x64-gnu
+echo "==> Clean npm install && build (NITRO_PRESET=node-server)"
+rm -rf node_modules
+rm -f package-lock.json
 npm install --engine-strict=false
+npm install @rolldown/binding-linux-x64-gnu --no-save || true
 npm run build
 
 if [[ ! -f "${APP_DIR}/.output/server/index.mjs" ]]; then
@@ -69,7 +92,6 @@ RestartSec=5
 WantedBy=multi-user.target
 UNIT
 
-# Run as root if www-data lacks nvm/node path; tighten later if desired
 systemctl daemon-reload
 systemctl enable blood-connect
 systemctl restart blood-connect
