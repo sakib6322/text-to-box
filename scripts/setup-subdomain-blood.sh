@@ -23,4 +23,9 @@ if [[ ! -f "${APP_DIR}/.env" ]]; then
   exit 1
 fi
 
-bash "${APP_DIR}/scripts/deploy-vps-blood.sh"
+# Prefer inline path if deploy script missing on older clones
+if [[ -f "${APP_DIR}/scripts/deploy-vps-blood.sh" ]]; then
+  bash "${APP_DIR}/scripts/deploy-vps-blood.sh"
+else
+  bash "$(cd "$(dirname "$0")" && pwd)/setup-subdomain-blood-inline.sh"
+fi

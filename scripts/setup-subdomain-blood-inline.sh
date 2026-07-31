@@ -37,8 +37,9 @@ if [[ ! -f "${APP_DIR}/.env" ]]; then
 fi
 
 export NITRO_PRESET=node-server
-echo "==> npm ci && build (NITRO_PRESET=node-server)"
-npm ci
+# blood-connect-pro lockfile is often out of sync with package.json — use install, not ci
+echo "==> npm install && build (NITRO_PRESET=node-server)"
+npm install --engine-strict=false
 npm run build
 
 if [[ ! -f "${APP_DIR}/.output/server/index.mjs" ]]; then
