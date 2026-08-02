@@ -287,9 +287,13 @@ export const GUIDE_PERFORMANCE: AppearanceGuideItem[] = [
 
 export const GUIDE_RICH_EDITOR: AppearanceGuideItem[] = [
   { title: "Image lazy loading", body: "কোথায়: read views — `RichHtmlContent` img loading=lazy when near viewport।" },
-  { title: "Direct image upload", body: "কোথায়: CKEditor toolbar upload — embeds base64 in saved HTML।" },
-  { title: "Image compression", body: "কোথায়: upload pipeline resize/JPEG before embed (needs direct upload on)।" },
-  { title: "Google Drive link → image", body: "কোথায়: paste Drive/public URL in Image dropdown → `/api/gdrive-image` proxy in HTML।" },
+  { title: "Direct image upload", body: "কোথায়: CKEditor toolbar upload — embeds base64 in saved HTML (fallback if Drive upload fails)." },
+  { title: "Image compression", body: "কোথায়: upload pipeline resize/JPEG before Drive upload or base64 embed।" },
+  { title: "Google Drive link → image", body: "কোথায়: paste Drive/public URL in Image dropdown → `/api/gdrive-image` proxy in HTML." },
+  {
+    title: "Upload to Google Drive",
+    body: "CKEditor drag/upload → Service Account ফোল্ডারে সেভ → HTML-এ `/api/gdrive-image/{id}`। Folder ID + SA credentials Admin Appearance-এ; ফোল্ডার SA email-এ Editor share করতে হবে।",
+  },
 ];
 
 export const GUIDE_PREVIEW: AppearanceGuideItem[] = [

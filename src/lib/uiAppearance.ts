@@ -605,6 +605,10 @@ export type RichEditorAppearance = {
   imageCompressionQuality: number;
   /** Convert Google Drive share links to embedded images */
   googleDriveEmbeds: boolean;
+  /** Upload dragged/picked images to a Google Drive folder (proxy URL in HTML) */
+  googleDriveUpload: boolean;
+  /** Drive folder ID from the folder URL (share folder with the service account) */
+  googleDriveFolderId: string;
 };
 
 export type UiAppearance = {
@@ -1679,6 +1683,8 @@ export function defaultRichEditor(overrides: Partial<RichEditorAppearance> = {})
     imageCompressionMaxWidthPx: 1600,
     imageCompressionQuality: 0.82,
     googleDriveEmbeds: true,
+    googleDriveUpload: false,
+    googleDriveFolderId: "",
     ...overrides,
   };
 }
@@ -1691,6 +1697,7 @@ export function mergeRichEditor(base: RichEditorAppearance, patch: unknown): Ric
     if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
     return Math.min(max, Math.max(min, v));
   };
+  const str = (v: unknown, fallback: string) => (typeof v === "string" ? v.trim() : fallback);
   return {
     imageLazyLoading: bool(p.imageLazyLoading, base.imageLazyLoading),
     directImageUpload: bool(p.directImageUpload, base.directImageUpload),
@@ -1698,6 +1705,8 @@ export function mergeRichEditor(base: RichEditorAppearance, patch: unknown): Ric
     imageCompressionMaxWidthPx: num(p.imageCompressionMaxWidthPx, base.imageCompressionMaxWidthPx, 640, 3840),
     imageCompressionQuality: num(p.imageCompressionQuality, base.imageCompressionQuality, 0.5, 1),
     googleDriveEmbeds: bool(p.googleDriveEmbeds, base.googleDriveEmbeds),
+    googleDriveUpload: bool(p.googleDriveUpload, base.googleDriveUpload),
+    googleDriveFolderId: str(p.googleDriveFolderId, base.googleDriveFolderId),
   };
 }
 

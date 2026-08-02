@@ -693,10 +693,25 @@ export function RichEditorLivePreview({ re }: { re: RichEditorAppearance }) {
             : "Off"}
         </li>
         <li>Google Drive embeds: {re.googleDriveEmbeds ? "On" : "Off"}</li>
+        <li>
+          Drive upload:{" "}
+          {re.googleDriveUpload
+            ? `On${re.googleDriveFolderId ? ` (folder ${re.googleDriveFolderId.slice(0, 8)}…)` : " — set folder ID"}`
+            : "Off"}
+        </li>
       </ul>
       <div className="ckeditor-field max-w-xl rounded-md border">
         <div className="flex flex-wrap gap-1 border-b bg-muted p-2">
-          {["B", "I", "U", "H1", "List", "Link", "Table", re.directImageUpload ? "Img" : null]
+          {[
+            "B",
+            "I",
+            "U",
+            "H1",
+            "List",
+            "Link",
+            "Table",
+            re.directImageUpload || re.googleDriveUpload ? "Img" : null,
+          ]
             .filter(Boolean)
             .map((label) => (
               <span key={String(label)} className="rounded border bg-background px-2 py-0.5 text-[10px] font-medium">

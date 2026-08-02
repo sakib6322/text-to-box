@@ -95,6 +95,7 @@ import { registerCourseRoutes } from "./courses.mjs";
 import { registerProgressRoutes } from "./progress.mjs";
 import { transformRichHtmlImages } from "./richHtmlImages.mjs";
 import { registerGdriveImageRoutes } from "./gdriveImage.mjs";
+import { registerGdriveUploadRoutes } from "./gdriveUpload.mjs";
 
 const app = express();
 app.use(cors());
@@ -4311,6 +4312,7 @@ app.get("/api/exam-attempts/:id", async (req, res) => {
 
 registerCourseRoutes(app, { requireSupabase, requireAuthUser, requirePerm });
 registerProgressRoutes(app, { requireSupabase, requireAuthUser, requirePerm });
+registerGdriveUploadRoutes(app, { requireSupabase, requireAuthUser, requirePerm, upload });
 
 const port = Number(process.env.PORT || 8787);
 await initDbConnection();

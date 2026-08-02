@@ -43,6 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveImageInsertUrl } from "@/lib/richHtmlImages";
 import { compressImage } from "@/lib/sourceInput";
+import { apiFetch } from "@/lib/apiBase";
 import { resolveConceptBackgroundColor, resolveConceptTextColor } from "@/lib/uiAppearance";
 import { getLocalColorScheme, resolveLocalIsDark } from "@/lib/colorSchemeLocal";
 
@@ -238,12 +239,12 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 function buildDefaultConfig(
   placeholder: string | undefined,
-  directImageUpload: boolean,
+  allowImageUpload: boolean,
 ) {
-  const plugins = directImageUpload
+  const plugins = allowImageUpload
     ? DEFAULT_PLUGINS
     : DEFAULT_PLUGINS.filter((p) => p !== ImageUpload && p !== Base64UploadAdapter);
-  const items = DEFAULT_TOOLBAR_ITEMS.filter((item) => item !== "uploadImage" || directImageUpload);
+  const items = DEFAULT_TOOLBAR_ITEMS.filter((item) => item !== "uploadImage" || allowImageUpload);
 
   return {
     licenseKey: "GPL" as const,
@@ -298,12 +299,14 @@ export function CKEditorField({
   const [insertingImage, setInsertingImage] = useState(false);
   const [imageMenuOpen, setImageMenuOpen] = useState(false);
 
+  const allowImageUpload = re.directImageUpload || re.googleDriveUpload;
+
   const config = useMemo(() => {
     if (variant === "compact") {
       return { ...compactConfig, placeholder };
     }
-    return buildDefaultConfig(placeholder, re.directImageUpload);
-  }, [placeholder, variant, re.directImageUpload]);
+    return buildDefaultConfig(placeholder, allowImageUpload);
+  }, [placeholder, variant, allowImageUpload]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -481,17 +484,38 @@ export function CKEditorField({
           lastEmitted.current = editor.getData();
           mountImageButtonInToolbar(editor);
 
-          if (re.directImageUpload && re.imageCompression) {
+          if (re.googleDriveUpload || (re.directImageUpload && re.imageCompression)) {
             editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({
               upload: () =>
                 loader.file.then(async (file: File | null) => {
                   if (!file) throw new Error("No file");
-                  const compressed = await compressImage(
-                    file,
-                    re.imageCompressionMaxWidthPx,
-                    re.imageCompressionQuality,
-                  );
-                  return { default: await readFileAsDataUrl(compressed) };
+                  let prepared: File = file;
+                  if (re.imageCompression) {
+                    prepared = await compressImage(
+                      file,
+                      re.imageCompressionMaxWidthPx,
+                      re.imageCompressionQuality,
+                    );
+                  }
+
+                  if (re.googleDriveUpload) {
+                    try {
+                      const body = new FormData();
+                      body.append("image", prepared, prepared.name || file.name || "image.jpg");
+                      const res = await apiFetch("/api/gdrive-upload", { method: "POST", body });
+                      const data = (await res.json().catch(() => ({}))) as { url?: string; error?: string };
+                      if (!res.ok || !data.url) {
+                        throw new Error(data.error || "Drive upload failed");
+                      }
+                      return { default: data.url };
+                    } catch (err) {
+                      if (!re.directImageUpload) throw err;
+                      console.warn("Drive upload failed; falling back to base64 embed", err);
+                      return { default: await readFileAsDataUrl(prepared) };
+                    }
+                  }
+
+                  return { default: await readFileAsDataUrl(prepared) };
                 }),
               abort: () => {},
             });

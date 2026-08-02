@@ -34,7 +34,8 @@ export function registerGdriveImageRoutes(app) {
         if (buf.length < 128) continue;
 
         res.setHeader("Content-Type", contentType);
-        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.setHeader("Cache-Control", "public, max-age=86400, stale-while-revalidate=604800");
+        res.setHeader("X-Content-Type-Options", "nosniff");
         return res.send(buf);
       } catch {
         /* try next source */

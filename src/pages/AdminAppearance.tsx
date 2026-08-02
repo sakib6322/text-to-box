@@ -41,6 +41,7 @@ import {
   type UiAppearance,
 } from "@/lib/uiAppearance";
 import { Textarea } from "@/components/ui/textarea";
+import { apiFetch } from "@/lib/apiBase";
 import { AppearanceOptionGuide } from "@/components/AppearanceOptionGuide";
 import { ColorField, FlexibleColorField, ThemeColorField } from "@/components/AppearanceColorFields";
 import { ConceptDetailShell } from "@/components/ConceptDetailShell";
@@ -224,8 +225,72 @@ export default function AdminAppearance() {
   >("colors");
   const [progressSection, setProgressSection] = useState<"steps" | "copy" | "features" | "colors">("steps");
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [gdriveEmail, setGdriveEmail] = useState("");
+  const [gdrivePrivateKey, setGdrivePrivateKey] = useState("");
+  const [gdriveConfigured, setGdriveConfigured] = useState(false);
+  const [gdriveConfiguredEmail, setGdriveConfiguredEmail] = useState<string | null>(null);
+  const [gdriveCredLoading, setGdriveCredLoading] = useState(false);
+  const [gdriveCredSaving, setGdriveCredSaving] = useState(false);
   const savedRef = useRef(appearance);
   savedRef.current = appearance;
+
+  useEffect(() => {
+    if (activeTab !== "richEditor") return;
+    let cancelled = false;
+    setGdriveCredLoading(true);
+    void (async () => {
+      try {
+        const r = await apiFetch("/api/settings/gdrive-upload");
+        const data = (await r.json().catch(() => ({}))) as {
+          configured?: boolean;
+          clientEmail?: string | null;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!r.ok) {
+          toast.error(data.error || "Could not load Drive credentials status");
+          return;
+        }
+        setGdriveConfigured(Boolean(data.configured));
+        setGdriveConfiguredEmail(data.clientEmail ?? null);
+      } catch {
+        if (!cancelled) toast.error("Could not load Drive credentials status");
+      } finally {
+        if (!cancelled) setGdriveCredLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
+
+  const saveGdriveCredentials = async () => {
+    setGdriveCredSaving(true);
+    try {
+      const r = await apiFetch("/api/settings/gdrive-upload", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clientEmail: gdriveEmail.trim() || undefined,
+          privateKey: gdrivePrivateKey.trim() || undefined,
+        }),
+      });
+      const data = (await r.json().catch(() => ({}))) as {
+        configured?: boolean;
+        clientEmail?: string | null;
+        error?: string;
+      };
+      if (!r.ok) throw new Error(data.error || "Save failed");
+      setGdriveConfigured(Boolean(data.configured));
+      setGdriveConfiguredEmail(data.clientEmail ?? null);
+      setGdrivePrivateKey("");
+      toast.success("Google Drive credentials saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setGdriveCredSaving(false);
+    }
+  };
 
   const theme = draft ?? appearance;
   const deviceTheme = theme[editDevice];
@@ -3546,6 +3611,12 @@ export default function AdminAppearance() {
                 onChange={(v) => updateRichEditor("googleDriveEmbeds", v)}
                 hint="Paste share link — shows inline without click"
               />
+              <BoolField
+                label="Upload images to Google Drive"
+                checked={re.googleDriveUpload}
+                onChange={(v) => updateRichEditor("googleDriveUpload", v)}
+                hint="CKEditor drag/upload → Drive folder; HTML uses /api/gdrive-image (base64 fallback if upload fails)"
+              />
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <NumberField
@@ -3566,6 +3637,52 @@ export default function AdminAppearance() {
                 onChange={(n) => updateRichEditor("imageCompressionQuality", n)}
                 hint="JPEG quality — lower = smaller file"
               />
+            </div>
+            <div className="space-y-3 rounded-md border p-3">
+              <p className="text-sm font-medium">Google Drive upload (Service Account)</p>
+              <p className="text-[11px] text-muted-foreground">
+                Create a Service Account JSON key, enable Drive API, create a folder, share that folder with the
+                service-account email as Editor, then paste Folder ID + credentials below. Save appearance for
+                Folder ID / toggle; save credentials with the button here.
+              </p>
+              <TextField
+                label="Drive folder ID"
+                value={re.googleDriveFolderId}
+                onChange={(v) => updateRichEditor("googleDriveFolderId", v)}
+                hint="From folder URL: drive.google.com/drive/folders/THIS_ID"
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Credentials status:{" "}
+                {gdriveCredLoading
+                  ? "Loading…"
+                  : gdriveConfigured
+                    ? `Configured${gdriveConfiguredEmail ? ` (${gdriveConfiguredEmail})` : ""}`
+                    : "Not configured — set email + private key (or paste full JSON key)"}
+              </p>
+              <TextField
+                label="Service account client email"
+                value={gdriveEmail}
+                onChange={setGdriveEmail}
+                hint="Leave blank to keep existing email when updating only the key"
+              />
+              <Field label="Private key or full JSON" hint="Paste -----BEGIN PRIVATE KEY----- … or entire service-account JSON">
+                <Textarea
+                  value={gdrivePrivateKey}
+                  onChange={(e) => setGdrivePrivateKey(e.target.value)}
+                  rows={5}
+                  className="font-mono text-xs"
+                  placeholder='{"type":"service_account",...} or private key PEM'
+                />
+              </Field>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void saveGdriveCredentials()}
+                disabled={gdriveCredSaving || (!gdriveEmail.trim() && !gdrivePrivateKey.trim())}
+              >
+                {gdriveCredSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Save Drive credentials
+              </Button>
             </div>
             <AppearancePreviewPanel title="Live preview · Rich editor images">
               <RichEditorLivePreview re={re} />

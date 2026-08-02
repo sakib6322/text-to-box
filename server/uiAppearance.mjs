@@ -469,6 +469,8 @@ function defaultRichEditor(overrides = {}) {
     imageCompressionMaxWidthPx: 1600,
     imageCompressionQuality: 0.82,
     googleDriveEmbeds: true,
+    googleDriveUpload: false,
+    googleDriveFolderId: "",
     ...overrides,
   };
 }
@@ -480,6 +482,7 @@ function mergeRichEditor(base, patch) {
     if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
     return Math.min(max, Math.max(min, v));
   };
+  const str = (v, fallback) => (typeof v === "string" ? v.trim() : fallback);
   return {
     imageLazyLoading: bool(patch.imageLazyLoading, base.imageLazyLoading),
     directImageUpload: bool(patch.directImageUpload, base.directImageUpload),
@@ -487,6 +490,8 @@ function mergeRichEditor(base, patch) {
     imageCompressionMaxWidthPx: num(patch.imageCompressionMaxWidthPx, base.imageCompressionMaxWidthPx, 640, 3840),
     imageCompressionQuality: num(patch.imageCompressionQuality, base.imageCompressionQuality, 0.5, 1),
     googleDriveEmbeds: bool(patch.googleDriveEmbeds, base.googleDriveEmbeds),
+    googleDriveUpload: bool(patch.googleDriveUpload, base.googleDriveUpload),
+    googleDriveFolderId: str(patch.googleDriveFolderId, base.googleDriveFolderId),
   };
 }
 
