@@ -27,7 +27,7 @@ export type BulkSbaItem = {
   boards: string[];
   options: [string, string, string, string, string];
   correctIndex: number;
-  optionExplanations: [string, string, string, string, string];
+  explanation: string;
 };
 
 export type BulkQuestionItem = BulkMcqItem | BulkSbaItem;
@@ -249,14 +249,23 @@ export function parseBulkQuestionsCsv(raw: string): ParseBulkQuestionsResult {
         warnings.push(`Row ${r + 1}: invalid correct index — using 0`);
         correctIndex = 0;
       }
-      const optionExplanations = padFive(expls, warnings, "explanations", items.length);
+      let explanation = "";
+      if (expls.length <= 1) {
+        explanation = (expls[0] ?? "").trim();
+      } else {
+        explanation =
+          (expls[Math.trunc(correctIndex)] ?? "").trim() ||
+          expls.find((e) => e.trim())?.trim() ||
+          "";
+        warnings.push(`Row ${r + 1}: SBA uses a single explanation — took correct-option / first non-empty from pipe list`);
+      }
       items.push({
         type: "sba",
         stem,
         boards,
         options,
         correctIndex: Math.trunc(correctIndex),
-        optionExplanations,
+        explanation,
       });
     }
   }
@@ -343,9 +352,24 @@ function parseOneItem(raw: unknown, index: number, warnings: string[]): BulkQues
     correctIndex = 0;
   }
 
-  const explRaw = obj.option_explanations ?? obj.optionExplanations ?? [];
-  const explStrings = Array.isArray(explRaw) ? explRaw.map(asString) : [];
-  const optionExplanations = padFive(explStrings, warnings, "option_explanations", index);
+  let explanation = asString(obj.explanation);
+  if (!explanation) {
+    const explRaw = obj.option_explanations ?? obj.optionExplanations ?? obj.explanations;
+    if (typeof explRaw === "string") {
+      explanation = asString(explRaw);
+    } else if (Array.isArray(explRaw)) {
+      const explStrings = explRaw.map(asString);
+      explanation =
+        (explStrings[Math.trunc(correctIndex)] ?? "").trim() ||
+        explStrings.find((e) => e.trim())?.trim() ||
+        "";
+      if (explStrings.filter((e) => e.trim()).length > 1) {
+        warnings.push(
+          `Question ${index + 1}: SBA uses a single explanation — took correct-option / first from option_explanations`,
+        );
+      }
+    }
+  }
 
   return {
     type: "sba",
@@ -353,7 +377,7 @@ function parseOneItem(raw: unknown, index: number, warnings: string[]): BulkQues
     boards,
     options,
     correctIndex: Math.trunc(correctIndex),
-    optionExplanations,
+    explanation,
   };
 }
 
@@ -509,7 +533,7 @@ export function bulkItemsToDrafts(items: BulkQuestionItem[], ctx: BulkDraftConte
           stem: item.stem,
           options: [...item.options],
           correctIndex: item.correctIndex,
-          optionExplanations: [...item.optionExplanations],
+          explanation: item.explanation,
         },
         sourcePointId: null,
       });
@@ -551,15 +575,16 @@ SBA item:
   "boards": ["ExactBoardName2"],
   "options": ["A", "B", "C", "D", "E"],
   "correct_index": 0,
-  "option_explanations": ["expA", "expB", "expC", "expD", "expE"]
+  "explanation": "Why the correct option is the best answer"
 }
 
 Rules:
 - Do NOT include subject/system/chapter/topic/concept (user selects those in the app).
 - boards: use exact board names from this list when relevant: ${boardList}
 - If no board applies, use "boards": []
-- MCQ: 3–6 high-yield true/false statements with short explanations
-- SBA: exactly 5 options; correct_index is 0-based; every option gets a short explanation
+- MCQ: 3–6 high-yield true/false statements; each statement needs its own "explanation"
+- SBA: exactly 5 options; correct_index is 0-based (0=a … 4=e)
+- SBA explanation: ONE shared string field "explanation" for the whole question (after Ans). Do NOT use option_explanations arrays or per-option explanations
 - One concept / topic only; 4–12 questions total unless I ask otherwise
 - Plain UTF-8 JSON only
 
@@ -588,7 +613,9 @@ Rules:
   If none: leave boards empty
 - texts: for MCQ = true/false statements separated by | ; for SBA = exactly 5 options separated by |
 - corrects: for MCQ = true|false|... aligned with texts ; for SBA = single 0-based index 0–4
-- explanations: pipe-separated, same count as texts (SBA must have 5)
+- explanations:
+  - MCQ: pipe-separated, same count as texts (one explanation per statement)
+  - SBA: ONE shared explanation for the whole question — a single cell, no | pipes between option explanations
 - Quote cells that contain commas
 - Do NOT put | inside a statement/option (use commas or rephrase)
 - Do NOT include subject/system/chapter/topic/concept
@@ -598,8 +625,25 @@ Rules:
 Example:
 type,stem,boards,texts,corrects,explanations
 mcq,"Regarding the mitral valve:","BCPS|FCPS","It has two cusps|It guards the right AV orifice","true|false","Anterior and posterior leaflets.|It guards the left AV orifice."
-sba,"Which structure guards the left AV orifice?","MD","Tricuspid valve|Mitral valve|Aortic valve|Pulmonary valve|Eustachian valve","1","Right AV valve.|Correct — mitral.|LV outflow.|RV outflow.|IVC remnant."
+sba,"Which structure guards the left AV orifice?","MD","Tricuspid valve|Mitral valve|Aortic valve|Pulmonary valve|Eustachian valve","1","Mitral valve is the bicuspid valve guarding the left AV orifice."
 
 Source / concept notes:
 <<<PASTE TEXTBOOK NOTES OR TOPIC HERE>>>`;
+}
+
+/** Trigger a browser download of the external bulk prompt (.txt). */
+export function downloadExternalBulkQuestionsPrompt(boardNames: string[], format: "json" | "csv" = "json") {
+  const text =
+    format === "csv"
+      ? buildExternalBulkQuestionsCsvPrompt(boardNames)
+      : buildExternalBulkQuestionsPrompt(boardNames);
+  const filename =
+    format === "csv" ? "create-question-bulk-csv-prompt.txt" : "create-question-bulk-json-prompt.txt";
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }

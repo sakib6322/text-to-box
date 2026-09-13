@@ -18,6 +18,7 @@ type SbaPayload = {
   stem?: string;
   options?: string[];
   correctIndex?: number;
+  explanation?: string;
   optionExplanations?: string[];
 };
 
@@ -150,12 +151,18 @@ function QuestionOptionsView({
               </div>
             );
           })}
-          {typeof q.sba.correctIndex === "number" &&
-          q.sba.optionExplanations?.[q.sba.correctIndex]?.trim() ? (
-            <p className="text-[11px] text-muted-foreground border-t pt-1.5">
-              {q.sba.optionExplanations[q.sba.correctIndex]}
-            </p>
-          ) : null}
+          {(() => {
+            const single = (q.sba.explanation ?? "").trim();
+            const arr = q.sba.optionExplanations ?? [];
+            const expl =
+              single ||
+              (typeof q.sba.correctIndex === "number" ? arr[q.sba.correctIndex]?.trim() : "") ||
+              arr.find((e) => e?.trim())?.trim() ||
+              "";
+            return expl ? (
+              <p className="text-[11px] text-muted-foreground border-t pt-1.5">{expl}</p>
+            ) : null;
+          })()}
         </div>
       ) : null}
     </Card>

@@ -64,7 +64,9 @@ function questionsToSelfQaItems(questions, conceptId) {
       let answer = "";
       if (Number.isFinite(idx) && options[idx]) {
         answer = `${String.fromCharCode(97 + idx)}. ${options[idx]}`;
-        const exp = String(payload.optionExplanations?.[idx] ?? "").trim();
+        const exp =
+          String(payload.explanation ?? "").trim() ||
+          String(payload.optionExplanations?.[idx] ?? "").trim();
         if (exp) answer += `\n${exp}`;
       }
       items.push({

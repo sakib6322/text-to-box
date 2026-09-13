@@ -38,7 +38,7 @@ export type DraftQuestion = {
     marks: number;
   };
   mcq: { stem: string; trueFalse: TfItem[] } | null;
-  sba: { stem: string; options: string[]; correctIndex: number; optionExplanations: string[] } | null;
+  sba: { stem: string; options: string[]; correctIndex: number; explanation: string } | null;
   sourcePointId: string | null;
 };
 
@@ -46,13 +46,35 @@ export type GeneratedExplanationResult = {
   question_index: number;
   question_mode: "mcq" | "sba";
   explanations?: string[];
+  /** Single SBA explanation (preferred). */
+  explanation?: string;
+  /** @deprecated Legacy per-option SBA explanations. */
   option_explanations?: string[];
 };
 
 export const mkQuestionId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 
+/** Five empty strings — used when padding SBA options / legacy arrays. */
 export const emptySbaExplanations = (): [string, string, string, string, string] => ["", "", "", "", ""];
+
+/** Resolve one SBA explanation; supports legacy `optionExplanations` payloads. */
+export function resolveSbaExplanation(sba: {
+  explanation?: string | null;
+  optionExplanations?: string[] | null;
+  correctIndex?: number | null;
+} | null | undefined): string {
+  if (!sba) return "";
+  const single = typeof sba.explanation === "string" ? sba.explanation.trim() : "";
+  if (single) return single;
+  const arr = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
+  const idx = Number(sba.correctIndex);
+  if (Number.isFinite(idx) && idx >= 0 && typeof arr[idx] === "string" && arr[idx].trim()) {
+    return arr[idx].trim();
+  }
+  const first = arr.find((e) => typeof e === "string" && e.trim());
+  return first?.trim() ?? "";
+}
 
 export function mergeExplanationResults(drafts: DraftQuestion[], results: GeneratedExplanationResult[]): DraftQuestion[] {
   const byIdx = new Map(results.map((r) => [r.question_index, r]));
@@ -71,10 +93,16 @@ export function mergeExplanationResults(drafts: DraftQuestion[], results: Genera
         },
       };
     }
-    if (draft.questionMode === "sba" && draft.sba && Array.isArray(gen.option_explanations)) {
-      const expls = emptySbaExplanations();
-      for (let j = 0; j < 5; j++) expls[j] = gen.option_explanations[j]?.trim() ?? "";
-      return { ...draft, sba: { ...draft.sba, optionExplanations: [...expls] } };
+    if (draft.questionMode === "sba" && draft.sba) {
+      const fromSingle = typeof gen.explanation === "string" ? gen.explanation.trim() : "";
+      const legacy = Array.isArray(gen.option_explanations) ? gen.option_explanations : [];
+      const idx = draft.sba.correctIndex;
+      const fromLegacy =
+        (typeof legacy[idx] === "string" && legacy[idx].trim()) ||
+        legacy.find((e) => typeof e === "string" && e.trim())?.trim() ||
+        "";
+      const explanation = fromSingle || fromLegacy || draft.sba.explanation || "";
+      return { ...draft, sba: { ...draft.sba, explanation } };
     }
     return draft;
   });
@@ -167,7 +195,7 @@ export function draftFromExtracted(
       stem: q.stem,
       options: opts,
       correctIndex: (q.sba_correct_index ?? 0) as 0 | 1 | 2 | 3 | 4,
-      optionExplanations: [...emptySbaExplanations()],
+      explanation: "",
     },
     sourcePointId: ctx.sourcePointId,
   };

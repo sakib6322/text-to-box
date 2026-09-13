@@ -87,7 +87,7 @@ const EMBEDDINGS: EmbeddingRow[] = [
     id: "question-explanation",
     table: "questions",
     column: "explanation_embedding",
-    embeds: "MCQ: T/F statement + explanation · SBA: option + explanation",
+    embeds: "MCQ: T/F statement + explanation · SBA: correct option + explanation",
     whenCreated: [
       "Generate বন্ধ (ডিফল্ট) — EMBED_UNUSED_CONTENT=true হলে explanation সহ save",
     ],

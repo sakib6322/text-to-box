@@ -50,6 +50,8 @@ type SbaPayload = {
   stem?: string;
   options?: string[];
   correctIndex?: number;
+  explanation?: string;
+  /** @deprecated Legacy per-option explanations. */
   optionExplanations?: string[];
   boardIds?: string[];
 };
@@ -57,6 +59,19 @@ type SbaPayload = {
 type ConceptOption = { id: string; title: string | null };
 type BoardOption = { id: string; name: string };
 type QuestionBoard = { id?: string | null; name: string; mention_count?: number };
+
+
+function resolveSbaExplanation(sba: SbaPayload | null | undefined): string {
+  if (!sba) return "";
+  const single = typeof sba.explanation === "string" ? sba.explanation.trim() : "";
+  if (single) return single;
+  const arr = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
+  const idx = Number(sba.correctIndex);
+  if (Number.isFinite(idx) && idx >= 0 && typeof arr[idx] === "string" && arr[idx].trim()) {
+    return arr[idx].trim();
+  }
+  return arr.find((e) => typeof e === "string" && e.trim())?.trim() ?? "";
+}
 
 type QuestionRow = {
   id: string;
@@ -95,7 +110,7 @@ export default function AllQuestions() {
   const [editChapter, setEditChapter] = useState("");
   const [editTopic, setEditTopic] = useState("");
   const [editMcqItems, setEditMcqItems] = useState<TfItem[]>([]);
-  const [editSbaExplanations, setEditSbaExplanations] = useState<string[]>(["", "", "", "", ""]);
+  const [editSbaExplanation, setEditSbaExplanation] = useState("");
   const [editBoardIds, setEditBoardIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
   const [search, setSearch] = useState("");
@@ -304,11 +319,7 @@ export default function AllQuestions() {
         explanation: t.explanation ?? "",
       })),
     );
-    const expls = ["", "", "", "", ""];
-    (row.sba?.optionExplanations ?? []).forEach((e, i) => {
-      if (i < 5) expls[i] = e ?? "";
-    });
-    setEditSbaExplanations(expls);
+    setEditSbaExplanation(resolveSbaExplanation(row.sba));
     const fromRow = (row.boards ?? []).map((b) => b.id).filter((id): id is string => Boolean(id));
     const fromPayload = row.mcq?.boardIds ?? row.sba?.boardIds ?? [];
     setEditBoardIds(fromRow.length ? fromRow : fromPayload.filter(Boolean));
@@ -364,7 +375,7 @@ export default function AllQuestions() {
       const payload =
         editTarget.questionMode === "mcq"
           ? { ...editTarget.mcq, stem: editStem, trueFalse: editMcqItems }
-          : { ...editTarget.sba, stem: editStem, optionExplanations: editSbaExplanations };
+          : { ...editTarget.sba, stem: editStem, explanation: editSbaExplanation };
       const resp = await fetch(apiUrl(`/api/questions/${editTarget.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -415,7 +426,7 @@ export default function AllQuestions() {
                     ? {
                         ...(r.sba ?? {}),
                         stem: editStem,
-                        optionExplanations: editSbaExplanations,
+                        explanation: editSbaExplanation,
                         boardIds: editBoardIds,
                       }
                     : null,
@@ -724,26 +735,14 @@ export default function AllQuestions() {
             ) : null}
             {editTarget?.questionMode === "sba" ? (
               <div className="space-y-3 border-t pt-3">
-                <Label className="text-sm font-medium">Option explanations</Label>
-                {editSbaExplanations.map((expl, i) => {
-                  const label = String.fromCharCode(97 + i);
-                  const isCorrect = editTarget.sba?.correctIndex === i;
-                  return (
-                    <div key={i} className="space-y-1.5">
-                      <Label className="text-xs text-muted-foreground">
-                        Option {label}: {isCorrect ? "Why correct" : "Why wrong"}
-                      </Label>
-                      <Textarea
-                        value={expl}
-                        onChange={(e) =>
-                          setEditSbaExplanations((prev) => prev.map((x, j) => (j === i ? e.target.value : x)))
-                        }
-                        rows={2}
-                        className="resize-y text-sm"
-                      />
-                    </div>
-                  );
-                })}
+                <Label className="text-sm font-medium">Explanation</Label>
+                <Textarea
+                  value={editSbaExplanation}
+                  onChange={(e) => setEditSbaExplanation(e.target.value)}
+                  rows={3}
+                  className="resize-y text-sm"
+                  placeholder="Explain why the correct option is the best answer…"
+                />
               </div>
             ) : null}
             <div className="space-y-2 border-t pt-3">

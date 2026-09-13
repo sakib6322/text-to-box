@@ -24,9 +24,9 @@ import { useCan } from "@/components/Can";
 import { cn } from "@/lib/utils";
 import {
   draftFromExtracted,
-  emptySbaExplanations,
   fetchGeneratedExplanations,
   mkQuestionId,
+  resolveSbaExplanation,
   type DraftQuestion,
   type ExtractedQuestion,
   type TfItem,
@@ -94,7 +94,7 @@ export function KeyPointQuestionsEditor({
   const [tfItems, setTfItems] = useState<TfItem[]>([]);
   const [sbaStem, setSbaStem] = useState("");
   const [sbaOptions, setSbaOptions] = useState<[string, string, string, string, string]>(["", "", "", "", ""]);
-  const [sbaOptionExplanations, setSbaOptionExplanations] = useState(emptySbaExplanations());
+  const [sbaExplanation, setSbaExplanation] = useState("");
   const [sbaCorrect, setSbaCorrect] = useState<0 | 1 | 2 | 3 | 4>(0);
   const [selectedBoardIds, setSelectedBoardIds] = useState<string[]>([]);
   const [summary, setSummary] = useState<string | null>(null);
@@ -136,7 +136,7 @@ export function KeyPointQuestionsEditor({
     setTfItems([]);
     setSbaStem("");
     setSbaOptions(["", "", "", "", ""]);
-    setSbaOptionExplanations(emptySbaExplanations());
+    setSbaExplanation("");
     setSbaCorrect(0);
     setSelectedBoardIds([...defaultBoardIds]);
     setSummary(null);
@@ -191,9 +191,11 @@ export function KeyPointQuestionsEditor({
       const opts: [string, string, string, string, string] = ["", "", "", "", ""];
       for (let i = 0; i < 5; i++) opts[i] = q.sba.options[i] ?? "";
       setSbaOptions(opts);
-      const expls = emptySbaExplanations();
-      for (let i = 0; i < 5; i++) expls[i] = q.sba.optionExplanations?.[i] ?? "";
-      setSbaOptionExplanations(expls);
+      setSbaExplanation(
+        resolveSbaExplanation(
+          q.sba as { explanation?: string; optionExplanations?: string[]; correctIndex?: number },
+        ),
+      );
       setSbaCorrect(q.sba.correctIndex as 0 | 1 | 2 | 3 | 4);
     }
   };
@@ -245,7 +247,7 @@ export function KeyPointQuestionsEditor({
               stem: sbaStem,
               options: sbaOptions,
               correctIndex: sbaCorrect,
-              optionExplanations: [...sbaOptionExplanations],
+              explanation: sbaExplanation,
             }
           : null,
       sourcePointId: resolvedKeyPointId ?? keyPointId,
@@ -408,7 +410,7 @@ export function KeyPointQuestionsEditor({
               stem: "",
               options: ["", "", "", "", ""],
               correctIndex: 0,
-              optionExplanations: [...emptySbaExplanations()],
+              explanation: "",
             }
           : null,
       sourcePointId: keyPointId,
@@ -441,7 +443,7 @@ export function KeyPointQuestionsEditor({
         setTfItems([]);
         setSbaStem("");
         setSbaOptions(["", "", "", "", ""]);
-        setSbaOptionExplanations(emptySbaExplanations());
+        setSbaExplanation("");
         setSelectedBoardIds([...defaultBoardIds]);
         setActiveQuestionIndex(0);
         syncKeyPointBoardsFromQuestions([], 0, defaultBoardIds);
@@ -517,7 +519,7 @@ export function KeyPointQuestionsEditor({
       setTfItems([]);
       setSbaStem("");
       setSbaOptions(["", "", "", "", ""]);
-      setSbaOptionExplanations(emptySbaExplanations());
+      setSbaExplanation("");
       setSelectedBoardIds([...defaultBoardIds]);
       setSummary(null);
       setSourceText("");
@@ -866,31 +868,16 @@ export function KeyPointQuestionsEditor({
                         ))}
                       </RadioGroup>
                     </div>
-                    <div className="space-y-2">
-                      <Label className="text-xs">Explanations (per option)</Label>
-                      {sbaOptions.map((_, i) => {
-                        const isCorrect = sbaCorrect === i;
-                        return (
-                          <div key={`expl-${i}`} className="space-y-1 rounded-md border p-2">
-                            <Label className="text-[10px]">
-                              Option {String.fromCharCode(97 + i)}: {isCorrect ? "Why correct" : "Why wrong"}
-                            </Label>
-                            <Textarea
-                              value={sbaOptionExplanations[i] ?? ""}
-                              onChange={(e) =>
-                                setSbaOptionExplanations((opts) => {
-                                  const next = [...opts] as [string, string, string, string, string];
-                                  next[i] = e.target.value;
-                                  return next;
-                                })
-                              }
-                              rows={2}
-                              className="resize-y"
-                              disabled={busy}
-                            />
-                          </div>
-                        );
-                      })}
+                    <div className="space-y-1.5">
+                      <Label className="text-xs">Explanation</Label>
+                      <Textarea
+                        value={sbaExplanation}
+                        onChange={(e) => setSbaExplanation(e.target.value)}
+                        rows={3}
+                        className="resize-y"
+                        disabled={busy}
+                        placeholder="Explain why the correct option is the best answer…"
+                      />
                     </div>
                   </div>
                 ) : null}

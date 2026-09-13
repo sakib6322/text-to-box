@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ClipboardCopy, FileJson, FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { ClipboardCopy, Download, FileJson, FileSpreadsheet, FileText, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import {
   buildExternalBulkQuestionsCsvPrompt,
   buildExternalBulkQuestionsPrompt,
   bulkItemsToDrafts,
+  downloadExternalBulkQuestionsPrompt,
   parseBulkQuestionsCsv,
   parseBulkQuestionsJson,
   type ParseBulkQuestionsResult,
@@ -138,6 +139,14 @@ export function BulkQuestionsImportPanel({
     }
   };
 
+  const downloadPrompt = (format: "json" | "csv") => {
+    downloadExternalBulkQuestionsPrompt(
+      boardOptions.map((b) => b.name),
+      format,
+    );
+    toast.success(format === "csv" ? "CSV prompt downloaded" : "JSON prompt downloaded");
+  };
+
   return (
     <Can permission="question_bank.create_ai.bulk">
       <div className="space-y-3 rounded-lg border border-dashed p-3">
@@ -191,6 +200,16 @@ export function BulkQuestionsImportPanel({
             >
               <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
               Copy CSV prompt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importing}
+              onClick={() => downloadPrompt("csv")}
+            >
+              <Download className="mr-2 h-3.5 w-3.5" />
+              Download CSV prompt
             </Button>
           </div>
         </div>
@@ -259,6 +278,16 @@ export function BulkQuestionsImportPanel({
             >
               <ClipboardCopy className="mr-2 h-3.5 w-3.5" />
               Copy JSON prompt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={importing}
+              onClick={() => downloadPrompt("json")}
+            >
+              <FileText className="mr-2 h-3.5 w-3.5" />
+              Download JSON prompt
             </Button>
             <Button type="button" variant="outline" size="sm" asChild>
               <a href="/samples/create-question-bulk.json" download>

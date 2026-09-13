@@ -30,7 +30,7 @@ import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
-type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
+type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; explanation?: string; optionExplanations?: string[] };
 
 type QuestionRow = {
   id: string;

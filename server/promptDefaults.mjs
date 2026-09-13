@@ -61,7 +61,7 @@ export function getDefaultQuestionExplanationsPrompt() {
 
 MCQ (True/False statements): For EVERY statement, explain WHY it is TRUE or FALSE according to the marked answer. One explanation per statement_index.
 
-SBA: Provide exactly 5 option_explanations (index 0=a … 4=e). For the CORRECT option explain why it is the best answer. For each WRONG option explain why it is incorrect.
+SBA: Provide exactly ONE explanation for the whole question (field "explanation"). Explain why the marked CORRECT option is the best answer (you may briefly note why others are weaker). Do NOT return per-option explanation arrays.
 
 Be medically accurate, exam-oriented, and specific. Do not repeat the option text verbatim without reasoning.
 

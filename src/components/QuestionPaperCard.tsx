@@ -4,7 +4,7 @@ import { resolveDeviceTheme } from "@/lib/uiAppearance";
 
 type TfItem = { id?: string; statement: string; correct: "true" | "false"; explanation?: string };
 type McqPayload = { stem?: string; trueFalse?: TfItem[] };
-type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] };
+type SbaPayload = { stem?: string; options?: string[]; correctIndex?: number; explanation?: string; optionExplanations?: string[] };
 type McqDist = Record<string, { true: number; false: number; notTouched: number }>;
 type SbaDist = Record<string, { count: number }>;
 
@@ -46,6 +46,19 @@ type Props = {
 
 const optionLabel = (i: number) => String.fromCharCode(97 + i);
 
+
+function resolveSbaExplanation(sba: SbaPayload | null | undefined): string {
+  if (!sba) return "";
+  const single = typeof sba.explanation === "string" ? sba.explanation.trim() : "";
+  if (single) return single;
+  const arr = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
+  const idx = Number(sba.correctIndex);
+  if (Number.isFinite(idx) && idx >= 0 && typeof arr[idx] === "string" && arr[idx].trim()) {
+    return arr[idx].trim();
+  }
+  return arr.find((e) => typeof e === "string" && e.trim())?.trim() ?? "";
+}
+
 export function QuestionPaperCard({
   questionMode,
   subject,
@@ -79,7 +92,8 @@ export function QuestionPaperCard({
   const sbaHasAnswer = sbaSelected !== undefined && sbaSelected !== null && sbaSelected !== "";
 
   const mcqHasExplanations = (mcq?.trueFalse ?? []).some((item) => (item.explanation ?? "").trim());
-  const sbaHasExplanations = (sba?.optionExplanations ?? []).some((e) => (e ?? "").trim());
+  const sbaExplanationText = resolveSbaExplanation(sba);
+  const sbaHasExplanations = Boolean(sbaExplanationText);
 
   return (
     <article className="question-paper print:shadow-none">
@@ -266,20 +280,8 @@ export function QuestionPaperCard({
 
       {showExplanations && questionMode === "sba" && sbaHasExplanations && (!hideAnswers || explanationsIndependent) ? (
         <div className="question-paper-expl">
-          <p className="question-paper-expl-title">{aq.explanationTitle || "Explanations"}</p>
-          {(sba?.options ?? []).map((_opt, i) => {
-            const expl = (sba?.optionExplanations?.[i] ?? "").trim();
-            if (!expl) return null;
-            const isCorrect = sba?.correctIndex === i;
-            return (
-              <div key={i} className="question-paper-expl-item">
-                <span className="question-paper-expl-label">
-                  {optionLabel(i)} ({isCorrect ? "correct" : "wrong"}):
-                </span>{" "}
-                {expl}
-              </div>
-            );
-          })}
+          <p className="question-paper-expl-title">{aq.explanationTitle || "Explanation"}</p>
+          <div className="question-paper-expl-item">{sbaExplanationText}</div>
         </div>
       ) : null}
     </article>

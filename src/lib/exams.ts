@@ -25,7 +25,14 @@ export type ExamQuestion = {
   examMarks?: number;
   position?: number;
   mcq?: { stem?: string; trueFalse?: { id?: string; statement: string; correct: "true" | "false"; explanation?: string }[] } | null;
-  sba?: { stem?: string; options?: string[]; correctIndex?: number; optionExplanations?: string[] } | null;
+  sba?: {
+    stem?: string;
+    options?: string[];
+    correctIndex?: number;
+    explanation?: string;
+    /** @deprecated Legacy per-option explanations. */
+    optionExplanations?: string[];
+  } | null;
   studentAnswer?: unknown;
   isCorrect?: boolean;
   marksEarned?: number;

@@ -16,6 +16,7 @@ export type PracticeQuestionFull = {
     stem?: string;
     options?: string[];
     correctIndex?: number;
+    explanation?: string;
     optionExplanations?: string[];
   } | null;
 };
@@ -134,13 +135,17 @@ export function PracticeQuestionBlock({
               </button>
             );
           })}
-          {locked[q.id] && q.sba?.optionExplanations?.length ? (
+          {locked[q.id] ? (
             <div className="space-y-1 border-t pt-2 text-[11px] text-muted-foreground">
               {(() => {
+                const single = (q.sba?.explanation ?? "").trim();
+                const arr = q.sba?.optionExplanations ?? [];
                 const picked = Number(revealed[q.id]?.given);
                 const expl =
-                  (Number.isFinite(picked) && q.sba?.optionExplanations?.[picked]?.trim()) ||
-                  q.sba?.optionExplanations?.[q.sba.correctIndex ?? -1]?.trim();
+                  single ||
+                  (Number.isFinite(picked) && arr[picked]?.trim()) ||
+                  arr[q.sba?.correctIndex ?? -1]?.trim() ||
+                  arr.find((e) => e?.trim())?.trim();
                 return expl ? <p>{expl}</p> : null;
               })()}
             </div>

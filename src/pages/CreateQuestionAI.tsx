@@ -60,6 +60,7 @@ import {
   buildExternalBulkQuestionsCsvPrompt,
   buildExternalBulkQuestionsPrompt,
   bulkItemsToDrafts,
+  downloadExternalBulkQuestionsPrompt,
   parseBulkQuestionsCsv,
   parseBulkQuestionsJson,
   type ParseBulkQuestionsResult,
@@ -104,8 +105,6 @@ type TfItem = {
   explanation: string;
 };
 
-const emptySbaExplanations = (): [string, string, string, string, string] => ["", "", "", "", ""];
-
 type QuestionMode = "mcq" | "sba" | null;
 type DraftQuestion = {
   id: string;
@@ -128,7 +127,7 @@ type DraftQuestion = {
     marks: number;
   };
   mcq: { stem: string; trueFalse: TfItem[] } | null;
-  sba: { stem: string; options: string[]; correctIndex: number; optionExplanations: string[] } | null;
+  sba: { stem: string; options: string[]; correctIndex: number; explanation: string } | null;
   sourcePointId: string | null;
   match?: SuggestionMatch | null;
   matchApproved?: boolean;
@@ -163,8 +162,25 @@ type GeneratedExplanationResult = {
   question_index: number;
   question_mode: "mcq" | "sba";
   explanations?: string[];
+  explanation?: string;
   option_explanations?: string[];
 };
+
+function resolveSbaExplanation(sba: {
+  explanation?: string | null;
+  optionExplanations?: string[] | null;
+  correctIndex?: number | null;
+} | null | undefined): string {
+  if (!sba) return "";
+  const single = typeof sba.explanation === "string" ? sba.explanation.trim() : "";
+  if (single) return single;
+  const arr = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
+  const idx = Number(sba.correctIndex);
+  if (Number.isFinite(idx) && idx >= 0 && typeof arr[idx] === "string" && arr[idx].trim()) {
+    return arr[idx].trim();
+  }
+  return arr.find((e) => typeof e === "string" && e.trim())?.trim() ?? "";
+}
 
 function mergeExplanationResults(drafts: DraftQuestion[], results: GeneratedExplanationResult[]): DraftQuestion[] {
   const byIdx = new Map(results.map((r) => [r.question_index, r]));
@@ -183,10 +199,18 @@ function mergeExplanationResults(drafts: DraftQuestion[], results: GeneratedExpl
         },
       };
     }
-    if (draft.questionMode === "sba" && draft.sba && Array.isArray(gen.option_explanations)) {
-      const expls = emptySbaExplanations();
-      for (let j = 0; j < 5; j++) expls[j] = gen.option_explanations[j]?.trim() ?? "";
-      return { ...draft, sba: { ...draft.sba, optionExplanations: [...expls] } };
+    if (draft.questionMode === "sba" && draft.sba) {
+      const fromSingle = typeof gen.explanation === "string" ? gen.explanation.trim() : "";
+      const legacy = Array.isArray(gen.option_explanations) ? gen.option_explanations : [];
+      const idx = draft.sba.correctIndex;
+      const fromLegacy =
+        (typeof legacy[idx] === "string" && legacy[idx].trim()) ||
+        legacy.find((e) => typeof e === "string" && e.trim())?.trim() ||
+        "";
+      return {
+        ...draft,
+        sba: { ...draft.sba, explanation: fromSingle || fromLegacy || draft.sba.explanation || "" },
+      };
     }
     return draft;
   });
@@ -260,7 +284,7 @@ export default function CreateQuestionAI() {
 
   const [sbaStem, setSbaStem] = useState("");
   const [sbaOptions, setSbaOptions] = useState(["", "", "", "", ""]);
-  const [sbaOptionExplanations, setSbaOptionExplanations] = useState<[string, string, string, string, string]>(emptySbaExplanations());
+  const [sbaExplanation, setSbaExplanation] = useState("");
   const [sbaCorrect, setSbaCorrect] = useState<0 | 1 | 2 | 3 | 4>(0);
 
   const [saving, setSaving] = useState(false);
@@ -456,9 +480,7 @@ export default function CreateQuestionAI() {
       const opts: [string, string, string, string, string] = ["", "", "", "", ""];
       for (let i = 0; i < 5; i++) opts[i] = q.sba.options[i] ?? "";
       setSbaOptions(opts);
-      const expls = emptySbaExplanations();
-      for (let i = 0; i < 5; i++) expls[i] = q.sba.optionExplanations?.[i] ?? "";
-      setSbaOptionExplanations(expls);
+      setSbaExplanation(resolveSbaExplanation(q.sba as { explanation?: string; optionExplanations?: string[]; correctIndex?: number }));
       setSbaCorrect(q.sba.correctIndex as 0 | 1 | 2 | 3 | 4);
     }
   };
@@ -513,7 +535,7 @@ export default function CreateQuestionAI() {
         stem: q.stem,
         options: opts,
         correctIndex: (q.sba_correct_index ?? 0) as 0 | 1 | 2 | 3 | 4,
-        optionExplanations: [...emptySbaExplanations()],
+        explanation: "",
       },
       sourcePointId: null,
     };
@@ -993,10 +1015,6 @@ export default function CreateQuestionAI() {
     setSbaOptions((opts) => opts.map((o, j) => (j === i ? v : o)) as [string, string, string, string, string]);
   };
 
-  const setSbaOptionExplanation = (i: number, v: string) => {
-    setSbaOptionExplanations((opts) => opts.map((o, j) => (j === i ? v : o)) as [string, string, string, string, string]);
-  };
-
   const resetForm = () => {
     setSelectedBoardIds([]);
     setDifficulty("medium");
@@ -1006,7 +1024,7 @@ export default function CreateQuestionAI() {
     setTfItems([]);
     setSbaStem("");
     setSbaOptions(["", "", "", "", ""]);
-    setSbaOptionExplanations(emptySbaExplanations());
+    setSbaExplanation("");
     setSbaCorrect(0);
     setQuestionMode(null);
     setResult(null);
@@ -1093,7 +1111,7 @@ export default function CreateQuestionAI() {
       mcq: mode === "mcq" ? { stem: mcqStem, trueFalse: tfItems } : null,
       sba:
         mode === "sba"
-          ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect, optionExplanations: [...sbaOptionExplanations] }
+          ? { stem: sbaStem, options: sbaOptions, correctIndex: sbaCorrect, explanation: sbaExplanation }
           : null,
       sourcePointId: points.find((p) => p.approved)?.point_id ?? null,
     };
@@ -1229,6 +1247,14 @@ export default function CreateQuestionAI() {
     }
   };
 
+  const downloadBulkExternalPrompt = (format: "json" | "csv" = "json") => {
+    downloadExternalBulkQuestionsPrompt(
+      boardOptions.map((b) => b.name),
+      format,
+    );
+    toast.success(format === "csv" ? "CSV prompt downloaded" : "JSON prompt downloaded");
+  };
+
   const buildCurrentDraftFromForm = (): DraftQuestion => {
     const t = taxonomyNames();
     const existing = queuedQuestions[activeQuestionIndex];
@@ -1250,7 +1276,7 @@ export default function CreateQuestionAI() {
               stem: sbaStem,
               options: sbaOptions,
               correctIndex: sbaCorrect,
-              optionExplanations: [...sbaOptionExplanations],
+              explanation: sbaExplanation,
             }
           : null,
       sourcePointId: existing?.sourcePointId ?? points.find((p) => p.approved)?.point_id ?? null,
@@ -1468,6 +1494,17 @@ export default function CreateQuestionAI() {
                 <ClipboardCopy className="mr-2 h-4 w-4" />
                 Copy CSV prompt
               </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-10 w-full sm:h-8 sm:w-auto"
+                disabled={importingBulk}
+                onClick={() => downloadBulkExternalPrompt("csv")}
+              >
+                <FileText className="mr-2 h-4 w-4" />
+                Download CSV prompt
+              </Button>
             </div>
           </div>
 
@@ -1505,6 +1542,16 @@ export default function CreateQuestionAI() {
             >
               <ClipboardCopy className="mr-2 h-4 w-4" />
               Copy JSON prompt
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10 w-full sm:w-auto"
+              onClick={() => downloadBulkExternalPrompt("json")}
+              disabled={importingBulk}
+            >
+              <FileText className="mr-2 h-4 w-4" />
+              Download JSON prompt
             </Button>
             <Button type="button" variant="outline" className="h-10 w-full sm:w-auto" asChild>
               <a href="/samples/create-question-bulk.json" download>
@@ -1846,27 +1893,6 @@ export default function CreateQuestionAI() {
                 </div>
               ))}
             </div>
-            <div className="space-y-3">
-              <Label>Explanations (per option)</Label>
-              {sbaOptions.map((opt, i) => {
-                const label = String.fromCharCode(97 + i);
-                const isCorrect = sbaCorrect === i;
-                return (
-                  <div key={`expl-${i}`} className="space-y-1.5 rounded-md border p-3">
-                    <Label className="text-xs">
-                      Option {label}: {isCorrect ? "Why this is correct" : "Why this is wrong"}
-                    </Label>
-                    <Textarea
-                      value={sbaOptionExplanations[i] ?? ""}
-                      onChange={(e) => setSbaOptionExplanation(i, e.target.value)}
-                      rows={2}
-                      className="resize-y text-base sm:text-sm"
-                      placeholder={isCorrect ? "Explain why this is the best answer…" : "Explain why this option is incorrect…"}
-                    />
-                  </div>
-                );
-              })}
-            </div>
             <div className="space-y-2">
               <Label>Correct option *</Label>
               <RadioGroup
@@ -1884,6 +1910,16 @@ export default function CreateQuestionAI() {
                   </label>
                 ))}
               </RadioGroup>
+            </div>
+            <div className="space-y-2">
+              <Label>Explanation</Label>
+              <Textarea
+                value={sbaExplanation}
+                onChange={(e) => setSbaExplanation(e.target.value)}
+                rows={3}
+                className="resize-y text-base sm:text-sm"
+                placeholder="Explain why the correct option is the best answer…"
+              />
             </div>
           </div>
         ) : null}

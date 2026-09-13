@@ -49,7 +49,7 @@ const PROMPT_NAV: { slug: PromptSlug; label: string; description: string }[] = [
     slug: "question-explanations",
     label: "Explanations",
     description:
-      "Generate explanations (AI) for MCQ T/F statements and SBA options. Concept context and question text are appended automatically.",
+      "Generate explanations (AI): MCQ = one explanation per T/F statement; SBA = one shared explanation for the whole question. Concept context and question text are appended automatically.",
   },
   {
     slug: "matching",

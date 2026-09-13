@@ -612,18 +612,19 @@ function buildExplanationEmbedText(questionMode, mcq, sba) {
   }
   if (questionMode === "sba" && sba && Array.isArray(sba.options)) {
     const correctIdx = Number(sba.correctIndex ?? 0);
-    const expls = Array.isArray(sba.optionExplanations) ? sba.optionExplanations : [];
-    const parts = sba.options
-      .map((opt, i) => {
-        const expl = typeof expls[i] === "string" ? expls[i].trim() : "";
-        if (!expl) return null;
-        const label = String.fromCharCode(97 + i);
-        const role = i === correctIdx ? "CORRECT" : "WRONG";
-        const text = typeof opt === "string" ? opt.trim() : "";
-        return `Option ${label} (${role}): ${text}\nExplanation: ${expl}`;
-      })
-      .filter(Boolean);
-    return parts.join("\n\n");
+    let expl = typeof sba.explanation === "string" ? sba.explanation.trim() : "";
+    if (!expl && Array.isArray(sba.optionExplanations)) {
+      const arr = sba.optionExplanations;
+      expl =
+        (typeof arr[correctIdx] === "string" && arr[correctIdx].trim()) ||
+        arr.find((e) => typeof e === "string" && e.trim())?.trim() ||
+        "";
+    }
+    if (!expl) return "";
+    const label = String.fromCharCode(97 + (Number.isFinite(correctIdx) ? correctIdx : 0));
+    const text =
+      typeof sba.options[correctIdx] === "string" ? sba.options[correctIdx].trim() : "";
+    return `Correct option ${label}: ${text || "—"}\nExplanation: ${expl}`;
   }
   return "";
 }
@@ -1214,10 +1215,7 @@ app.post("/api/generate-question-explanations", async (req, res) => {
                   required: ["statement_index", "explanation"],
                 },
               },
-              option_explanations: {
-                type: SchemaType.ARRAY,
-                items: { type: SchemaType.STRING },
-              },
+              explanation: { type: SchemaType.STRING },
             },
             required: ["question_index"],
           },
@@ -1281,11 +1279,13 @@ ${questionsBlock}`;
           }))
           .filter((x) => Number.isInteger(x.statement_index) && x.statement_index >= 0 && x.explanation);
       }
-      if (Array.isArray(row?.option_explanations)) {
-        entry.option_explanations = row.option_explanations
-          .slice(0, 5)
-          .map((x) => sanitizeModelText(x));
-        while (entry.option_explanations.length < 5) entry.option_explanations.push("");
+      if (typeof row?.explanation === "string" && row.explanation.trim()) {
+        entry.explanation = sanitizeModelText(row.explanation);
+      } else if (Array.isArray(row?.option_explanations)) {
+        // Legacy model replies: pick correct option text or first non-empty.
+        const arr = row.option_explanations.map((x) => sanitizeModelText(x));
+        entry.explanation =
+          arr.find((x) => typeof x === "string" && x.trim())?.trim() || "";
       }
       byIndex.set(qi, entry);
     }
@@ -1302,8 +1302,16 @@ ${questionsBlock}`;
           }
           return { question_index: q.question_index, question_mode: "mcq", explanations };
         }
-        const option_explanations = gen?.option_explanations ?? ["", "", "", "", ""];
-        return { question_index: q.question_index, question_mode: "sba", option_explanations };
+        let explanation = typeof gen?.explanation === "string" ? gen.explanation.trim() : "";
+        if (!explanation && Array.isArray(gen?.option_explanations)) {
+          const idx = q.correct_index ?? 0;
+          const arr = gen.option_explanations;
+          explanation =
+            (typeof arr[idx] === "string" && arr[idx].trim()) ||
+            arr.find((x) => typeof x === "string" && x.trim())?.trim() ||
+            "";
+        }
+        return { question_index: q.question_index, question_mode: "sba", explanation };
       }),
     });
   } catch (e) {

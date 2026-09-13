@@ -29,13 +29,7 @@
         "Eustachian valve"
       ],
       "correct_index": 1,
-      "option_explanations": [
-        "Right AV valve.",
-        "Correct — bicuspid / mitral valve.",
-        "Semilunar valve at LV outflow.",
-        "Semilunar valve at RV outflow.",
-        "IVC valve remnant."
-      ]
+      "explanation": "Mitral valve is the bicuspid valve that guards the left atrioventricular orifice."
     }
   ]
 }
