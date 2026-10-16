@@ -819,6 +819,8 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
 
 .ckeditor-field--concept .ck.ck-editor__editable li::marker {
   color: var(--cd-bullet, var(--cd-paragraph, var(--cd-unset-text, #ffffff)));
+  font-weight: 900;
+  font-size: calc(var(--cd-bullet-size, 14px) * 1.15);
 }
 
 .ckeditor-field--concept .ck.ck-editor__editable a {
@@ -1149,6 +1151,8 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
 .story-based-learning-rich li::marker,
 .story-based-learning .prose li::marker {
   color: var(--cd-bullet, var(--cd-paragraph, var(--cd-unset-text, currentColor)));
+  font-weight: 900;
+  font-size: calc(var(--cd-bullet-size, 14px) * 1.15);
 }
 
 .concept-detail-rich blockquote,

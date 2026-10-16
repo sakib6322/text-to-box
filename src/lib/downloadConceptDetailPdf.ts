@@ -177,6 +177,7 @@ export async function downloadConceptDetailPdf(
     ol { list-style-type: decimal; }
     ol ol { list-style-type: lower-alpha; }
     li { display: list-item; margin-bottom: 6px; }
+    li::marker { font-weight: 900; font-size: 1.15em; }
     table { width: auto; max-width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; }
     col, th, td { box-sizing: border-box; }
     th, td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; word-wrap: break-word; }

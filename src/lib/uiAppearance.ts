@@ -921,7 +921,7 @@ function defaultConcept(overrides: Partial<ConceptDetailsAppearance> = {}): Conc
     boldWeight: 700,
     linkColor: "#2563eb",
     bulletColor: "#0f172a",
-    bulletSizePx: 14,
+    bulletSizePx: 16,
     listIndentPx: 20,
     tableHeaderBg: "#fbbf24",
     tableHeaderColor: "#1e293b",
