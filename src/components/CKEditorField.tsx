@@ -485,20 +485,25 @@ export function CKEditorField({
           lastEmitted.current = editor.getData();
           mountImageButtonInToolbar(editor);
 
-          // Promote glyph/indent bullets (Word/PDF plain paste) into real nested lists
-          editor.editing.view.document.on("clipboardInput", (evt, data) => {
-            const dt = data.dataTransfer;
-            if (!dt) return;
-            const html = String(dt.getData("text/html") ?? "");
-            const plain = String(dt.getData("text/plain") ?? "");
-            const normalized = normalizeClipboardListHtml(html, plain);
-            if (!normalized) return;
+          // Promote glyph/indent bullets (Word/PDF plain paste) into real nested lists.
+          // Prefer ClipboardPipeline so List schema conversion stays intact.
+          const clipboard = editor.plugins.get("ClipboardPipeline");
+          clipboard.on(
+            "inputTransformation",
+            (_evt, data: { content: unknown; dataTransfer?: DataTransfer }) => {
+              const dt = data.dataTransfer;
+              const html = String(dt?.getData("text/html") ?? "");
+              const plain = String(dt?.getData("text/plain") ?? "");
+              // Real <ul>/<ol> — leave CKEditor / PasteFromOffice path alone
+              if (/<(ul|ol)\b/i.test(html)) return;
 
-            evt.stop();
-            const viewFragment = editor.data.processor.toView(normalized);
-            const modelFragment = editor.data.toModel(viewFragment);
-            editor.model.insertContent(modelFragment, editor.model.document.selection);
-          });
+              const normalized = normalizeClipboardListHtml(html, plain);
+              if (!normalized) return;
+
+              data.content = editor.data.processor.toView(normalized);
+            },
+            { priority: "high" },
+          );
 
           if (re.googleDriveUpload || (re.directImageUpload && re.imageCompression)) {
             editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({

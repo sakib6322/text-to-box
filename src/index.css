@@ -712,6 +712,57 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
+/*
+ * Editor lists — Tailwind Preflight zeroes list-style on all ul/ol.
+ * Must apply to every CKEditorField (default / concept / story), with !important.
+ * Prefer `inside` so overflow:hidden shells do not clip markers.
+ */
+.ckeditor-field .ck-editor__editable.ck-content ul,
+.ckeditor-field .ck-editor__editable ul {
+  list-style-type: disc !important;
+  list-style-position: inside !important;
+  margin: 0.35em 0 !important;
+  padding-left: 0.25rem !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content ul ul,
+.ckeditor-field .ck-editor__editable ul ul {
+  list-style-type: circle !important;
+  margin: 0.15em 0 0.15em 1rem !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content ul ul ul,
+.ckeditor-field .ck-editor__editable ul ul ul {
+  list-style-type: square !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content ol,
+.ckeditor-field .ck-editor__editable ol {
+  list-style-type: decimal !important;
+  list-style-position: inside !important;
+  margin: 0.35em 0 !important;
+  padding-left: 0.25rem !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content ol ol,
+.ckeditor-field .ck-editor__editable ol ol {
+  list-style-type: lower-alpha !important;
+  margin: 0.15em 0 0.15em 1rem !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content li,
+.ckeditor-field .ck-editor__editable li {
+  display: list-item !important;
+}
+
+.ckeditor-field .ck-editor__editable.ck-content li::marker,
+.ckeditor-field .ck-editor__editable li::marker {
+  /* Match body text — Appearance bulletColor is often dark and vanishes on dark textbox bg */
+  color: currentColor;
+  font-weight: 900;
+  font-size: 1.15em;
+}
+
 .ckeditor-field--compact .ck.ck-toolbar {
   padding: 0.15rem 0.25rem;
 }
@@ -793,34 +844,8 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   color: var(--cd-h3-color, var(--cd-heading, var(--cd-unset-text, #ffffff)));
 }
 
-.ckeditor-field--concept .ck.ck-editor__editable ul {
-  list-style-type: disc;
-  list-style-position: outside;
-  padding-left: var(--cd-list-indent, 1.25rem);
-}
-
-.ckeditor-field--concept .ck.ck-editor__editable ul ul {
-  list-style-type: circle;
-}
-
-.ckeditor-field--concept .ck.ck-editor__editable ul ul ul {
-  list-style-type: square;
-}
-
-.ckeditor-field--concept .ck.ck-editor__editable ol {
-  list-style-type: decimal;
-  list-style-position: outside;
-  padding-left: var(--cd-list-indent, 1.25rem);
-}
-
-.ckeditor-field--concept .ck.ck-editor__editable li {
-  display: list-item;
-}
-
 .ckeditor-field--concept .ck.ck-editor__editable li::marker {
-  color: var(--cd-bullet, var(--cd-paragraph, var(--cd-unset-text, #ffffff)));
-  font-weight: 900;
-  font-size: calc(var(--cd-bullet-size, 14px) * 1.15);
+  color: var(--cd-paragraph, var(--cd-unset-text, currentColor));
 }
 
 .ckeditor-field--concept .ck.ck-editor__editable a {
@@ -918,22 +943,6 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   color: var(--sbl-body-color, var(--cd-unset-text, #ffffff)) !important;
 }
 
-.ckeditor-field--story .ck.ck-editor__editable ul {
-  list-style-type: disc;
-  list-style-position: outside;
-  padding-left: 1.25rem;
-}
-
-.ckeditor-field--story .ck.ck-editor__editable ul ul {
-  list-style-type: circle;
-}
-
-.ckeditor-field--story .ck.ck-editor__editable ol {
-  list-style-type: decimal;
-  list-style-position: outside;
-  padding-left: 1.25rem;
-}
-
 .ckeditor-field--story .ck.ck-editor__editable p,
 .ckeditor-field--story .ck.ck-editor__editable li,
 .ckeditor-field--story .ck.ck-editor__editable td,
@@ -941,8 +950,8 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   color: var(--sbl-body-color, var(--cd-unset-text, #ffffff));
 }
 
-.ckeditor-field--story .ck.ck-editor__editable li {
-  display: list-item;
+.ckeditor-field--story .ck.ck-editor__editable li::marker {
+  color: var(--sbl-body-color, currentColor);
 }
 
 .ckeditor-field--story .ck.ck-editor__editable h1,
