@@ -793,8 +793,32 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   color: var(--cd-h3-color, var(--cd-heading, var(--cd-unset-text, #ffffff)));
 }
 
+.ckeditor-field--concept .ck.ck-editor__editable ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: var(--cd-list-indent, 1.25rem);
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable ul ul {
+  list-style-type: circle;
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable ul ul ul {
+  list-style-type: square;
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: var(--cd-list-indent, 1.25rem);
+}
+
 .ckeditor-field--concept .ck.ck-editor__editable li {
-  color: var(--cd-bullet, var(--cd-unset-text, #ffffff));
+  display: list-item;
+}
+
+.ckeditor-field--concept .ck.ck-editor__editable li::marker {
+  color: var(--cd-bullet, var(--cd-paragraph, var(--cd-unset-text, #ffffff)));
 }
 
 .ckeditor-field--concept .ck.ck-editor__editable a {
@@ -892,11 +916,31 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   color: var(--sbl-body-color, var(--cd-unset-text, #ffffff)) !important;
 }
 
+.ckeditor-field--story .ck.ck-editor__editable ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  padding-left: 1.25rem;
+}
+
+.ckeditor-field--story .ck.ck-editor__editable ul ul {
+  list-style-type: circle;
+}
+
+.ckeditor-field--story .ck.ck-editor__editable ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  padding-left: 1.25rem;
+}
+
 .ckeditor-field--story .ck.ck-editor__editable p,
 .ckeditor-field--story .ck.ck-editor__editable li,
 .ckeditor-field--story .ck.ck-editor__editable td,
 .ckeditor-field--story .ck.ck-editor__editable th {
   color: var(--sbl-body-color, var(--cd-unset-text, #ffffff));
+}
+
+.ckeditor-field--story .ck.ck-editor__editable li {
+  display: list-item;
 }
 
 .ckeditor-field--story .ck.ck-editor__editable h1,
@@ -1026,17 +1070,85 @@ html[data-cd-card-shadow="0"] .concept-detail-card {
   color: var(--cd-link, #2563eb);
 }
 
+/*
+ * Tailwind Preflight sets `list-style: none` on ul/ol.
+ * @tailwindcss/typography is installed but not registered — so `prose` never
+ * restores markers. Concept / story read views must set list-style explicitly.
+ */
 .concept-detail-rich ul,
-.concept-detail-rich ol,
 .concept-detail-rich .prose ul,
-.concept-detail-rich .prose ol {
-  padding-left: var(--cd-list-indent, 20px);
+.concept-detail-prose ul,
+.story-based-learning-rich ul,
+.story-based-learning .prose ul {
+  list-style-type: disc;
+  list-style-position: outside;
+  margin: 0.35em 0;
+  padding-left: var(--cd-list-indent, 1.25rem);
   font-size: var(--cd-bullet-size, 14px);
 }
 
+.concept-detail-rich ul ul,
+.concept-detail-rich .prose ul ul,
+.concept-detail-prose ul ul,
+.story-based-learning-rich ul ul,
+.story-based-learning .prose ul ul {
+  list-style-type: circle;
+  margin: 0.15em 0;
+}
+
+.concept-detail-rich ul ul ul,
+.concept-detail-rich .prose ul ul ul,
+.concept-detail-prose ul ul ul,
+.story-based-learning-rich ul ul ul,
+.story-based-learning .prose ul ul ul {
+  list-style-type: square;
+}
+
+.concept-detail-rich ol,
+.concept-detail-rich .prose ol,
+.concept-detail-prose ol,
+.story-based-learning-rich ol,
+.story-based-learning .prose ol {
+  list-style-type: decimal;
+  list-style-position: outside;
+  margin: 0.35em 0;
+  padding-left: var(--cd-list-indent, 1.25rem);
+  font-size: var(--cd-bullet-size, 14px);
+}
+
+.concept-detail-rich ol ol,
+.concept-detail-rich .prose ol ol,
+.concept-detail-prose ol ol,
+.story-based-learning-rich ol ol,
+.story-based-learning .prose ol ol {
+  list-style-type: lower-alpha;
+  margin: 0.15em 0;
+}
+
+.concept-detail-rich ol ol ol,
+.concept-detail-rich .prose ol ol ol,
+.concept-detail-prose ol ol ol,
+.story-based-learning-rich ol ol ol,
+.story-based-learning .prose ol ol ol {
+  list-style-type: lower-roman;
+}
+
+.concept-detail-rich li,
+.concept-detail-rich .prose li,
+.concept-detail-prose li,
+.story-based-learning-rich li,
+.story-based-learning .prose li {
+  margin: 0.2em 0;
+  padding-left: 0.15em;
+  display: list-item;
+}
+
 .concept-detail-rich li::marker,
-.concept-detail-rich .prose li::marker {
-  color: var(--cd-bullet, var(--cd-unset-text, #ffffff));
+.concept-detail-rich .prose li::marker,
+.concept-detail-prose li::marker,
+.story-based-learning-rich li::marker,
+.story-based-learning .prose li::marker {
+  color: var(--cd-bullet, var(--cd-paragraph, var(--cd-unset-text, currentColor)));
 }
 
 .concept-detail-rich blockquote,

@@ -42,6 +42,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { resolveImageInsertUrl } from "@/lib/richHtmlImages";
+import { normalizeClipboardListHtml } from "@/lib/normalizeListPaste";
 import { compressImage } from "@/lib/sourceInput";
 import { apiFetch } from "@/lib/apiBase";
 import { resolveConceptBackgroundColor, resolveConceptTextColor } from "@/lib/uiAppearance";
@@ -483,6 +484,21 @@ export function CKEditorField({
           editorRef.current = editor;
           lastEmitted.current = editor.getData();
           mountImageButtonInToolbar(editor);
+
+          // Promote glyph/indent bullets (Word/PDF plain paste) into real nested lists
+          editor.editing.view.document.on("clipboardInput", (evt, data) => {
+            const dt = data.dataTransfer;
+            if (!dt) return;
+            const html = String(dt.getData("text/html") ?? "");
+            const plain = String(dt.getData("text/plain") ?? "");
+            const normalized = normalizeClipboardListHtml(html, plain);
+            if (!normalized) return;
+
+            evt.stop();
+            const viewFragment = editor.data.processor.toView(normalized);
+            const modelFragment = editor.data.toModel(viewFragment);
+            editor.model.insertContent(modelFragment, editor.model.document.selection);
+          });
 
           if (re.googleDriveUpload || (re.directImageUpload && re.imageCompression)) {
             editor.plugins.get("FileRepository").createUploadAdapter = (loader) => ({

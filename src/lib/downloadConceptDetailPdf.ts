@@ -170,8 +170,13 @@ export async function downloadConceptDetailPdf(
     strong, b { font-weight: 700; }
     em, i { font-style: italic; }
     u { text-decoration: underline; }
-    ul, ol { margin: 0; padding-left: 1.25rem; }
-    li { margin-bottom: 6px; }
+    ul, ol { margin: 0; padding-left: 1.25rem; list-style-position: outside; }
+    ul { list-style-type: disc; }
+    ul ul { list-style-type: circle; }
+    ul ul ul { list-style-type: square; }
+    ol { list-style-type: decimal; }
+    ol ol { list-style-type: lower-alpha; }
+    li { display: list-item; margin-bottom: 6px; }
     table { width: auto; max-width: 100%; border-collapse: collapse; table-layout: auto; font-size: 12px; }
     col, th, td { box-sizing: border-box; }
     th, td { border: 1px solid #cbd5e1; padding: 8px; vertical-align: top; word-wrap: break-word; }
