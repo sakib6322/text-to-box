@@ -1,4 +1,4 @@
-import { apiUrl } from "@/lib/apiBase";
+import { apiUrl, readJsonResponse } from "@/lib/apiBase";
 import { getAuthHeaders, getSession } from "@/lib/auth";
 import {
   conceptProgressPct,
@@ -68,6 +68,13 @@ export type PracticeSession = {
   completedAt?: string;
   score?: number;
   total?: number;
+  /** Total answer units in the paper (MCQ statements + SBA). */
+  totalUnits?: number;
+  fullAnswered?: number;
+  partialAnswered?: number;
+  skipped?: number;
+  /** Last question index for resume. */
+  currentIndex?: number;
   answers?: PracticeAnswer[];
 };
 
@@ -164,7 +171,10 @@ async function syncStudyToServer(entry: StudyProgress) {
   }
 }
 
-async function syncPracticeToServer(session: PracticeSession) {
+let practiceSyncTimer: ReturnType<typeof setTimeout> | null = null;
+let practiceSyncPending: PracticeSession | null = null;
+
+async function flushPracticeSync(session: PracticeSession) {
   try {
     await fetch(apiUrl("/api/user/progress/practice"), {
       method: "PUT",
@@ -178,13 +188,40 @@ async function syncPracticeToServer(session: PracticeSession) {
         answers: session.answers ?? null,
         score: session.score ?? null,
         total: session.total ?? null,
+        total_units: session.totalUnits ?? null,
+        full_answered: session.fullAnswered ?? null,
+        partial_answered: session.partialAnswered ?? null,
+        skipped: session.skipped ?? null,
+        current_index: session.currentIndex ?? null,
         created_at: session.createdAt,
         completed_at: session.completedAt ?? null,
       }),
     });
   } catch {
-    /* offline */
+    /* offline / proxy reset — local cache still holds the draft */
   }
+}
+
+/** Debounce server sync so rapid Next/answer clicks don't hammer a restarting API. */
+function syncPracticeToServer(session: PracticeSession, immediate = false) {
+  practiceSyncPending = session;
+  if (immediate) {
+    if (practiceSyncTimer) {
+      clearTimeout(practiceSyncTimer);
+      practiceSyncTimer = null;
+    }
+    const next = practiceSyncPending;
+    practiceSyncPending = null;
+    if (next) void flushPracticeSync(next);
+    return;
+  }
+  if (practiceSyncTimer) clearTimeout(practiceSyncTimer);
+  practiceSyncTimer = setTimeout(() => {
+    practiceSyncTimer = null;
+    const next = practiceSyncPending;
+    practiceSyncPending = null;
+    if (next) void flushPracticeSync(next);
+  }, 600);
 }
 
 export async function hydrateProgressFromServer(): Promise<void> {
@@ -197,13 +234,13 @@ export async function hydrateProgressFromServer(): Promise<void> {
         fetch(apiUrl("/api/user/progress/practice"), { headers: getAuthHeaders() }),
       ]);
       if (studyRes.ok) {
-        const data = (await studyRes.json()) as { rows?: Record<string, unknown>[] };
+        const data = await readJsonResponse<{ rows?: Record<string, unknown>[] }>(studyRes, { rows: [] });
         const map: Record<string, StudyProgress> = {};
         for (const r of data.rows ?? []) map[String(r.concept_id)] = rowToStudyProgress(r);
         writeJson(`${PREFIX}_${storageUserKey()}_study`, map);
       }
       if (practiceRes.ok) {
-        const data = (await practiceRes.json()) as {
+        const data = await readJsonResponse<{
           rows?: {
             id: string;
             concept_id: string;
@@ -213,10 +250,15 @@ export async function hydrateProgressFromServer(): Promise<void> {
             answers?: PracticeAnswer[];
             score?: number;
             total?: number;
+            total_units?: number;
+            full_answered?: number;
+            partial_answered?: number;
+            skipped?: number;
+            current_index?: number;
             created_at: string;
             completed_at?: string;
           }[];
-        };
+        }>(practiceRes, { rows: [] });
         const sessions: PracticeSession[] = (data.rows ?? []).map((r) => ({
           id: r.id,
           conceptId: r.concept_id,
@@ -226,6 +268,11 @@ export async function hydrateProgressFromServer(): Promise<void> {
           answers: r.answers,
           score: r.score,
           total: r.total,
+          totalUnits: r.total_units,
+          fullAnswered: r.full_answered,
+          partialAnswered: r.partial_answered,
+          skipped: r.skipped,
+          currentIndex: r.current_index,
           createdAt: r.created_at,
           completedAt: r.completed_at,
         }));
@@ -464,7 +511,8 @@ export function getPracticeSessions(): PracticeSession[] {
 export function savePracticeSession(session: PracticeSession) {
   const list = getPracticeSessions().filter((s) => s.id !== session.id);
   writeJson(`${PREFIX}_${storageUserKey()}_practice`, [session, ...list].slice(0, 100));
-  void syncPracticeToServer(session);
+  // Flush immediately on submit/complete; otherwise debounce mid-run drafts
+  syncPracticeToServer(session, Boolean(session.completedAt));
 }
 
 export function getPracticeSession(id: string): PracticeSession | null {

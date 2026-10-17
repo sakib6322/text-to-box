@@ -25,3 +25,20 @@ export function withAuthHeaders(init: RequestInit = {}): RequestInit {
 export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   return fetch(apiUrl(path), withAuthHeaders(init ?? {}));
 }
+
+/**
+ * Parse JSON safely — empty / proxy-error bodies no longer throw
+ * "Unexpected end of JSON input".
+ */
+export async function readJsonResponse<T = unknown>(
+  res: Response,
+  fallback: T = {} as T,
+): Promise<T> {
+  const text = await res.text().catch(() => "");
+  if (!text.trim()) return fallback;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
+  }
+}

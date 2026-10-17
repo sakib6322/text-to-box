@@ -1,33 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Send } from "lucide-react";
 import { AppBackButton } from "@/components/AppBackButton";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PracticeQuestionBlock, type PracticeQuestionFull } from "@/components/PracticeQuestionBlock";
-import { apiUrl } from "@/lib/apiBase";
-import { getPracticeSession, savePracticeSession, type PracticeAnswer } from "@/lib/userProgress";
+import { PracticeSessionNav } from "@/components/PracticeSessionNav";
+import { apiUrl, readJsonResponse } from "@/lib/apiBase";
+import {
+  restoreRevealState,
+  summarizePracticeRun,
+} from "@/lib/practiceProgress";
+import {
+  getPracticeSession,
+  savePracticeSession,
+  type PracticeAnswer,
+  type PracticeSession,
+} from "@/lib/userProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 
 function gradeMcqStatement(correct: "true" | "false", given: "true" | "false") {
   return correct === given;
-}
-
-function restoreFromAnswers(
-  saved: PracticeAnswer[],
-): { locked: Record<string, boolean>; revealed: Record<string, { given: unknown; correct: boolean }> } {
-  const locked: Record<string, boolean> = {};
-  const revealed: Record<string, { given: unknown; correct: boolean }> = {};
-  for (const a of saved) {
-    locked[a.questionId] = true;
-    const ans = a.answer as { value?: unknown; selectedIndex?: number };
-    revealed[a.questionId] = {
-      given: ans.value ?? ans.selectedIndex,
-      correct: a.isCorrect,
-    };
-  }
-  return { locked, revealed };
 }
 
 export default function PracticeTake() {
@@ -45,6 +39,24 @@ export default function PracticeTake() {
   const [revealed, setRevealed] = useState<Record<string, { given: unknown; correct: boolean }>>({});
   const [answers, setAnswers] = useState<PracticeAnswer[]>([]);
   const [done, setDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const questionAnchorRef = useRef<HTMLDivElement | null>(null);
+  const qIndexRef = useRef(0);
+
+  const persistDraft = useCallback(
+    (patch: Partial<PracticeSession> & { answers?: PracticeAnswer[]; currentIndex?: number }) => {
+      if (!sessionId) return;
+      const session = getPracticeSession(sessionId);
+      if (!session || session.completedAt) return;
+      savePracticeSession({
+        ...session,
+        ...patch,
+        answers: patch.answers ?? session.answers,
+        currentIndex: patch.currentIndex ?? session.currentIndex,
+      });
+    },
+    [sessionId],
+  );
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -56,20 +68,47 @@ export default function PracticeTake() {
     }
     setSessionTitle(session.title);
     setConceptId(session.conceptId);
-    if (reviewMode && session.completedAt && session.answers?.length) {
-      const restored = restoreFromAnswers(session.answers);
+
+    const savedAnswers = session.answers ?? [];
+    if (savedAnswers.length) {
+      const restored = restoreRevealState(savedAnswers);
       setLocked(restored.locked);
       setRevealed(restored.revealed);
-      setAnswers(session.answers);
+      setAnswers(savedAnswers);
     }
+    if (typeof session.currentIndex === "number" && session.currentIndex >= 0) {
+      setQIndex(session.currentIndex);
+    }
+    if (session.completedAt && !reviewMode) {
+      setDone(true);
+    }
+
     setLoading(true);
     try {
       const ids = session.questionIds.join(",");
-      const res = await fetch(apiUrl(`/api/questions?ids=${encodeURIComponent(ids)}`));
-      const data = (await res.json()) as { rows?: PracticeQuestionFull[]; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Load failed");
-      const byId = new Map((data.rows ?? []).map((q) => [q.id, q]));
-      setQuestions(session.questionIds.map((id) => byId.get(id)).filter(Boolean) as PracticeQuestionFull[]);
+      const loadQuestions = async () => {
+        const res = await fetch(apiUrl(`/api/questions?ids=${encodeURIComponent(ids)}`));
+        const data = await readJsonResponse<{ rows?: PracticeQuestionFull[]; error?: string }>(res, {});
+        if (!res.ok) throw new Error(data.error || `Load failed (${res.status})`);
+        return data.rows ?? [];
+      };
+      let rows: PracticeQuestionFull[] = [];
+      try {
+        rows = await loadQuestions();
+      } catch {
+        // API often resets during HMR — one quick retry
+        await new Promise((r) => setTimeout(r, 400));
+        rows = await loadQuestions();
+      }
+      const byId = new Map(rows.map((q) => [q.id, q]));
+      const ordered = session.questionIds
+        .map((id) => byId.get(id))
+        .filter(Boolean) as PracticeQuestionFull[];
+      if (!ordered.length) throw new Error("Questions could not be loaded — try again");
+      setQuestions(ordered);
+      if (typeof session.currentIndex === "number") {
+        setQIndex(Math.min(session.currentIndex, Math.max(0, ordered.length - 1)));
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Load failed");
     } finally {
@@ -82,38 +121,52 @@ export default function PracticeTake() {
   }, [load]);
 
   const q = questions[qIndex];
+  const summary = useMemo(() => summarizePracticeRun(questions, answers), [questions, answers]);
+  const currentStatus = summary.statuses[qIndex] ?? "empty";
+
+  useEffect(() => {
+    qIndexRef.current = qIndex;
+  }, [qIndex]);
+
   const score = useMemo(() => {
-    if (reviewMode) {
+    if (reviewMode || done) {
       const session = sessionId ? getPracticeSession(sessionId) : null;
-      return session?.score ?? answers.filter((a) => a.isCorrect).length;
+      return session?.score ?? summary.correct;
     }
-    return answers.filter((a) => a.isCorrect).length;
-  }, [answers, reviewMode, sessionId]);
+    return summary.correct;
+  }, [answers, reviewMode, sessionId, done, summary.correct]);
 
-  const totalAnswered = useMemo(() => {
-    if (reviewMode) {
-      const session = sessionId ? getPracticeSession(sessionId) : null;
-      return session?.total ?? answers.length;
-    }
-    return answers.length;
-  }, [answers, reviewMode, sessionId]);
+  const finish = useCallback(
+    (finalAnswers: PracticeAnswer[]) => {
+      if (!sessionId) return;
+      const session = getPracticeSession(sessionId);
+      if (!session) return;
+      const stats = summarizePracticeRun(questions, finalAnswers);
+      savePracticeSession({
+        ...session,
+        completedAt: new Date().toISOString(),
+        score: stats.correct,
+        total: stats.attempted,
+        totalUnits: stats.totalUnits,
+        fullAnswered: stats.full,
+        partialAnswered: stats.partial,
+        skipped: stats.empty,
+        currentIndex: qIndex,
+        answers: finalAnswers,
+      });
+      setDone(true);
+    },
+    [sessionId, questions, qIndex],
+  );
 
-  const finish = (finalAnswers: PracticeAnswer[]) => {
-    if (!sessionId) return;
-    const session = getPracticeSession(sessionId);
-    if (!session) return;
-    savePracticeSession({
-      ...session,
-      completedAt: new Date().toISOString(),
-      score: finalAnswers.filter((a) => a.isCorrect).length,
-      total: finalAnswers.length,
-      answers: finalAnswers,
-    });
-    setDone(true);
-  };
-
-  const revealMcq = (stmtKey: string, stmtId: string, correct: "true" | "false", given: "true" | "false", explanation?: string) => {
-    if (locked[stmtKey] || reviewMode) return;
+  const revealMcq = (
+    stmtKey: string,
+    stmtId: string,
+    correct: "true" | "false",
+    given: "true" | "false",
+    explanation?: string,
+  ) => {
+    if (locked[stmtKey] || reviewMode || done) return;
     const ok = gradeMcqStatement(correct, given);
     setLocked((p) => ({ ...p, [stmtKey]: true }));
     setRevealed((p) => ({ ...p, [stmtKey]: { given, correct: ok } }));
@@ -123,11 +176,15 @@ export default function PracticeTake() {
       isCorrect: ok,
       answeredAt: new Date().toISOString(),
     };
-    setAnswers((prev) => [...prev, entry]);
+    setAnswers((prev) => {
+      const next = [...prev.filter((a) => a.questionId !== entry.questionId), entry];
+      persistDraft({ answers: next, currentIndex: qIndexRef.current });
+      return next;
+    });
   };
 
   const revealSba = (optionIndex: number) => {
-    if (!q || locked[q.id] || reviewMode) return;
+    if (!q || locked[q.id] || reviewMode || done) return;
     const correctIdx = q.sba?.correctIndex ?? -1;
     const ok = optionIndex === correctIdx;
     setLocked((p) => ({ ...p, [q.id]: true }));
@@ -138,21 +195,50 @@ export default function PracticeTake() {
       isCorrect: ok,
       answeredAt: new Date().toISOString(),
     };
-    setAnswers((prev) => [...prev, entry]);
+    setAnswers((prev) => {
+      const next = [...prev.filter((a) => a.questionId !== entry.questionId), entry];
+      persistDraft({ answers: next, currentIndex: qIndexRef.current });
+      return next;
+    });
   };
 
-  const goNextQuestion = () => {
-    if (qIndex < questions.length - 1) {
-      setQIndex((i) => i + 1);
-    } else {
-      setAnswers((current) => {
-        finish(current);
-        return current;
-      });
+  const goTo = (index: number) => {
+    const clamped = Math.max(0, Math.min(index, questions.length - 1));
+    setQIndex(clamped);
+    qIndexRef.current = clamped;
+    persistDraft({ answers, currentIndex: clamped });
+    // Bring the question into view so skipped items can be marked immediately
+    requestAnimationFrame(() => {
+      questionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const goPrev = () => {
+    if (qIndex > 0) goTo(qIndex - 1);
+  };
+
+  const goNext = () => {
+    if (qIndex < questions.length - 1) goTo(qIndex + 1);
+  };
+
+  const submitPractice = () => {
+    if (submitting || done || reviewMode) return;
+    const left = summary.empty + summary.partial;
+    if (left > 0) {
+      const ok = window.confirm(
+        `${summary.empty}টি question এখনো খালি, ${summary.partial}টি partial। তবুও submit করবেন?`,
+      );
+      if (!ok) return;
     }
+    setSubmitting(true);
+    finish(answers);
+    setSubmitting(false);
+    toast.success("Practice submitted");
   };
 
-  const shellClass = isMobile ? "mx-auto max-w-lg pb-28 space-y-4" : "mx-auto max-w-3xl pb-10 space-y-4 px-2";
+  const shellClass = isMobile
+    ? "mx-auto max-w-lg pb-24 space-y-3"
+    : "mx-auto max-w-5xl pb-16 space-y-4 px-2";
 
   if (loading) {
     return (
@@ -163,6 +249,7 @@ export default function PracticeTake() {
   }
 
   if (reviewMode && questions.length > 0) {
+    const session = sessionId ? getPracticeSession(sessionId) : null;
     return (
       <div className={shellClass}>
         <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3">
@@ -172,9 +259,26 @@ export default function PracticeTake() {
             <p className="text-sm font-medium">Full review</p>
           </div>
           <Badge variant="secondary" className="tabular-nums">
-            {score} / {totalAnswered}
+            {score} / {session?.total ?? answers.length}
           </Badge>
         </div>
+
+        {(session?.fullAnswered != null || summary.full > 0) && (
+          <div className={isMobile ? "px-4" : ""}>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
+                Full {session?.fullAnswered ?? summary.full}
+              </Badge>
+              <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
+                Partial {session?.partialAnswered ?? summary.partial}
+              </Badge>
+              <Badge variant="outline">
+                Skipped {session?.skipped ?? summary.empty}
+              </Badge>
+            </div>
+          </div>
+        )}
+
         <div className={`space-y-4 ${isMobile ? "px-4" : ""}`}>
           {questions.map((question, i) => (
             <PracticeQuestionBlock
@@ -187,14 +291,12 @@ export default function PracticeTake() {
             />
           ))}
         </div>
-        <div
-          className={`flex gap-2 ${isMobile ? "safe-area-pb fixed bottom-0 left-0 right-0 flex-col border-t bg-background/95 p-4" : "pt-2"}`}
-        >
-          <Button asChild className={isMobile ? "h-12 w-full" : ""}>
-            <Link to={`/concept/${conceptId}/details`}>Study & practice again</Link>
+        <div className={`flex flex-wrap justify-end gap-2 ${isMobile ? "px-4" : ""}`}>
+          <Button asChild size="sm" className="h-8 text-xs">
+            <Link to={`/practice/${conceptId}/setup`}>Practice again</Link>
           </Button>
-          <Button asChild variant="outline" className={isMobile ? "w-full" : ""}>
-            <Link to="/study/progress">Back to My progress</Link>
+          <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+            <Link to="/study/progress">History</Link>
           </Button>
         </div>
       </div>
@@ -202,19 +304,38 @@ export default function PracticeTake() {
   }
 
   if (done) {
+    const session = sessionId ? getPracticeSession(sessionId) : null;
     return (
-      <div className={`${isMobile ? "max-w-lg" : "max-w-xl"} mx-auto space-y-4 p-6 text-center`}>
-        <CheckCircle2 className="mx-auto h-12 w-12 text-primary" />
-        <h1 className="text-xl font-bold">Practice complete</h1>
-        <p className="text-muted-foreground">
-          Score: {score} / {answers.length}
-        </p>
-        <Button asChild className="w-full">
-          <Link to={`/practice/session/${sessionId}?review=1`}>View full review</Link>
-        </Button>
-        <Button asChild variant="outline" className="w-full">
-          <Link to="/study/progress">View progress report</Link>
-        </Button>
+      <div className={`${isMobile ? "max-w-lg" : "max-w-xl"} mx-auto space-y-4 p-6`}>
+        <div className="rounded-2xl border bg-card p-6 text-center shadow-sm">
+          <CheckCircle2 className="mx-auto h-10 w-10 text-primary" />
+          <h1 className="mt-3 text-lg font-bold">Practice submitted</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Score{" "}
+            <span className="font-semibold text-foreground tabular-nums">
+              {score}/{session?.total ?? answers.length}
+            </span>
+            {session?.totalUnits != null ? (
+              <span className="text-muted-foreground"> · of {session.totalUnits} units</span>
+            ) : null}
+          </p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center">
+            <MiniStat label="Full" value={session?.fullAnswered ?? summary.full} />
+            <MiniStat label="Partial" value={session?.partialAnswered ?? summary.partial} />
+            <MiniStat label="Skipped" value={session?.skipped ?? summary.empty} />
+          </div>
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button asChild size="sm" className="h-8 text-xs">
+            <Link to={`/practice/session/${sessionId}?review=1`}>Review answers</Link>
+          </Button>
+          <Button asChild size="sm" variant="outline" className="h-8 text-xs">
+            <Link to={`/practice/${conceptId}/setup`}>Practice again</Link>
+          </Button>
+          <Button asChild size="sm" variant="ghost" className="h-8 text-xs">
+            <Link to="/study/progress">History</Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -232,47 +353,113 @@ export default function PracticeTake() {
 
   return (
     <div className={shellClass}>
-      <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-4 py-3">
+      <div className="sticky top-0 z-20 flex items-center gap-2 border-b bg-background/95 px-3 py-2.5 md:px-4">
         <AppBackButton fallback="/study/progress" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs text-muted-foreground">{sessionTitle}</p>
+          <p className="truncate text-[11px] text-muted-foreground">{sessionTitle}</p>
           <p className="text-sm font-medium tabular-nums">
-            Q{qIndex + 1} / {questions.length}
+            Q{qIndex + 1}
+            <span className="text-muted-foreground font-normal"> / {questions.length}</span>
           </p>
         </div>
-        <Badge variant="secondary" className="tabular-nums">
-          {score} correct
+        <Badge variant="secondary" className="tabular-nums text-[10px]">
+          {summary.correct}✓ · {summary.empty} left
         </Badge>
       </div>
 
-      <div className={isMobile ? "px-4" : ""}>
-        <PracticeQuestionBlock
-          q={q}
-          qNum={qIndex + 1}
-          locked={locked}
-          revealed={revealed}
-          onRevealMcq={revealMcq}
-          onRevealSba={revealSba}
-        />
+      <div className={`grid gap-4 ${isMobile ? "" : "lg:grid-cols-[1fr_240px] lg:items-start"}`}>
+        <div className={isMobile ? "px-3 space-y-3" : "space-y-3"}>
+          {isMobile ? (
+            <PracticeSessionNav
+              summary={summary}
+              currentIndex={qIndex}
+              onJump={goTo}
+              compact
+            />
+          ) : null}
+
+          <div ref={questionAnchorRef} className="scroll-mt-16 space-y-2">
+            {currentStatus === "empty" ? (
+              <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-[11px] text-primary">
+                Skip করা question — এখন True/False বা অপশনে ক্লিক করে দাগাতে পারেন।
+              </div>
+            ) : null}
+            {currentStatus === "partial" ? (
+              <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+                Partial — বাকি statement/অপশন এখন দাগিয়ে Full করতে পারেন।
+              </div>
+            ) : null}
+
+            <PracticeQuestionBlock
+              key={q.id}
+              q={q}
+              qNum={qIndex + 1}
+              locked={locked}
+              revealed={revealed}
+              onRevealMcq={revealMcq}
+              onRevealSba={revealSba}
+            />
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            Board-এর <span className="font-medium text-foreground">dashed / amber</span> নম্বরে ক্লিক
+            করলে skip বা partial question-এ চলে যাবেন — সেখান থেকে দাগাতে পারবেন।
+          </p>
+        </div>
+
+        {!isMobile ? (
+          <div className="sticky top-16">
+            <PracticeSessionNav summary={summary} currentIndex={qIndex} onJump={goTo} />
+          </div>
+        ) : null}
       </div>
 
-      {q.questionMode === "mcq" ? (
-        <div className="safe-area-pb fixed bottom-0 left-0 right-0 border-t bg-background/95 p-4">
+      {/* Compact corner controls */}
+      <div className="safe-area-pb pointer-events-none fixed bottom-3 right-3 z-30 flex items-center gap-1.5 md:bottom-5 md:right-6">
+        <div className="pointer-events-auto flex items-center gap-1 rounded-full border bg-background/95 p-1 shadow-md backdrop-blur">
           <Button
-            className="mx-auto block h-12 w-full max-w-lg"
-            onClick={goNextQuestion}
-            disabled={!q.mcq?.trueFalse?.every((stmt, i) => locked[`${q.id}:${stmt.id ?? i}`])}
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 w-8 rounded-full p-0"
+            onClick={goPrev}
+            disabled={qIndex <= 0}
+            aria-label="Previous"
           >
-            {qIndex >= questions.length - 1 ? "Finish practice" : "Next question"}
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-8 rounded-full px-2.5 text-xs"
+            onClick={goNext}
+            disabled={qIndex >= questions.length - 1}
+          >
+            Next
+            <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 rounded-full px-3 text-xs"
+            onClick={submitPractice}
+            disabled={submitting}
+          >
+            <Send className="mr-1 h-3 w-3" />
+            Submit
           </Button>
         </div>
-      ) : locked[q.id] ? (
-        <div className="safe-area-pb fixed bottom-0 left-0 right-0 border-t bg-background/95 p-4">
-          <Button className="mx-auto block h-12 w-full max-w-lg" onClick={goNextQuestion}>
-            {qIndex >= questions.length - 1 ? "Finish practice" : "Next question"}
-          </Button>
-        </div>
-      ) : null}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border bg-muted/30 px-2 py-2">
+      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-base font-semibold tabular-nums">{value}</p>
     </div>
   );
 }

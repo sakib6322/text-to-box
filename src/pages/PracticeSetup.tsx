@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { apiUrl } from "@/lib/apiBase";
+import { apiUrl, readJsonResponse } from "@/lib/apiBase";
 import { fetchConceptByIdWithBoards } from "@/lib/conceptDetail";
 import { useConceptStudentUi } from "@/hooks/useConceptStudentUi";
 import {
@@ -78,8 +78,8 @@ export default function PracticeSetup() {
       if (concept.taxonomy.topic) qs.set("topic", concept.taxonomy.topic);
 
       const res = await fetch(apiUrl(`/api/questions?${qs}`));
-      const data = (await res.json()) as { rows?: QRow[]; error?: string };
-      if (!res.ok) throw new Error(data.error ?? "Failed to load questions");
+      const data = await readJsonResponse<{ rows?: QRow[]; error?: string }>(res, {});
+      if (!res.ok) throw new Error(data.error || `Failed to load questions (${res.status})`);
       setQuestions(data.rows ?? []);
       setSelected(new Set());
     } catch (e) {
@@ -274,12 +274,22 @@ export default function PracticeSetup() {
             <div key={s.id} className="flex items-center justify-between gap-2 border-b py-2 text-xs last:border-0">
               <div className="min-w-0">
                 <p className="truncate font-medium">{s.title}</p>
-                <p className="text-[10px] text-muted-foreground">{s.questionIds.length} questions</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {s.questionIds.length} questions
+                  {s.completedAt
+                    ? ` · Full ${s.fullAnswered ?? "—"} · Partial ${s.partialAnswered ?? "—"} · Skip ${s.skipped ?? "—"}`
+                    : ` · In progress Q${(s.currentIndex ?? 0) + 1}`}
+                </p>
               </div>
               {s.completedAt ? (
-                <Badge variant="secondary" className="shrink-0 tabular-nums">
-                  {s.score ?? 0}/{s.total ?? s.questionIds.length}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Badge variant="secondary" className="tabular-nums">
+                    {s.score ?? 0}/{s.total ?? s.questionIds.length}
+                  </Badge>
+                  <Button asChild size="sm" variant="ghost" className="h-7 px-2 text-[10px]">
+                    <Link to={`/practice/session/${s.id}?review=1`}>Review</Link>
+                  </Button>
+                </div>
               ) : (
                 <Button asChild size="sm" variant="outline" className="h-7 shrink-0 text-[10px]">
                   <Link to={`/practice/session/${s.id}`}>Resume</Link>

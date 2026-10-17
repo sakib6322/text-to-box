@@ -137,22 +137,33 @@ export default function StudyProgressPage() {
                 {p.completedAt ? (
                   <>
                     <p className="text-xs tabular-nums">
-                      Score: <span className="font-semibold text-primary">{p.score ?? 0}</span> / {p.total ?? p.questionIds.length}
-                      {" · "}{new Date(p.completedAt).toLocaleDateString()}
+                      Score: <span className="font-semibold text-primary">{p.score ?? 0}</span> /{" "}
+                      {p.total ?? p.questionIds.length}
+                      {" · "}
+                      {new Date(p.completedAt).toLocaleDateString()}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      Full {p.fullAnswered ?? "—"} · Partial {p.partialAnswered ?? "—"} · Skipped{" "}
+                      {p.skipped ?? "—"}
                     </p>
                     <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
                       <Button asChild size="sm" variant="default" className="h-8 text-xs">
-                        <Link to={`/practice/session/${p.id}?review=1`}>View full review</Link>
+                        <Link to={`/practice/session/${p.id}?review=1`}>View review</Link>
                       </Button>
                       <Button asChild size="sm" variant="outline" className="h-8 text-xs">
-                        <Link to={`/concept/${p.conceptId}/learn`}>Study again</Link>
+                        <Link to={`/practice/${p.conceptId}/setup`}>Practice again</Link>
                       </Button>
                     </div>
                   </>
                 ) : (
-                  <Button asChild size="sm" variant="outline" className="h-7 text-xs">
-                    <Link to={`/practice/session/${p.id}`}>Resume</Link>
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      In progress · Q{(p.currentIndex ?? 0) + 1}/{p.questionIds.length}
+                    </p>
+                    <Button asChild size="sm" variant="outline" className="h-7 text-xs ml-auto">
+                      <Link to={`/practice/session/${p.id}`}>Resume</Link>
+                    </Button>
+                  </div>
                 )}
               </Card>
             ))}
