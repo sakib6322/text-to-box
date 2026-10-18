@@ -4,6 +4,21 @@ import type { PracticeAnswer } from "@/lib/userProgress";
 
 export type QuestionFillStatus = "empty" | "partial" | "full";
 
+/** Per-statement / per-SBA outcome for jump-box dots. */
+export type UnitDot = "correct" | "wrong" | "skip";
+
+export type QuestionUnitDetail = {
+  status: QuestionFillStatus;
+  units: UnitDot[];
+  correct: number;
+  wrong: number;
+  skip: number;
+  /** % of units that are correct (of total units). */
+  pctCorrect: number;
+  /** % touched (correct+wrong) of total. */
+  pctTouched: number;
+};
+
 export type PracticeRunSummary = {
   full: number;
   partial: number;
@@ -12,6 +27,7 @@ export type PracticeRunSummary = {
   attempted: number;
   totalUnits: number;
   statuses: QuestionFillStatus[];
+  details: QuestionUnitDetail[];
 };
 
 export function answeredUnitsForQuestion(q: PracticeQuestionFull, answers: PracticeAnswer[]): number {
@@ -27,23 +43,62 @@ export function answeredUnitsForQuestion(q: PracticeQuestionFull, answers: Pract
   return n;
 }
 
+export function getQuestionUnitDetail(
+  q: PracticeQuestionFull,
+  answers: PracticeAnswer[],
+): QuestionUnitDetail {
+  const units: UnitDot[] = [];
+
+  if (q.questionMode === "sba") {
+    const hit = answers.find((a) => a.questionId === q.id);
+    if (!hit) units.push("skip");
+    else units.push(hit.isCorrect ? "correct" : "wrong");
+  } else {
+    const stmts = q.mcq?.trueFalse ?? [];
+    for (let i = 0; i < stmts.length; i++) {
+      const sid = stmts[i]?.id ?? String(i);
+      const hit = answers.find((a) => a.questionId === `${q.id}:${sid}`);
+      if (!hit) units.push("skip");
+      else units.push(hit.isCorrect ? "correct" : "wrong");
+    }
+    if (!units.length && q.mcq?.stem?.trim()) units.push("skip");
+  }
+
+  const correct = units.filter((u) => u === "correct").length;
+  const wrong = units.filter((u) => u === "wrong").length;
+  const skip = units.filter((u) => u === "skip").length;
+  const total = units.length || 1;
+  const touched = correct + wrong;
+
+  let status: QuestionFillStatus = "empty";
+  if (touched <= 0) status = "empty";
+  else if (skip <= 0) status = "full";
+  else status = "partial";
+
+  return {
+    status,
+    units,
+    correct,
+    wrong,
+    skip,
+    pctCorrect: Math.round((correct / total) * 100),
+    pctTouched: Math.round((touched / total) * 100),
+  };
+}
+
 export function getQuestionFillStatus(
   q: PracticeQuestionFull,
   answers: PracticeAnswer[],
 ): QuestionFillStatus {
-  const total = countPracticeAnswerUnits(q);
-  if (total <= 0) return "empty";
-  const got = answeredUnitsForQuestion(q, answers);
-  if (got <= 0) return "empty";
-  if (got >= total) return "full";
-  return "partial";
+  return getQuestionUnitDetail(q, answers).status;
 }
 
 export function summarizePracticeRun(
   questions: PracticeQuestionFull[],
   answers: PracticeAnswer[],
 ): PracticeRunSummary {
-  const statuses = questions.map((q) => getQuestionFillStatus(q, answers));
+  const details = questions.map((q) => getQuestionUnitDetail(q, answers));
+  const statuses = details.map((d) => d.status);
   let full = 0;
   let partial = 0;
   let empty = 0;
@@ -55,7 +110,7 @@ export function summarizePracticeRun(
   const correct = answers.filter((a) => a.isCorrect).length;
   const attempted = answers.length;
   const totalUnits = questions.reduce((sum, q) => sum + countPracticeAnswerUnits(q), 0);
-  return { full, partial, empty, correct, attempted, totalUnits, statuses };
+  return { full, partial, empty, correct, attempted, totalUnits, statuses, details };
 }
 
 export function restoreRevealState(saved: PracticeAnswer[]): {

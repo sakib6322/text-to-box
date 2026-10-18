@@ -121,11 +121,24 @@ export function HeadingSlideReader({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
   }, [html, slides.length, controlled]);
 
-  // Nested mode: measure scroll inside the box
+  // On slide change: always start from the top (nested box or page)
   useEffect(() => {
-    if (scrollMode !== "nested") return;
     const el = scrollRef.current;
     if (el) el.scrollTop = 0;
+
+    if (scrollMode === "page" && typeof window !== "undefined") {
+      // Bring reader / page top into view so next slide content starts at the top
+      requestAnimationFrame(() => {
+        const root = el?.closest(".heading-slide-reader") as HTMLElement | null;
+        if (root) {
+          root.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+      });
+    }
+
+    if (scrollMode !== "nested") return;
     if (!config.requireScrollToEnd) {
       setNearEnd(true);
       return;

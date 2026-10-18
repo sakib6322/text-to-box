@@ -143,8 +143,8 @@ export default function StudyProgressPage() {
                       {new Date(p.completedAt).toLocaleDateString()}
                     </p>
                     <p className="text-[10px] text-muted-foreground tabular-nums">
-                      Full {p.fullAnswered ?? "—"} · Partial {p.partialAnswered ?? "—"} · Skipped{" "}
-                      {p.skipped ?? "—"}
+                      Fully touched {p.fullAnswered ?? "—"} · Partially touched{" "}
+                      {p.partialAnswered ?? "—"} · Not touched {p.skipped ?? "—"}
                     </p>
                     <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
                       <Button asChild size="sm" variant="default" className="h-8 text-xs">

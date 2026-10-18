@@ -18,6 +18,7 @@ import {
   type PracticeSession,
 } from "@/lib/userProgress";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 function gradeMcqStatement(correct: "true" | "false", given: "true" | "false") {
@@ -210,6 +211,9 @@ export default function PracticeTake() {
     // Bring the question into view so skipped items can be marked immediately
     requestAnimationFrame(() => {
       questionAnchorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (typeof window !== "undefined" && window.scrollY > 80) {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
     });
   };
 
@@ -237,7 +241,7 @@ export default function PracticeTake() {
   };
 
   const shellClass = isMobile
-    ? "mx-auto max-w-lg pb-24 space-y-3"
+    ? "mx-auto max-w-lg space-y-3 pb-[7.5rem]"
     : "mx-auto max-w-5xl pb-16 space-y-4 px-2";
 
   if (loading) {
@@ -267,13 +271,13 @@ export default function PracticeTake() {
           <div className={isMobile ? "px-4" : ""}>
             <div className="flex flex-wrap gap-2 text-[11px]">
               <Badge variant="outline" className="border-emerald-300 bg-emerald-50 text-emerald-800">
-                Full {session?.fullAnswered ?? summary.full}
+                Fully touched {session?.fullAnswered ?? summary.full}
               </Badge>
               <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-900">
-                Partial {session?.partialAnswered ?? summary.partial}
+                Partially touched {session?.partialAnswered ?? summary.partial}
               </Badge>
               <Badge variant="outline">
-                Skipped {session?.skipped ?? summary.empty}
+                Not touched {session?.skipped ?? summary.empty}
               </Badge>
             </div>
           </div>
@@ -320,9 +324,9 @@ export default function PracticeTake() {
             ) : null}
           </p>
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <MiniStat label="Full" value={session?.fullAnswered ?? summary.full} />
-            <MiniStat label="Partial" value={session?.partialAnswered ?? summary.partial} />
-            <MiniStat label="Skipped" value={session?.skipped ?? summary.empty} />
+            <MiniStat label="Fully touched" value={session?.fullAnswered ?? summary.full} />
+            <MiniStat label="Partially touched" value={session?.partialAnswered ?? summary.partial} />
+            <MiniStat label="Not touched" value={session?.skipped ?? summary.empty} />
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2">
@@ -367,17 +371,8 @@ export default function PracticeTake() {
         </Badge>
       </div>
 
-      <div className={`grid gap-4 ${isMobile ? "" : "lg:grid-cols-[1fr_240px] lg:items-start"}`}>
-        <div className={isMobile ? "px-3 space-y-3" : "space-y-3"}>
-          {isMobile ? (
-            <PracticeSessionNav
-              summary={summary}
-              currentIndex={qIndex}
-              onJump={goTo}
-              compact
-            />
-          ) : null}
-
+      <div className={`grid gap-4 ${isMobile ? "" : "lg:grid-cols-[1fr_260px] lg:items-start"}`}>
+        <div className={isMobile ? "space-y-3 px-3" : "space-y-3"}>
           <div ref={questionAnchorRef} className="scroll-mt-16 space-y-2">
             {currentStatus === "empty" ? (
               <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-[11px] text-primary">
@@ -386,7 +381,7 @@ export default function PracticeTake() {
             ) : null}
             {currentStatus === "partial" ? (
               <div className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
-                Partial — বাকি statement/অপশন এখন দাগিয়ে Full করতে পারেন।
+                Partial — বাকি statement/অপশন এখন দাগিয়ে Fully touched করতে পারেন।
               </div>
             ) : null}
 
@@ -401,10 +396,11 @@ export default function PracticeTake() {
             />
           </div>
 
-          <p className="text-[11px] text-muted-foreground">
-            Board-এর <span className="font-medium text-foreground">dashed / amber</span> নম্বরে ক্লিক
-            করলে skip বা partial question-এ চলে যাবেন — সেখান থেকে দাগাতে পারবেন।
-          </p>
+          {!isMobile ? (
+            <p className="text-[11px] text-muted-foreground">
+              Jump box-এ সবুজ = সঠিক, লাল = ভুল, ধূসর = skip।
+            </p>
+          ) : null}
         </div>
 
         {!isMobile ? (
@@ -414,43 +410,64 @@ export default function PracticeTake() {
         ) : null}
       </div>
 
-      {/* Compact corner controls */}
-      <div className="safe-area-pb pointer-events-none fixed bottom-3 right-3 z-30 flex items-center gap-1.5 md:bottom-5 md:right-6">
-        <div className="pointer-events-auto flex items-center gap-1 rounded-full border bg-background/95 p-1 shadow-md backdrop-blur">
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 w-8 rounded-full p-0"
-            onClick={goPrev}
-            disabled={qIndex <= 0}
-            aria-label="Previous"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-8 rounded-full px-2.5 text-xs"
-            onClick={goNext}
-            disabled={qIndex >= questions.length - 1}
-          >
-            Next
-            <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            className="h-8 rounded-full px-3 text-xs"
-            onClick={submitPractice}
-            disabled={submitting}
-          >
-            <Send className="mr-1 h-3 w-3" />
-            Submit
-          </Button>
-        </div>
+      {/* Prev left corner · Next (+ Submit) right corner — above mobile dock */}
+      <div
+        className={cn(
+          "pointer-events-none fixed z-30",
+          isMobile ? "bottom-[4.75rem] left-3" : "safe-area-pb bottom-4 left-4 md:bottom-5 md:left-6",
+        )}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="pointer-events-auto h-9 rounded-full border bg-background/95 px-3 text-xs shadow-md backdrop-blur"
+          onClick={goPrev}
+          disabled={qIndex <= 0}
+          aria-label="Previous"
+        >
+          <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
+          Prev
+        </Button>
       </div>
+      <div
+        className={cn(
+          "pointer-events-none fixed z-30 flex items-center gap-1.5",
+          isMobile ? "bottom-[4.75rem] right-3" : "safe-area-pb bottom-4 right-4 md:bottom-5 md:right-6",
+        )}
+      >
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="pointer-events-auto h-9 rounded-full border bg-background/95 px-3 text-xs shadow-md backdrop-blur"
+          onClick={goNext}
+          disabled={qIndex >= questions.length - 1}
+          aria-label="Next"
+        >
+          Next
+          <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="pointer-events-auto h-9 rounded-full px-3 text-xs shadow-md"
+          onClick={submitPractice}
+          disabled={submitting}
+        >
+          <Send className="mr-1 h-3 w-3" />
+          Submit
+        </Button>
+      </div>
+
+      {isMobile ? (
+        <PracticeSessionNav
+          summary={summary}
+          currentIndex={qIndex}
+          onJump={goTo}
+          variant="mobileDock"
+        />
+      ) : null}
     </div>
   );
 }

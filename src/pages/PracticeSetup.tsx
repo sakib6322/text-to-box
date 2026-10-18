@@ -277,7 +277,7 @@ export default function PracticeSetup() {
                 <p className="text-[10px] text-muted-foreground">
                   {s.questionIds.length} questions
                   {s.completedAt
-                    ? ` · Full ${s.fullAnswered ?? "—"} · Partial ${s.partialAnswered ?? "—"} · Skip ${s.skipped ?? "—"}`
+                    ? ` · Fully ${s.fullAnswered ?? "—"} · Partial ${s.partialAnswered ?? "—"} · Not touched ${s.skipped ?? "—"}`
                     : ` · In progress Q${(s.currentIndex ?? 0) + 1}`}
                 </p>
               </div>
