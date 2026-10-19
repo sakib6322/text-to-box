@@ -241,8 +241,8 @@ export default function PracticeTake() {
   };
 
   const shellClass = isMobile
-    ? "mx-auto max-w-lg space-y-3 pb-[7.5rem]"
-    : "mx-auto max-w-5xl pb-16 space-y-4 px-2";
+    ? "mx-auto max-w-lg space-y-3 pb-[9.5rem]"
+    : "mx-auto max-w-5xl space-y-4 px-2 pb-8";
 
   if (loading) {
     return (
@@ -371,8 +371,8 @@ export default function PracticeTake() {
         </Badge>
       </div>
 
-      <div className={`grid gap-4 ${isMobile ? "" : "lg:grid-cols-[1fr_260px] lg:items-start"}`}>
-        <div className={isMobile ? "space-y-3 px-3" : "space-y-3"}>
+      <div className={`grid gap-4 ${isMobile ? "" : "lg:grid-cols-[minmax(0,1fr)_260px] lg:items-start"}`}>
+        <div className={cn("relative", isMobile ? "space-y-3 px-3" : "min-w-0 space-y-3")}>
           <div ref={questionAnchorRef} className="scroll-mt-16 space-y-2">
             {currentStatus === "empty" ? (
               <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-3 py-2 text-[11px] text-primary">
@@ -397,9 +397,50 @@ export default function PracticeTake() {
           </div>
 
           {!isMobile ? (
-            <p className="text-[11px] text-muted-foreground">
-              Jump box-এ সবুজ = সঠিক, লাল = ভুল, ধূসর = skip।
-            </p>
+            <>
+              <p className="text-[11px] text-muted-foreground">
+                MCQ jump: গোল চিহ্ন + ৩/৫ · SBA: শুধু রঙের বক্স।
+              </p>
+              {/* Desktop nav — inside question column only (not under sidebar) */}
+              <div className="sticky bottom-3 z-20 flex items-center justify-between gap-2 rounded-full border bg-background/95 p-1 shadow-md backdrop-blur">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-9 rounded-full px-3 text-xs"
+                  onClick={goPrev}
+                  disabled={qIndex <= 0}
+                  aria-label="Previous"
+                >
+                  <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
+                  Prev
+                </Button>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-9 rounded-full px-3 text-xs"
+                    onClick={goNext}
+                    disabled={qIndex >= questions.length - 1}
+                    aria-label="Next"
+                  >
+                    Next
+                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-9 rounded-full px-3 text-xs"
+                    onClick={submitPractice}
+                    disabled={submitting}
+                  >
+                    <Send className="mr-1 h-3 w-3" />
+                    Submit
+                  </Button>
+                </div>
+              </div>
+            </>
           ) : null}
         </div>
 
@@ -410,62 +451,20 @@ export default function PracticeTake() {
         ) : null}
       </div>
 
-      {/* Prev left corner · Next (+ Submit) right corner — above mobile dock */}
-      <div
-        className={cn(
-          "pointer-events-none fixed z-30",
-          isMobile ? "bottom-[4.75rem] left-3" : "safe-area-pb bottom-4 left-4 md:bottom-5 md:left-6",
-        )}
-      >
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="pointer-events-auto h-9 rounded-full border bg-background/95 px-3 text-xs shadow-md backdrop-blur"
-          onClick={goPrev}
-          disabled={qIndex <= 0}
-          aria-label="Previous"
-        >
-          <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
-          Prev
-        </Button>
-      </div>
-      <div
-        className={cn(
-          "pointer-events-none fixed z-30 flex items-center gap-1.5",
-          isMobile ? "bottom-[4.75rem] right-3" : "safe-area-pb bottom-4 right-4 md:bottom-5 md:right-6",
-        )}
-      >
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="pointer-events-auto h-9 rounded-full border bg-background/95 px-3 text-xs shadow-md backdrop-blur"
-          onClick={goNext}
-          disabled={qIndex >= questions.length - 1}
-          aria-label="Next"
-        >
-          Next
-          <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          className="pointer-events-auto h-9 rounded-full px-3 text-xs shadow-md"
-          onClick={submitPractice}
-          disabled={submitting}
-        >
-          <Send className="mr-1 h-3 w-3" />
-          Submit
-        </Button>
-      </div>
-
       {isMobile ? (
         <PracticeSessionNav
           summary={summary}
           currentIndex={qIndex}
           onJump={goTo}
           variant="mobileDock"
+          navActions={{
+            onPrev: goPrev,
+            onNext: goNext,
+            onSubmit: submitPractice,
+            canPrev: qIndex > 0,
+            canNext: qIndex < questions.length - 1,
+            submitting,
+          }}
         />
       ) : null}
     </div>

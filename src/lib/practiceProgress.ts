@@ -8,11 +8,13 @@ export type QuestionFillStatus = "empty" | "partial" | "full";
 export type UnitDot = "correct" | "wrong" | "skip";
 
 export type QuestionUnitDetail = {
+  mode: "mcq" | "sba";
   status: QuestionFillStatus;
   units: UnitDot[];
   correct: number;
   wrong: number;
   skip: number;
+  total: number;
   /** % of units that are correct (of total units). */
   pctCorrect: number;
   /** % touched (correct+wrong) of total. */
@@ -47,9 +49,10 @@ export function getQuestionUnitDetail(
   q: PracticeQuestionFull,
   answers: PracticeAnswer[],
 ): QuestionUnitDetail {
+  const mode: "mcq" | "sba" = q.questionMode === "sba" ? "sba" : "mcq";
   const units: UnitDot[] = [];
 
-  if (q.questionMode === "sba") {
+  if (mode === "sba") {
     const hit = answers.find((a) => a.questionId === q.id);
     if (!hit) units.push("skip");
     else units.push(hit.isCorrect ? "correct" : "wrong");
@@ -76,11 +79,13 @@ export function getQuestionUnitDetail(
   else status = "partial";
 
   return {
+    mode,
     status,
     units,
     correct,
     wrong,
     skip,
+    total,
     pctCorrect: Math.round((correct / total) * 100),
     pctTouched: Math.round((touched / total) * 100),
   };

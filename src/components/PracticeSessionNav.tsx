@@ -1,5 +1,16 @@
 import { useState, type ReactNode } from "react";
-import { CheckCircle2, ChevronDown, ChevronUp, CircleDashed, CircleDot, Target } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  CircleDashed,
+  CircleDot,
+  Send,
+  Target,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
   PracticeRunSummary,
@@ -8,6 +19,15 @@ import type {
   UnitDot,
 } from "@/lib/practiceProgress";
 
+type NavActions = {
+  onPrev: () => void;
+  onNext: () => void;
+  onSubmit: () => void;
+  canPrev: boolean;
+  canNext: boolean;
+  submitting?: boolean;
+};
+
 type Props = {
   summary: PracticeRunSummary;
   currentIndex: number;
@@ -15,6 +35,8 @@ type Props = {
   className?: string;
   /** Desktop side panel (default) or mobile bottom dock */
   variant?: "panel" | "mobileDock";
+  /** Mobile dock embeds Prev / Next / Submit so they are never clipped */
+  navActions?: NavActions;
 };
 
 const DOT_CLASS: Record<UnitDot, string> = {
@@ -52,6 +74,7 @@ export function PracticeSessionNav({
   onJump,
   className,
   variant = "panel",
+  navActions,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
   const pct =
@@ -81,11 +104,13 @@ export function PracticeSessionNav({
   const details = summary.details.length
     ? summary.details
     : summary.statuses.map((status) => ({
+        mode: "mcq" as const,
         status,
         units: [] as UnitDot[],
         correct: 0,
         wrong: 0,
         skip: 0,
+        total: 0,
         pctCorrect: 0,
         pctTouched: 0,
       }));
@@ -98,11 +123,53 @@ export function PracticeSessionNav({
           className,
         )}
       >
+        {/* Nav row — fully visible above chips */}
+        {navActions ? (
+          <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-9 shrink-0 rounded-full px-3 text-xs"
+              onClick={navActions.onPrev}
+              disabled={!navActions.canPrev}
+              aria-label="Previous"
+            >
+              <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
+              Prev
+            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-full px-3 text-xs"
+                onClick={navActions.onNext}
+                disabled={!navActions.canNext}
+                aria-label="Next"
+              >
+                Next
+                <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="h-9 rounded-full px-3 text-xs"
+                onClick={navActions.onSubmit}
+                disabled={navActions.submitting}
+              >
+                <Send className="mr-1 h-3 w-3" />
+                Submit
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <button
           type="button"
           aria-expanded={expanded}
           onClick={() => setExpanded((v) => !v)}
-          className="flex w-full flex-col items-center gap-2 px-3 pb-1 pt-2"
+          className="flex w-full flex-col items-center gap-2 px-3 pb-1.5 pt-2"
         >
           <span className="h-1 w-9 rounded-full bg-muted-foreground/25" aria-hidden />
           <div className="flex w-full items-center gap-2">
@@ -122,10 +189,10 @@ export function PracticeSessionNav({
         </button>
 
         {expanded ? (
-          <div className="max-h-[42vh] space-y-2.5 overflow-y-auto overscroll-contain px-3 pb-3 pt-1">
+          <div className="max-h-[38vh] space-y-2.5 overflow-y-auto overscroll-contain px-3 pb-3 pt-1">
             <div className="flex items-center justify-between gap-2">
               <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Session board · Jump
+                Jump to question
               </p>
               {openCount > 0 ? (
                 <button
@@ -146,7 +213,7 @@ export function PracticeSessionNav({
           </div>
         ) : (
           <p className="px-3 pb-2 text-center text-[9px] text-muted-foreground">
-            উপরে সোয়াইপ / ট্যাপ করে jump board খুলুন
+            ট্যাপ করে jump board খুলুন
           </p>
         )}
       </div>
@@ -230,6 +297,7 @@ function JumpGrid({
     <div className={cn("grid gap-1.5", dense ? "grid-cols-4" : "grid-cols-3 sm:grid-cols-4")}>
       {details.map((detail, i) => {
         const active = i === currentIndex;
+        const isMcq = detail.mode === "mcq";
         return (
           <button
             key={i}
@@ -237,24 +305,37 @@ function JumpGrid({
             title={jumpTitle(detail, i)}
             onClick={() => onJump(i)}
             className={cn(
-              "flex flex-col items-stretch gap-1 rounded-md border px-1.5 py-1.5 text-left transition",
-              dense ? "min-h-[2.75rem]" : "min-h-[3.25rem]",
+              "flex flex-col items-stretch rounded-md border text-left transition",
+              isMcq
+                ? cn("gap-1 px-1.5 py-1.5", dense ? "min-h-[2.75rem]" : "min-h-[3.25rem]")
+                : cn("items-center justify-center px-1.5 py-2", dense ? "min-h-[2.5rem]" : "min-h-[2.75rem]"),
               boxTone(detail),
               active && `ring-2 ring-offset-1 ring-offset-background ${ringTone(detail)}`,
             )}
           >
-            <div className="flex items-center justify-between gap-1">
+            <div
+              className={cn(
+                "flex items-center gap-1",
+                isMcq ? "justify-between" : "justify-center",
+              )}
+            >
               <span className="text-[11px] font-semibold tabular-nums">Q{i + 1}</span>
-              <span className="text-[9px] font-medium tabular-nums opacity-80">{detail.pctCorrect}%</span>
+              {isMcq ? (
+                <span className="text-[9px] font-medium tabular-nums opacity-80">
+                  {detail.correct}/{detail.total || detail.units.length || 0}
+                </span>
+              ) : null}
             </div>
-            {detail.units.length > 0 ? (
-              <div className="flex flex-wrap gap-0.5">
-                {detail.units.map((u, ui) => (
-                  <span key={ui} className={cn("h-1.5 w-1.5 rounded-full", DOT_CLASS[u])} title={u} />
-                ))}
-              </div>
+            {isMcq && detail.units.length > 0 ? (
+              <>
+                <div className="flex flex-wrap gap-0.5">
+                  {detail.units.map((u, ui) => (
+                    <span key={ui} className={cn("h-1.5 w-1.5 rounded-full", DOT_CLASS[u])} title={u} />
+                  ))}
+                </div>
+                <UnitBar detail={detail} />
+              </>
             ) : null}
-            <UnitBar detail={detail} />
           </button>
         );
       })}
@@ -298,7 +379,10 @@ function jumpTitle(detail: QuestionUnitDetail, index: number): string {
     partial: "Partially touched",
     empty: "Not touched",
   };
-  return `Q${index + 1} · ${statusLabel[detail.status]} · ✓${detail.correct} ✗${detail.wrong} ○${detail.skip}`;
+  if (detail.mode === "sba") {
+    return `Q${index + 1} · SBA · ${statusLabel[detail.status]}`;
+  }
+  return `Q${index + 1} · MCQ · ${detail.correct}/${detail.total} correct`;
 }
 
 function UnitBar({ detail }: { detail: QuestionUnitDetail }) {

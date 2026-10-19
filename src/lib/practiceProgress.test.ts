@@ -43,10 +43,22 @@ describe("practiceProgress", () => {
     const detail = getQuestionUnitDetail(mcq, answers);
     expect(detail.status).toBe("partial");
     expect(detail.units).toEqual(["correct", "wrong", "correct", "correct", "skip"]);
+    expect(detail.mode).toBe("mcq");
     expect(detail.correct).toBe(3);
     expect(detail.wrong).toBe(1);
     expect(detail.skip).toBe(1);
+    expect(detail.total).toBe(5);
     expect(detail.pctCorrect).toBe(60);
+  });
+
+  it("marks SBA mode without multi-unit partial math", () => {
+    const answers: PracticeAnswer[] = [
+      { questionId: "q2", answer: { selectedIndex: 1 }, isCorrect: true, answeredAt: "" },
+    ];
+    const detail = getQuestionUnitDetail(sba, answers);
+    expect(detail.mode).toBe("sba");
+    expect(detail.status).toBe("full");
+    expect(detail.total).toBe(1);
   });
 
   it("summarizes full / partial / empty", () => {
