@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -45,23 +45,78 @@ const DOT_CLASS: Record<UnitDot, string> = {
   skip: "bg-slate-300 dark:bg-slate-600",
 };
 
-function boxTone(detail: QuestionUnitDetail): string {
+function sbaBoxTone(detail: QuestionUnitDetail): string {
   if (detail.status === "empty") {
     return "border-dashed border-primary/50 bg-background text-primary hover:bg-primary/5";
   }
-  if (detail.wrong > 0 && detail.correct === 0 && detail.skip === 0) {
+  if (detail.wrong > 0) {
     return "border-rose-400 bg-rose-50 text-rose-900 hover:brightness-95";
   }
-  if (detail.wrong > 0) {
-    return "border-rose-300/80 bg-rose-50/80 text-rose-950 hover:brightness-95";
-  }
-  if (detail.status === "full" && detail.correct > 0) {
+  if (detail.correct > 0) {
     return "border-emerald-500 bg-emerald-50 text-emerald-900 hover:brightness-95";
   }
-  return "border-amber-400 bg-amber-50 text-amber-950 hover:brightness-95";
+  return "border-border bg-muted/40 text-muted-foreground hover:bg-muted/60";
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
+
+/**
+ * MCQ quality 0→1 → hue red → amber → green (not green-opacity only).
+ * 0/5 লাল · 2/5 কমলা · 3/5 অ্যাম্বার · 5/5 সবুজ
+ */
+function mcqQualityHue(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  if (x <= 0.5) return lerp(4, 42, x / 0.5); // red → amber
+  return lerp(42, 152, (x - 0.5) / 0.5); // amber → emerald
+}
+
+/**
+ * Score for color: correct pulls toward green; wrong pulls toward red.
+ * Skips sit in the middle of the scale (neither full credit nor full penalty).
+ */
+function mcqQualityScore(detail: QuestionUnitDetail): number {
+  const total = detail.total || detail.units.length || 1;
+  // correct=1, skip≈0.35, wrong=0  → then / total
+  const weighted = detail.correct * 1 + detail.skip * 0.35 + detail.wrong * 0;
+  return Math.min(1, Math.max(0, weighted / total));
+}
+
+function mcqBoxVisual(detail: QuestionUnitDetail): {
+  className: string;
+  style?: CSSProperties;
+} {
+  if (detail.status === "empty" && detail.correct === 0 && detail.wrong === 0) {
+    return {
+      className: "border-dashed border-primary/50 bg-background text-primary hover:bg-primary/5",
+    };
+  }
+
+  const t = mcqQualityScore(detail);
+  const hue = mcqQualityHue(t);
+  // Light fill + stronger border along the same hue (readable on white)
+  const bg = `hsl(${hue.toFixed(1)} 78% ${lerp(92, 86, t).toFixed(1)}%)`;
+  const border = `hsl(${hue.toFixed(1)} 68% ${lerp(58, 42, t).toFixed(1)}%)`;
+  const fg = t < 0.35 ? "text-rose-950" : t < 0.65 ? "text-amber-950" : "text-emerald-950";
+
+  return {
+    className: cn(fg, "hover:brightness-[0.98]"),
+    style: {
+      backgroundColor: bg,
+      borderColor: border,
+    },
+  };
 }
 
 function ringTone(detail: QuestionUnitDetail): string {
+  if (detail.mode === "mcq") {
+    if (detail.status === "empty" && detail.wrong === 0) return "ring-primary/40";
+    const t = mcqQualityScore(detail);
+    if (t >= 0.75) return "ring-emerald-500/65";
+    if (t >= 0.45) return "ring-amber-400/60";
+    return "ring-rose-400/55";
+  }
   if (detail.wrong > 0) return "ring-rose-400/50";
   if (detail.status === "full") return "ring-emerald-400/60";
   if (detail.status === "partial") return "ring-amber-400/60";
@@ -298,18 +353,20 @@ function JumpGrid({
       {details.map((detail, i) => {
         const active = i === currentIndex;
         const isMcq = detail.mode === "mcq";
+        const visual = isMcq ? mcqBoxVisual(detail) : { className: sbaBoxTone(detail) };
         return (
           <button
             key={i}
             type="button"
             title={jumpTitle(detail, i)}
             onClick={() => onJump(i)}
+            style={visual.style}
             className={cn(
               "flex flex-col items-stretch rounded-md border text-left transition",
               isMcq
                 ? cn("gap-1 px-1.5 py-1.5", dense ? "min-h-[2.75rem]" : "min-h-[3.25rem]")
                 : cn("items-center justify-center px-1.5 py-2", dense ? "min-h-[2.5rem]" : "min-h-[2.75rem]"),
-              boxTone(detail),
+              visual.className,
               active && `ring-2 ring-offset-1 ring-offset-background ${ringTone(detail)}`,
             )}
           >

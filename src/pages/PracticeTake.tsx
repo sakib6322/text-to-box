@@ -397,50 +397,44 @@ export default function PracticeTake() {
           </div>
 
           {!isMobile ? (
-            <>
-              <p className="text-[11px] text-muted-foreground">
-                MCQ jump: গোল চিহ্ন + ৩/৫ · SBA: শুধু রঙের বক্স।
-              </p>
-              {/* Desktop nav — inside question column only (not under sidebar) */}
-              <div className="sticky bottom-3 z-20 flex items-center justify-between gap-2 rounded-full border bg-background/95 p-1 shadow-md backdrop-blur">
+            <div className="sticky bottom-3 z-20 flex items-center justify-between gap-2 rounded-full border bg-background/95 p-1 shadow-md backdrop-blur">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-9 rounded-full px-3 text-xs"
+                onClick={goPrev}
+                disabled={qIndex <= 0}
+                aria-label="Previous"
+              >
+                <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
+                Prev
+              </Button>
+              <div className="flex items-center gap-1.5">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
                   className="h-9 rounded-full px-3 text-xs"
-                  onClick={goPrev}
-                  disabled={qIndex <= 0}
-                  aria-label="Previous"
+                  onClick={goNext}
+                  disabled={qIndex >= questions.length - 1}
+                  aria-label="Next"
                 >
-                  <ChevronLeft className="mr-0.5 h-3.5 w-3.5" />
-                  Prev
+                  Next
+                  <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                 </Button>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-9 rounded-full px-3 text-xs"
-                    onClick={goNext}
-                    disabled={qIndex >= questions.length - 1}
-                    aria-label="Next"
-                  >
-                    Next
-                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="h-9 rounded-full px-3 text-xs"
-                    onClick={submitPractice}
-                    disabled={submitting}
-                  >
-                    <Send className="mr-1 h-3 w-3" />
-                    Submit
-                  </Button>
-                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 rounded-full px-3 text-xs"
+                  onClick={submitPractice}
+                  disabled={submitting}
+                >
+                  <Send className="mr-1 h-3 w-3" />
+                  Submit
+                </Button>
               </div>
-            </>
+            </div>
           ) : null}
         </div>
 
