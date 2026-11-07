@@ -45,6 +45,16 @@ import {
 } from "./appSettings.mjs";
 import { getUiAppearance, saveUiAppearance, resetUiAppearance } from "./uiAppearance.mjs";
 import {
+  listSiteUpdateSessions,
+  getSiteUpdateSession,
+  createSiteUpdateSession,
+  saveSiteUpdateSession,
+  deleteSiteUpdateSession,
+  enableSiteUpdateShare,
+  disableSiteUpdateShare,
+  getSharedSiteUpdateSession,
+} from "./siteUpdateBriefs.mjs";
+import {
   getGeminiModelSettings,
   saveGeminiModelSettings,
   resolveAiModels,
@@ -1601,6 +1611,112 @@ app.post("/api/settings/appearance/reset", async (req, res) => {
   } catch (e) {
     console.error(e);
     return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.get("/api/settings/site-updates", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.view"))) return;
+    return res.json(await listSiteUpdateSessions(db));
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) });
+  }
+});
+
+app.get("/api/settings/site-updates/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.view"))) return;
+    return res.json(await getSiteUpdateSession(db, req.params.id));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Failed";
+    console.error(e);
+    return res.status(msg === "Session not found" ? 404 : 500).json({ error: formatSupabaseError(e) || msg });
+  }
+});
+
+app.post("/api/settings/site-updates", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.edit"))) return;
+    const result = await createSiteUpdateSession(db, req.body ?? {});
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: formatSupabaseError(e) || (e instanceof Error ? e.message : "Create failed") });
+  }
+});
+
+app.put("/api/settings/site-updates/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.edit"))) return;
+    const result = await saveSiteUpdateSession(db, req.params.id, req.body ?? {});
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Save failed";
+    console.error(e);
+    return res.status(msg === "Session not found" ? 404 : 500).json({ error: formatSupabaseError(e) || msg });
+  }
+});
+
+app.delete("/api/settings/site-updates/:id", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.edit"))) return;
+    await deleteSiteUpdateSession(db, req.params.id);
+    return res.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Delete failed";
+    console.error(e);
+    return res.status(msg === "Session not found" ? 404 : 500).json({ error: formatSupabaseError(e) || msg });
+  }
+});
+
+app.post("/api/settings/site-updates/:id/share", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.share"))) return;
+    const result = await enableSiteUpdateShare(db, req.params.id);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Share failed";
+    console.error(e);
+    return res.status(msg === "Session not found" ? 404 : 500).json({ error: formatSupabaseError(e) || msg });
+  }
+});
+
+app.post("/api/settings/site-updates/:id/unshare", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "settings.site_updates.share"))) return;
+    const result = await disableSiteUpdateShare(db, req.params.id);
+    return res.json({ ok: true, ...result });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Unshare failed";
+    console.error(e);
+    return res.status(msg === "Session not found" ? 404 : 500).json({ error: formatSupabaseError(e) || msg });
+  }
+});
+
+app.get("/api/site-updates/share/:token", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    return res.json(await getSharedSiteUpdateSession(db, req.params.token));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Not found";
+    console.error(e);
+    return res.status(404).json({ error: msg });
   }
 });
 

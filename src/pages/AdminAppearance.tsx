@@ -2489,8 +2489,15 @@ export default function AdminAppearance() {
               />
               <ColorField label="Option number color" value={aq.optionNumberColor} onChange={(v) => updateAq("optionNumberColor", v)} />
               <ColorField label="Option text color" value={aq.optionTextColor} onChange={(v) => updateAq("optionTextColor", v)} />
-              <ColorField label="Correct highlight" value={aq.correctColor} onChange={(v) => updateAq("correctColor", v)} />
+              <ColorField
+                label="Correct highlight"
+                value={aq.correctColor}
+                onChange={(v) => updateAq("correctColor", v)}
+              />
               <ColorField label="Wrong highlight" value={aq.wrongColor} onChange={(v) => updateAq("wrongColor", v)} />
+              <p className="sm:col-span-2 lg:col-span-3 text-[11px] text-muted-foreground">
+                Correct / Wrong highlight — All Questions paper এবং Practice answer reveal দুটোতেই লাগে। Dark UI-তে গাঢ় রং রাখুন যাতে লেখা পড়া যায়।
+              </p>
             </div>
 
             <p className="text-xs font-semibold uppercase text-muted-foreground pt-2">Explanations</p>

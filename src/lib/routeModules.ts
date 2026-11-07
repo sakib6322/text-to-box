@@ -24,6 +24,7 @@ const exact: Record<string, Loader> = {
   "/admin/exam/schedules": () => import("@/pages/ExamSchedules"),
   "/admin/settings": () => import("@/pages/AdminSettings"),
   "/admin/settings/appearance": () => import("@/pages/AdminAppearance"),
+  "/admin/settings/site-updates": () => import("@/pages/AdminSiteUpdates"),
   "/admin/practice-sheets": () => import("@/pages/AdminPlaceholder"),
   "/admin/students": () => import("@/pages/AdminPlaceholder"),
   "/admin/teachers": () => import("@/pages/AdminPlaceholder"),
@@ -48,6 +49,7 @@ const patterns: { test: RegExp; load: Loader }[] = [
   { test: /^\/admin\/courses\/[^/]+\/routine$/, load: () => import("@/pages/AdminCourseRoutine") },
   { test: /^\/admin\/courses\/[^/]+\/enrollments$/, load: () => import("@/pages/AdminCourseEnrollments") },
   { test: /^\/admin\/courses\/[^/]+\/progress-sets$/, load: () => import("@/pages/AdminProgressSets") },
+  { test: /^\/site-updates\/[^/]+$/, load: () => import("@/pages/SiteUpdateShare") },
 ];
 
 const layouts: Record<string, Loader> = {

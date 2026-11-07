@@ -221,6 +221,15 @@ export const PERMISSION_GROUPS = [
     ],
   },
   {
+    id: "settings_site_updates",
+    label: "Settings → Site updates",
+    permissions: [
+      { key: "settings.site_updates.view", label: "View" },
+      { key: "settings.site_updates.edit", label: "Open / edit / save sessions" },
+      { key: "settings.site_updates.share", label: "Share sessions" },
+    ],
+  },
+  {
     id: "user_area",
     label: "User area (student)",
     permissions: [

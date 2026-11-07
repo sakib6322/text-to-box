@@ -220,6 +220,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    id: "settings_site_updates",
+    label: "Settings → Site updates",
+    permissions: [
+      { key: "settings.site_updates.view", label: "View" },
+      { key: "settings.site_updates.edit", label: "Open / edit / save sessions" },
+      { key: "settings.site_updates.share", label: "Share sessions" },
+    ],
+  },
+  {
     id: "user_area",
     label: "User area (student)",
     permissions: [
@@ -251,6 +260,7 @@ export const ROUTE_VIEW_PERMISSION: Record<string, string> = {
   "/admin/teachers": "teachers.view",
   "/admin/organization": "organization.view",
   "/admin/settings/appearance": "settings.appearance.view",
+  "/admin/settings/site-updates": "settings.site_updates.view",
 };
 
 export const SETTINGS_TAB_PERMISSION: Record<string, string> = {

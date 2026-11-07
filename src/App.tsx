@@ -27,6 +27,8 @@ const AdminCourseEnrollments = lazyPage(() => import("./pages/AdminCourseEnrollm
 const AllQuestions = lazyPage(() => import("./pages/AllQuestions.tsx"));
 const AdminSettings = lazyPage(() => import("./pages/AdminSettings.tsx"));
 const AdminAppearance = lazyPage(() => import("./pages/AdminAppearance.tsx"));
+const AdminSiteUpdates = lazyPage(() => import("./pages/AdminSiteUpdates.tsx"));
+const SiteUpdateShare = lazyPage(() => import("./pages/SiteUpdateShare.tsx"));
 const CreateExam = lazyPage(() => import("./pages/CreateExam.tsx"));
 const ExamSchedules = lazyPage(() => import("./pages/ExamSchedules.tsx"));
 const MyExams = lazyPage(() => import("./pages/MyExams.tsx"));
@@ -200,7 +202,16 @@ const App = () => (
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="settings/site-updates"
+                  element={
+                    <ProtectedRoute permission="settings.site_updates.view">
+                      <AdminSiteUpdates />
+                    </ProtectedRoute>
+                  }
+                />
               </Route>
+              <Route path="/site-updates/:token" element={<SiteUpdateShare />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

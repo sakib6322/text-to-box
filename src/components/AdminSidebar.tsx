@@ -102,6 +102,11 @@ const adminItems: NavItem[] = [
     children: [
       { label: "General", labelKey: "general", to: "/admin/settings" },
       { label: "Appearance", labelKey: "appearance", to: "/admin/settings/appearance", permission: "settings.appearance.view" },
+      {
+        label: "Site updates",
+        to: "/admin/settings/site-updates",
+        permission: "settings.site_updates.view",
+      },
     ],
   },
 ];
@@ -112,7 +117,11 @@ function navItemVisible(item: NavItem): boolean {
     return item.children.some((c) => !c.permission || hasPermission(c.permission));
   }
   if (item.to === "/admin/settings") {
-    return hasPermission("settings.connection.view") || hasPermission("settings.appearance.view");
+    return (
+      hasPermission("settings.connection.view") ||
+      hasPermission("settings.appearance.view") ||
+      hasPermission("settings.site_updates.view")
+    );
   }
   return !item.permission || hasPermission(item.permission);
 }

@@ -501,6 +501,11 @@ export default function AdminSettings() {
         <Button asChild variant="outline" size="sm">
           <Link to="/admin/settings/appearance">Appearance · UI Master</Link>
         </Button>
+        {hasPermission("settings.site_updates.view") ? (
+          <Button asChild variant="outline" size="sm">
+            <Link to="/admin/settings/site-updates">Site updates</Link>
+          </Button>
+        ) : null}
         <Button asChild variant="outline" size="sm">
           <Link to="/admin/question-bank/create-ai">Create Question (AI)</Link>
         </Button>

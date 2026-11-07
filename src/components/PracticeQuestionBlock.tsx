@@ -82,9 +82,9 @@ export function PracticeQuestionBlock({
                         onClick={() => onRevealMcq?.(key, sid, stmt.correct, val, stmt.explanation)}
                         className={[
                           "rounded-lg border px-3 py-2.5 text-left text-sm font-medium transition-colors",
-                          isLocked && picked && rev?.correct ? "border-emerald-500 bg-emerald-50 text-emerald-800" : "",
-                          isLocked && picked && !rev?.correct ? "border-red-500 bg-red-50 text-red-800" : "",
-                          isLocked && !picked && isCorrectOpt ? "border-emerald-300 bg-emerald-50/50" : "",
+                          isLocked && picked && rev?.correct ? "practice-opt-correct" : "",
+                          isLocked && picked && !rev?.correct ? "practice-opt-wrong" : "",
+                          isLocked && !picked && isCorrectOpt ? "practice-opt-correct-hint" : "",
                           !isLocked && !readOnly ? "cursor-pointer hover:border-primary" : "cursor-not-allowed opacity-80",
                         ].join(" ")}
                       >
@@ -117,9 +117,9 @@ export function PracticeQuestionBlock({
                 onClick={() => onRevealSba?.(i)}
                 className={[
                   "flex w-full items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors",
-                  isLocked && picked && rev?.correct ? "border-emerald-500 bg-emerald-50" : "",
-                  isLocked && picked && !rev?.correct ? "border-red-500 bg-red-50" : "",
-                  isLocked && !picked && isCorrect ? "border-emerald-300 bg-emerald-50/50" : "",
+                  isLocked && picked && rev?.correct ? "practice-opt-correct" : "",
+                  isLocked && picked && !rev?.correct ? "practice-opt-wrong" : "",
+                  isLocked && !picked && isCorrect ? "practice-opt-correct-hint" : "",
                   !isLocked && !readOnly ? "cursor-pointer hover:border-primary" : "cursor-not-allowed opacity-80",
                 ].join(" ")}
               >
@@ -127,9 +127,9 @@ export function PracticeQuestionBlock({
                 <span className="flex-1">{opt}</span>
                 {isLocked && picked ? (
                   rev?.correct ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 practice-opt-icon-correct" />
                   ) : (
-                    <XCircle className="h-4 w-4 shrink-0 text-red-600" />
+                    <XCircle className="h-4 w-4 shrink-0 practice-opt-icon-wrong" />
                   )
                 ) : null}
               </button>

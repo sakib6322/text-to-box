@@ -1558,6 +1558,36 @@ html[data-aq-paper-shadow='0'] .question-paper {
   border-color: color-mix(in srgb, var(--aq-wrong, #dc2626) 40%, transparent);
 }
 
+/* Practice reveal — solid fill + white text so options stay readable on dark UI */
+.practice-opt-correct {
+  border-color: color-mix(in srgb, var(--aq-correct, #047857) 75%, #000) !important;
+  background: color-mix(in srgb, var(--aq-correct, #047857) 78%, #000) !important;
+  color: #fff !important;
+}
+
+.practice-opt-wrong {
+  border-color: color-mix(in srgb, var(--aq-wrong, #dc2626) 75%, #000) !important;
+  background: color-mix(in srgb, var(--aq-wrong, #dc2626) 78%, #000) !important;
+  color: #fff !important;
+}
+
+.practice-opt-correct-hint {
+  border-color: color-mix(in srgb, var(--aq-correct, #047857) 70%, #000) !important;
+  background: color-mix(in srgb, var(--aq-correct, #047857) 55%, #000) !important;
+  color: #fff !important;
+}
+
+.practice-opt-correct *,
+.practice-opt-wrong *,
+.practice-opt-correct-hint * {
+  color: inherit !important;
+}
+
+.practice-opt-icon-correct,
+.practice-opt-icon-wrong {
+  color: #fff !important;
+}
+
 .question-paper-expl {
   border-top: 1px solid var(--aq-expl-border, var(--aq-header-border, #d4d4d4));
   margin-top: 1rem;
