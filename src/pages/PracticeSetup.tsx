@@ -113,6 +113,27 @@ export default function PracticeSetup() {
   const selectAllVisible = () => setSelected(new Set(visibleQuestions.map((q) => q.id)));
   const clearSelection = () => setSelected(new Set());
 
+  const visibleMcq = useMemo(
+    () => visibleQuestions.filter((q) => q.questionMode === "mcq"),
+    [visibleQuestions],
+  );
+  const visibleSba = useMemo(
+    () => visibleQuestions.filter((q) => q.questionMode === "sba"),
+    [visibleQuestions],
+  );
+
+  const selectAllMcq = () => {
+    if (!visibleMcq.length) return toast.error("এখানে কোনো MCQ নেই");
+    setSelected(new Set(visibleMcq.map((q) => q.id)));
+    toast.success(`সব MCQ select হয়েছে (${visibleMcq.length})`);
+  };
+
+  const selectAllSba = () => {
+    if (!visibleSba.length) return toast.error("এখানে কোনো SBA নেই");
+    setSelected(new Set(visibleSba.map((q) => q.id)));
+    toast.success(`সব SBA select হয়েছে (${visibleSba.length})`);
+  };
+
   const selectByCount = () => {
     const n = Math.floor(Number(selectCountInput));
     if (!Number.isFinite(n) || n <= 0) {
@@ -198,8 +219,12 @@ export default function PracticeSetup() {
         <div className="flex flex-wrap gap-2 text-xs">
           <Badge variant="secondary">{selected.size} selected</Badge>
           <Badge variant="outline">{visibleQuestions.length} available</Badge>
-          <Badge variant="outline">MCQ {mcqCount}</Badge>
-          <Badge variant="outline">SBA {sbaCount}</Badge>
+          <Badge variant="outline">
+            MCQ {mcqCount}/{visibleMcq.length}
+          </Badge>
+          <Badge variant="outline">
+            SBA {sbaCount}/{visibleSba.length}
+          </Badge>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={selectAllVisible}>
@@ -207,6 +232,26 @@ export default function PracticeSetup() {
           </Button>
           <Button type="button" variant="outline" size="sm" className="h-8 text-xs" onClick={clearSelection}>
             <Square className="mr-1 h-3 w-3" /> Clear
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={selectAllMcq}
+            disabled={visibleMcq.length === 0}
+          >
+            Practice all MCQ ({visibleMcq.length})
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 text-xs"
+            onClick={selectAllSba}
+            disabled={visibleSba.length === 0}
+          >
+            Practice all SBA ({visibleSba.length})
           </Button>
           <div className="flex items-center gap-1.5">
             <Input
