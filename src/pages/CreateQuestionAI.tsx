@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
+import { ExplanationField } from "@/components/ExplanationField";
 import { toast } from "sonner";
 import { TaxonomySelects } from "@/components/TaxonomySelects";
 import { emptyTaxonomySelection, type TaxonomySelection } from "@/lib/taxonomy";
@@ -1854,11 +1855,10 @@ export default function CreateQuestionAI() {
                   </div>
                   <div className="space-y-2">
                     <Label>{row.correct === "true" ? "Why this is TRUE" : "Why this is FALSE"}</Label>
-                    <Textarea
+                    <ExplanationField
                       value={row.explanation ?? ""}
-                      onChange={(e) => setTf(i, { explanation: e.target.value })}
-                      rows={2}
-                      className="resize-y text-base sm:text-sm"
+                      onChange={(html) => setTf(i, { explanation: html })}
+                      minHeight="120px"
                       placeholder="Explain why this statement is true or false…"
                     />
                   </div>
@@ -1913,12 +1913,11 @@ export default function CreateQuestionAI() {
             </div>
             <div className="space-y-2">
               <Label>Explanation</Label>
-              <Textarea
+              <ExplanationField
                 value={sbaExplanation}
-                onChange={(e) => setSbaExplanation(e.target.value)}
-                rows={3}
-                className="resize-y text-base sm:text-sm"
-                placeholder="Explain why the correct option is the best answer…"
+                onChange={setSbaExplanation}
+                minHeight="150px"
+                placeholder="Why correct? Wrong options? Features / differences (Heading, List, Table)…"
               />
             </div>
           </div>

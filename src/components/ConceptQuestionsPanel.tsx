@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { ExplanationContent } from "@/components/ExplanationContent";
 import { apiUrl } from "@/lib/apiBase";
 import { toast } from "sonner";
 
@@ -123,7 +124,9 @@ function QuestionOptionsView({
                 })}
               </div>
               {stmt.explanation?.trim() ? (
-                <p className="text-[11px] text-muted-foreground border-t pt-1.5">{stmt.explanation}</p>
+                <div className="border-t pt-1.5 text-[11px] text-muted-foreground">
+                  <ExplanationContent content={stmt.explanation} />
+                </div>
               ) : null}
             </div>
           ))}
@@ -160,7 +163,9 @@ function QuestionOptionsView({
               arr.find((e) => e?.trim())?.trim() ||
               "";
             return expl ? (
-              <p className="text-[11px] text-muted-foreground border-t pt-1.5">{expl}</p>
+              <div className="border-t pt-1.5 text-[11px] text-muted-foreground">
+                <ExplanationContent content={expl} />
+              </div>
             ) : null;
           })()}
         </div>

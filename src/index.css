@@ -1615,6 +1615,90 @@ html[data-aq-show-explanations='0'] .question-paper-expl {
   color: var(--aq-expl-color, #404040);
 }
 
+/* Organised rich explanations (headings / lists / tables) */
+.explanation-prose {
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.explanation-prose :where(p) {
+  margin: 0.35em 0;
+}
+
+.explanation-prose :where(h1, h2, h3) {
+  margin: 0.65em 0 0.25em;
+  font-weight: 600;
+  line-height: 1.3;
+  color: inherit;
+}
+
+.explanation-prose :where(h1) {
+  font-size: 1.15em;
+}
+
+.explanation-prose :where(h2) {
+  font-size: 1.08em;
+}
+
+.explanation-prose :where(h3) {
+  font-size: 1.02em;
+}
+
+.explanation-prose :where(ul, ol) {
+  margin: 0.35em 0;
+  padding-left: 1.25em;
+}
+
+.explanation-prose :where(ul) {
+  list-style: disc;
+}
+
+.explanation-prose :where(ol) {
+  list-style: decimal;
+}
+
+.explanation-prose :where(li) {
+  margin: 0.15em 0;
+}
+
+.explanation-prose :where(li > ul, li > ol) {
+  margin-top: 0.15em;
+}
+
+.explanation-prose :where(table) {
+  width: 100%;
+  margin: 0.5em 0;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.explanation-prose :where(th, td) {
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  padding: 0.35em 0.5em;
+  vertical-align: top;
+  text-align: left;
+}
+
+.explanation-prose :where(th) {
+  font-weight: 600;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+
+.explanation-prose :where(blockquote) {
+  margin: 0.4em 0;
+  padding-left: 0.75em;
+  border-left: 3px solid color-mix(in srgb, currentColor 28%, transparent);
+  opacity: 0.95;
+}
+
+.question-paper-expl-item .explanation-prose {
+  display: inline-block;
+  width: 100%;
+  margin-top: 0.25em;
+  vertical-align: top;
+}
+
 .question-paper-expl-label {
   font-weight: 600;
   color: var(--aq-expl-label, #262626);

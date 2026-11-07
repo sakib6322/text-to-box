@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ExplanationField } from "@/components/ExplanationField";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { apiUrl, apiFetch } from "@/lib/apiBase";
 import { getAuthHeaders } from "@/lib/auth";
@@ -789,13 +790,11 @@ export function KeyPointQuestionsEditor({
                           <Label className="text-xs">
                             {row.correct === "true" ? "Why this is TRUE" : "Why this is FALSE"}
                           </Label>
-                          <Textarea
+                          <ExplanationField
                             value={row.explanation}
-                            onChange={(e) => setTf(i, { explanation: e.target.value })}
-                            rows={2}
-                            className="resize-y"
-                            placeholder="Explain…"
+                            onChange={(html) => setTf(i, { explanation: html })}
                             disabled={busy}
+                            minHeight="120px"
                           />
                         </div>
                       </Card>
@@ -870,13 +869,12 @@ export function KeyPointQuestionsEditor({
                     </div>
                     <div className="space-y-1.5">
                       <Label className="text-xs">Explanation</Label>
-                      <Textarea
+                      <ExplanationField
                         value={sbaExplanation}
-                        onChange={(e) => setSbaExplanation(e.target.value)}
-                        rows={3}
-                        className="resize-y"
+                        onChange={setSbaExplanation}
                         disabled={busy}
-                        placeholder="Explain why the correct option is the best answer…"
+                        minHeight="150px"
+                        placeholder="Why correct? Wrong options? Features / differences (use Heading, List, Table)…"
                       />
                     </div>
                   </div>

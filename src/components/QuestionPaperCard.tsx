@@ -1,4 +1,5 @@
 import { Badge } from "@/components/ui/badge";
+import { ExplanationContent } from "@/components/ExplanationContent";
 import { useUiAppearance } from "@/components/UiAppearanceProvider";
 import { resolveDeviceTheme } from "@/lib/uiAppearance";
 
@@ -270,8 +271,8 @@ export function QuestionPaperCard({
               <div key={item.id ?? i} className="question-paper-expl-item">
                 <span className="question-paper-expl-label">
                   {i + 1}. ({item.correct === "true" ? "T" : "F"}):
-                </span>{" "}
-                {expl}
+                </span>
+                <ExplanationContent content={expl} />
               </div>
             );
           })}
@@ -281,7 +282,9 @@ export function QuestionPaperCard({
       {showExplanations && questionMode === "sba" && sbaHasExplanations && (!hideAnswers || explanationsIndependent) ? (
         <div className="question-paper-expl">
           <p className="question-paper-expl-title">{aq.explanationTitle || "Explanation"}</p>
-          <div className="question-paper-expl-item">{sbaExplanationText}</div>
+          <div className="question-paper-expl-item">
+            <ExplanationContent content={sbaExplanationText} />
+          </div>
         </div>
       ) : null}
     </article>

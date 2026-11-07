@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ExplanationField } from "@/components/ExplanationField";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
 import {
   fetchConceptByKeyPointId,
@@ -719,15 +720,14 @@ export default function AllQuestions() {
                     <Label className="text-xs text-muted-foreground">
                       Statement {i + 1} ({item.correct === "true" ? "TRUE" : "FALSE"})
                     </Label>
-                    <Textarea
+                    <ExplanationField
                       value={item.explanation ?? ""}
-                      onChange={(e) =>
+                      onChange={(html) =>
                         setEditMcqItems((prev) =>
-                          prev.map((t, j) => (j === i ? { ...t, explanation: e.target.value } : t)),
+                          prev.map((t, j) => (j === i ? { ...t, explanation: html } : t)),
                         )
                       }
-                      rows={2}
-                      className="resize-y text-sm"
+                      minHeight="120px"
                     />
                   </div>
                 ))}
@@ -736,12 +736,11 @@ export default function AllQuestions() {
             {editTarget?.questionMode === "sba" ? (
               <div className="space-y-3 border-t pt-3">
                 <Label className="text-sm font-medium">Explanation</Label>
-                <Textarea
+                <ExplanationField
                   value={editSbaExplanation}
-                  onChange={(e) => setEditSbaExplanation(e.target.value)}
-                  rows={3}
-                  className="resize-y text-sm"
-                  placeholder="Explain why the correct option is the best answer…"
+                  onChange={setEditSbaExplanation}
+                  minHeight="150px"
+                  placeholder="Why correct? Wrong options? Features / differences (Heading, List, Table)…"
                 />
               </div>
             ) : null}

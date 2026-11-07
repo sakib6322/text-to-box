@@ -1,6 +1,7 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { ExplanationContent } from "@/components/ExplanationContent";
 
 export type PracticeQuestionFull = {
   id: string;
@@ -94,7 +95,9 @@ export function PracticeQuestionBlock({
                   })}
                 </div>
                 {isLocked && stmt.explanation?.trim() ? (
-                  <p className="border-t pt-2 text-[11px] text-muted-foreground">{stmt.explanation}</p>
+                  <div className="border-t pt-2 text-[11px] text-muted-foreground">
+                    <ExplanationContent content={stmt.explanation} />
+                  </div>
                 ) : null}
               </div>
             );
@@ -146,7 +149,7 @@ export function PracticeQuestionBlock({
                   (Number.isFinite(picked) && arr[picked]?.trim()) ||
                   arr[q.sba?.correctIndex ?? -1]?.trim() ||
                   arr.find((e) => e?.trim())?.trim();
-                return expl ? <p>{expl}</p> : null;
+                return expl ? <ExplanationContent content={expl} /> : null;
               })()}
             </div>
           ) : null}
