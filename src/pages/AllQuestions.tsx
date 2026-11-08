@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Plus, Trash2, BookOpen } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, BookOpen, FolderTree, X } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -14,8 +15,14 @@ import {
 import { toast } from "sonner";
 import { QuestionPaperCard } from "@/components/QuestionPaperCard";
 import { BoardCheckboxGroup } from "@/components/BoardCheckboxGroup";
-import { fetchTaxonomy, type TaxonomyItem } from "@/lib/taxonomy";
-import { apiUrl } from "@/lib/apiBase";
+import {
+  emptyTaxonomySelection,
+  fetchTaxonomy,
+  type TaxonomyItem,
+  type TaxonomySelection,
+} from "@/lib/taxonomy";
+import { TaxonomySelects } from "@/components/TaxonomySelects";
+import { apiUrl, apiFetch, readJsonResponse } from "@/lib/apiBase";
 import { ConfirmDeleteDialog } from "@/components/ConfirmDeleteDialog";
 import { Can, useCan } from "@/components/Can";
 import { guardPermission } from "@/lib/permissionGuard";
@@ -143,6 +150,14 @@ export default function AllQuestions() {
   const [detailsName, setDetailsName] = useState("");
   const [detailsConcept, setDetailsConcept] = useState<ConceptDetail>(emptyConceptDetail());
   const [detailsKeyPoints, setDetailsKeyPoints] = useState<KeyPointWithBoards[]>([]);
+  const [topicChangeMode, setTopicChangeMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [topicChangeOpen, setTopicChangeOpen] = useState(false);
+  const [topicChangeTaxonomy, setTopicChangeTaxonomy] = useState<TaxonomySelection>(emptyTaxonomySelection);
+  const [topicChangeConcept, setTopicChangeConcept] = useState("");
+  const [topicChangeConcepts, setTopicChangeConcepts] = useState<ConceptOption[]>([]);
+  const [loadingTopicChangeConcepts, setLoadingTopicChangeConcepts] = useState(false);
+  const [savingTopicChange, setSavingTopicChange] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const headerSearch = useMemo(
     () => ({
@@ -472,12 +487,161 @@ export default function AllQuestions() {
   };
 
   const resultCount = useMemo(() => rows.length, [rows]);
+  const selectedCount = selectedIds.size;
+  const allVisibleSelected = rows.length > 0 && rows.every((r) => selectedIds.has(r.id));
+
+  useEffect(() => {
+    if (!topicChangeMode) setSelectedIds(new Set());
+  }, [topicChangeMode]);
+
+  useEffect(() => {
+    if (!topicChangeOpen) return;
+    let cancelled = false;
+    (async () => {
+      setLoadingTopicChangeConcepts(true);
+      try {
+        const params = new URLSearchParams();
+        if (topicChangeTaxonomy.subjectName) params.set("subject", topicChangeTaxonomy.subjectName);
+        if (topicChangeTaxonomy.systemName) params.set("system", topicChangeTaxonomy.systemName);
+        if (topicChangeTaxonomy.chapterName) params.set("chapter", topicChangeTaxonomy.chapterName);
+        if (topicChangeTaxonomy.topicName) params.set("topic", topicChangeTaxonomy.topicName);
+        const qs = params.toString();
+        const r = await fetch(apiUrl(`/api/concepts${qs ? `?${qs}` : ""}`));
+        const j = await readJsonResponse<{ concepts?: ConceptOption[] }>(r, {});
+        if (cancelled) return;
+        setTopicChangeConcepts(Array.isArray(j.concepts) ? j.concepts : []);
+      } catch {
+        if (!cancelled) setTopicChangeConcepts([]);
+      } finally {
+        if (!cancelled) setLoadingTopicChangeConcepts(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    topicChangeOpen,
+    topicChangeTaxonomy.subjectName,
+    topicChangeTaxonomy.systemName,
+    topicChangeTaxonomy.chapterName,
+    topicChangeTaxonomy.topicName,
+  ]);
+
+  const toggleSelect = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      for (const r of rows) {
+        if (checked) next.add(r.id);
+        else next.delete(r.id);
+      }
+      return next;
+    });
+  };
+
+  const openTopicChangeDialog = () => {
+    if (!guardPermission("question_bank.questions.edit")) return;
+    if (selectedCount === 0) return toast.error("কমপক্ষে একটি question সিলেক্ট করুন");
+    setTopicChangeTaxonomy(emptyTaxonomySelection());
+    setTopicChangeConcept("");
+    setTopicChangeOpen(true);
+  };
+
+  const applyTopicChange = async () => {
+    if (!guardPermission("question_bank.questions.edit")) return;
+    const ids = [...selectedIds];
+    if (!ids.length) return toast.error("কমপক্ষে একটি question সিলেক্ট করুন");
+
+    const patch: Record<string, string> = {};
+    if (topicChangeTaxonomy.subjectName.trim()) patch.subject = topicChangeTaxonomy.subjectName.trim();
+    if (topicChangeTaxonomy.systemName.trim()) patch.system = topicChangeTaxonomy.systemName.trim();
+    if (topicChangeTaxonomy.chapterName.trim()) patch.chapter = topicChangeTaxonomy.chapterName.trim();
+    if (topicChangeTaxonomy.topicName.trim()) patch.topic = topicChangeTaxonomy.topicName.trim();
+    if (topicChangeConcept.trim()) patch.concept = topicChangeConcept.trim();
+    if (!Object.keys(patch).length) {
+      return toast.error("Subject / System / Chapter / Topic / Concept থেকে অন্তত একটি সিলেক্ট করুন");
+    }
+
+    setSavingTopicChange(true);
+    try {
+      const r = await apiFetch("/api/questions/bulk-taxonomy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, ...patch }),
+      });
+      const j = await readJsonResponse<{ ok?: boolean; updated?: number; error?: string }>(r, {});
+      if (!r.ok) throw new Error(j.error || "Change failed");
+
+      setRows((prev) =>
+        prev.map((row) => (selectedIds.has(row.id) ? { ...row, ...patch } : row)),
+      );
+      toast.success(`${j.updated ?? ids.length} question update হয়েছে`);
+      setTopicChangeOpen(false);
+      setTopicChangeMode(false);
+      setSelectedIds(new Set());
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Change failed");
+    } finally {
+      setSavingTopicChange(false);
+    }
+  };
 
   return (
     <div className="space-y-4 print:bg-white">
-      <div className="flex items-center justify-between gap-2 print:hidden">
-        <h1 className="page-title">{pageTitle}</h1>
-        {aq.showResultBadge ? <Badge variant="secondary">{resultCount} items</Badge> : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 print:hidden">
+        <div className="flex items-center gap-2">
+          <h1 className="page-title">{pageTitle}</h1>
+          {aq.showResultBadge ? <Badge variant="secondary">{resultCount} items</Badge> : null}
+        </div>
+        <Can permission="question_bank.questions.edit">
+          {!topicChangeMode ? (
+            <Button type="button" variant="outline" size="sm" onClick={() => setTopicChangeMode(true)}>
+              <FolderTree className="mr-1.5 h-4 w-4" />
+              Change Topics
+            </Button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary">{selectedCount} selected</Badge>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => toggleSelectAllVisible(!allVisibleSelected)}
+                disabled={rows.length === 0}
+              >
+                {allVisibleSelected ? "Clear visible" : "Select all visible"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={openTopicChangeDialog}
+                disabled={selectedCount === 0}
+              >
+                Change
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setTopicChangeMode(false);
+                  setSelectedIds(new Set());
+                }}
+              >
+                <X className="mr-1 h-4 w-4" />
+                Cancel
+              </Button>
+            </div>
+          )}
+        </Can>
       </div>
 
       <Card
@@ -635,7 +799,33 @@ export default function AllQuestions() {
       ) : (
         <div className="all-questions-list">
           {rows.map((r, i) => (
-            <div key={r.id} className="relative group">
+            <div
+              key={r.id}
+              className={cn(
+                "relative group",
+                topicChangeMode && "cursor-pointer",
+                topicChangeMode && selectedIds.has(r.id) && "rounded-lg ring-2 ring-primary/40",
+              )}
+              onClick={
+                topicChangeMode
+                  ? (e) => {
+                      const t = e.target as HTMLElement;
+                      if (t.closest("button, a, input, label, [role='checkbox']")) return;
+                      toggleSelect(r.id, !selectedIds.has(r.id));
+                    }
+                  : undefined
+              }
+            >
+              {topicChangeMode ? (
+                <div className="absolute left-2 top-2 z-10 print:hidden">
+                  <Checkbox
+                    checked={selectedIds.has(r.id)}
+                    onCheckedChange={(v) => toggleSelect(r.id, v === true)}
+                    aria-label={`Select question ${i + 1}`}
+                    className="h-5 w-5 border-2 bg-background shadow-sm"
+                  />
+                </div>
+              ) : null}
               <QuestionPaperCard
                 index={i}
                 questionMode={r.questionMode}
@@ -649,7 +839,12 @@ export default function AllQuestions() {
                 mcq={r.mcq}
                 sba={r.sba}
               />
-              <div className="absolute top-2 right-2 print:hidden flex gap-1 opacity-80 group-hover:opacity-100">
+              <div
+                className={cn(
+                  "absolute top-2 right-2 print:hidden flex gap-1 opacity-80 group-hover:opacity-100",
+                  topicChangeMode && "pointer-events-none opacity-30",
+                )}
+              >
                 {r.concept?.trim() ? (
                   <Button
                     variant="ghost"
@@ -924,6 +1119,72 @@ export default function AllQuestions() {
             <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit || !editStem.trim()}>
               {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={topicChangeOpen}
+        onOpenChange={(open) => {
+          if (!savingTopicChange) setTopicChangeOpen(open);
+        }}
+      >
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Change Topics</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{selectedCount}</span> টি selected question-এ নতুন
+              taxonomy / concept apply হবে। যেগুলো সিলেক্ট করবেন শুধু সেগুলোই আপডেট হবে।
+            </p>
+            <TaxonomySelects
+              value={topicChangeTaxonomy}
+              onChange={(next) => {
+                setTopicChangeTaxonomy(next);
+                setTopicChangeConcept("");
+              }}
+            />
+            <div className="space-y-1.5">
+              <Label>Concept (optional)</Label>
+              <Select
+                value={topicChangeConcept || "__none__"}
+                onValueChange={(v) => setTopicChangeConcept(v === "__none__" ? "" : v)}
+                disabled={loadingTopicChangeConcepts}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingTopicChangeConcepts ? "Loading…" : "Keep existing / select"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Don&apos;t change concept</SelectItem>
+                  {topicChangeConcepts.map((c) => {
+                    const title = (c.title ?? "").trim() || "Untitled concept";
+                    return (
+                      <SelectItem key={c.id} value={title}>
+                        {title}
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Subject → Topic cascade filters the concept list. Leave a level empty to keep that field unchanged.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="modalCancel"
+              onClick={() => setTopicChangeOpen(false)}
+              disabled={savingTopicChange}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void applyTopicChange()} disabled={savingTopicChange}>
+              {savingTopicChange ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Apply to {selectedCount}
             </Button>
           </DialogFooter>
         </DialogContent>

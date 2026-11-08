@@ -3562,6 +3562,40 @@ app.delete("/api/questions/:id", async (req, res) => {
   }
 });
 
+app.post("/api/questions/bulk-taxonomy", async (req, res) => {
+  try {
+    const db = requireSupabase(res);
+    if (!db) return;
+    if (!(await requirePerm(req, res, db, "question_bank.questions.edit"))) return;
+
+    const body = req.body ?? {};
+    const ids = Array.isArray(body.ids)
+      ? [...new Set(body.ids.map((id) => String(id ?? "").trim()).filter(Boolean))]
+      : [];
+    if (!ids.length) return res.status(400).json({ error: "Select at least one question" });
+    if (ids.length > 500) return res.status(400).json({ error: "Too many questions (max 500)" });
+
+    const patch = {};
+    if (typeof body.subject === "string" && body.subject.trim()) patch.subject = body.subject.trim();
+    if (typeof body.system === "string" && body.system.trim()) patch.system = body.system.trim();
+    if (typeof body.chapter === "string" && body.chapter.trim()) patch.chapter = body.chapter.trim();
+    if (typeof body.topic === "string" && body.topic.trim()) patch.topic = body.topic.trim();
+    if (typeof body.concept === "string" && body.concept.trim()) patch.concept = body.concept.trim();
+
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ error: "Select at least one field to change (subject → concept)" });
+    }
+
+    const { data, error } = await db.from("questions").update(patch).in("id", ids).select("id");
+    if (error) return res.status(500).json({ error: error.message });
+    const updated = Array.isArray(data) ? data.length : 0;
+    return res.json({ ok: true, updated, ids: (data ?? []).map((r) => r.id), patch });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
 app.patch("/api/questions/:id", async (req, res) => {
   try {
     const db = requireSupabase(res);
