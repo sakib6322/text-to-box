@@ -604,6 +604,13 @@ html:not([data-reduce-motion="1"]) .kp-study-card {
   }
 }
 
+/* CKEditor dropdowns/balloons above Radix dialogs (z-50) */
+.ck-body-wrapper,
+.ck.ck-balloon-panel,
+.ck.ck-dropdown__panel {
+  z-index: 10050 !important;
+}
+
 /* CKEditor 5 — match app theme */
 .ckeditor-field {
   width: 100%;

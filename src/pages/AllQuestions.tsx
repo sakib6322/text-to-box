@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Loader2, Pencil, Trash2, BookOpen } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, BookOpen } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -29,8 +29,10 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ExplanationField } from "@/components/ExplanationField";
 import { ConceptDetailsDialog } from "@/components/ConceptDetailsDialog";
+import { mkQuestionId } from "@/lib/questionDrafts";
 import {
   fetchConceptByKeyPointId,
   fetchConceptByTitle,
@@ -111,6 +113,8 @@ export default function AllQuestions() {
   const [editChapter, setEditChapter] = useState("");
   const [editTopic, setEditTopic] = useState("");
   const [editMcqItems, setEditMcqItems] = useState<TfItem[]>([]);
+  const [editSbaOptions, setEditSbaOptions] = useState<string[]>(["", "", "", "", ""]);
+  const [editSbaCorrect, setEditSbaCorrect] = useState(0);
   const [editSbaExplanation, setEditSbaExplanation] = useState("");
   const [editBoardIds, setEditBoardIds] = useState<string[]>([]);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -314,12 +318,22 @@ export default function AllQuestions() {
     setEditSystem(row.system);
     setEditChapter(row.chapter);
     setEditTopic(row.topic);
+    const tf = (row.mcq?.trueFalse ?? []).map((t) => ({
+      id: t.id || mkQuestionId(),
+      statement: t.statement ?? "",
+      correct: (t.correct === "false" ? "false" : "true") as "true" | "false",
+      explanation: t.explanation ?? "",
+    }));
     setEditMcqItems(
-      (row.mcq?.trueFalse ?? []).map((t) => ({
-        ...t,
-        explanation: t.explanation ?? "",
-      })),
+      tf.length > 0
+        ? tf
+        : [{ id: mkQuestionId(), statement: "", correct: "true", explanation: "" }],
     );
+    const opts = [...(row.sba?.options ?? [])];
+    while (opts.length < 5) opts.push("");
+    setEditSbaOptions(opts.slice(0, 5).map((o) => o ?? ""));
+    const correctIdx = Number(row.sba?.correctIndex);
+    setEditSbaCorrect(Number.isFinite(correctIdx) && correctIdx >= 0 && correctIdx < 5 ? correctIdx : 0);
     setEditSbaExplanation(resolveSbaExplanation(row.sba));
     const fromRow = (row.boards ?? []).map((b) => b.id).filter((id): id is string => Boolean(id));
     const fromPayload = row.mcq?.boardIds ?? row.sba?.boardIds ?? [];
@@ -371,12 +385,41 @@ export default function AllQuestions() {
   const saveEdit = async () => {
     if (!editTarget) return;
     if (!guardPermission("question_bank.questions.edit")) return;
+
+    if (editTarget.questionMode === "mcq") {
+      const incomplete = editMcqItems.some((t) => !t.statement.trim());
+      if (incomplete) return toast.error("প্রতিটি MCQ statement পূরণ করুন");
+    } else {
+      const filled = editSbaOptions.filter((o) => o.trim());
+      if (filled.length < 2) return toast.error("কমপক্ষে ২টি SBA option লাগবে");
+      if (!editSbaOptions[editSbaCorrect]?.trim()) {
+        return toast.error("সঠিক option খালি রাখা যাবে না");
+      }
+    }
+
     setSavingEdit(true);
     try {
       const payload =
         editTarget.questionMode === "mcq"
-          ? { ...editTarget.mcq, stem: editStem, trueFalse: editMcqItems }
-          : { ...editTarget.sba, stem: editStem, explanation: editSbaExplanation };
+          ? {
+              ...editTarget.mcq,
+              stem: editStem,
+              trueFalse: editMcqItems.map((t) => ({
+                ...t,
+                id: t.id || mkQuestionId(),
+                statement: t.statement.trim(),
+                explanation: t.explanation ?? "",
+              })),
+              boardIds: editBoardIds,
+            }
+          : {
+              ...editTarget.sba,
+              stem: editStem,
+              options: editSbaOptions.map((o) => o.trim()),
+              correctIndex: editSbaCorrect,
+              explanation: editSbaExplanation,
+              boardIds: editBoardIds,
+            };
       const resp = await fetch(apiUrl(`/api/questions/${editTarget.id}`), {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
@@ -413,24 +456,8 @@ export default function AllQuestions() {
                 chapter: editChapter.trim(),
                 topic: editTopic.trim(),
                 boards: nextBoards,
-                mcq:
-                  r.questionMode === "mcq"
-                    ? {
-                        ...(r.mcq ?? {}),
-                        stem: editStem,
-                        trueFalse: editMcqItems,
-                        boardIds: editBoardIds,
-                      }
-                    : null,
-                sba:
-                  r.questionMode === "sba"
-                    ? {
-                        ...(r.sba ?? {}),
-                        stem: editStem,
-                        explanation: editSbaExplanation,
-                        boardIds: editBoardIds,
-                      }
-                    : null,
+                mcq: r.questionMode === "mcq" ? (payload as McqPayload) : null,
+                sba: r.questionMode === "sba" ? (payload as SbaPayload) : null,
               }
             : r,
         ),
@@ -681,18 +708,46 @@ export default function AllQuestions() {
       />
 
       <Dialog open={Boolean(editTarget)} onOpenChange={(open) => !open && setEditTarget(null)}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Edit question</DialogTitle>
+        <DialogContent
+          className="flex max-h-[92vh] w-[min(96vw,42rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:rounded-lg"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          onInteractOutside={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest?.(".ck-body-wrapper, .ck-balloon-panel, .ck.ck-dropdown__panel, .ck.ck-toolbar")) {
+              e.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest?.(".ck-body-wrapper, .ck-balloon-panel, .ck.ck-dropdown__panel, .ck.ck-toolbar")) {
+              e.preventDefault();
+            }
+          }}
+          onFocusOutside={(e) => {
+            const t = e.target as HTMLElement | null;
+            if (t?.closest?.(".ck-body-wrapper, .ck-balloon-panel, .ck.ck-dropdown__panel")) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <DialogHeader className="shrink-0 border-b px-6 py-4 pr-12 text-left">
+            <DialogTitle>
+              Edit question
+              {editTarget ? (
+                <Badge variant="outline" className="ml-2 align-middle text-[10px] uppercase">
+                  {editTarget.questionMode}
+                </Badge>
+              ) : null}
+            </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 py-2">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-4">
             <div className="space-y-1.5">
               <Label>Concept</Label>
               <Input value={editConcept} onChange={(e) => setEditConcept(e.target.value)} />
             </div>
             <div className="space-y-1.5">
-              <Label>Stem</Label>
-              <Textarea value={editStem} onChange={(e) => setEditStem(e.target.value)} rows={4} className="resize-y" />
+              <Label>Stem / Question</Label>
+              <Textarea value={editStem} onChange={(e) => setEditStem(e.target.value)} rows={3} className="resize-y" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -712,38 +767,147 @@ export default function AllQuestions() {
                 <Input value={editTopic} onChange={(e) => setEditTopic(e.target.value)} />
               </div>
             </div>
-            {editTarget?.questionMode === "mcq" && editMcqItems.length > 0 ? (
+
+            {editTarget?.questionMode === "mcq" ? (
               <div className="space-y-3 border-t pt-3">
-                <Label className="text-sm font-medium">Statement explanations</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label className="text-sm font-medium">True / False statements</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setEditMcqItems((prev) => [
+                        ...prev,
+                        { id: mkQuestionId(), statement: "", correct: "true", explanation: "" },
+                      ])
+                    }
+                  >
+                    <Plus className="mr-1 h-3.5 w-3.5" /> Add statement
+                  </Button>
+                </div>
                 {editMcqItems.map((item, i) => (
-                  <div key={item.id ?? i} className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">
-                      Statement {i + 1} ({item.correct === "true" ? "TRUE" : "FALSE"})
-                    </Label>
-                    <ExplanationField
-                      value={item.explanation ?? ""}
-                      onChange={(html) =>
+                  <div key={item.id ?? i} className="space-y-2 rounded-lg border p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs font-medium">Statement {i + 1}</Label>
+                      {editMcqItems.length > 1 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-destructive"
+                          onClick={() => setEditMcqItems((prev) => prev.filter((_, j) => j !== i))}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <Textarea
+                      value={item.statement}
+                      onChange={(e) =>
                         setEditMcqItems((prev) =>
-                          prev.map((t, j) => (j === i ? { ...t, explanation: html } : t)),
+                          prev.map((t, j) => (j === i ? { ...t, statement: e.target.value } : t)),
                         )
                       }
-                      minHeight="120px"
+                      rows={2}
+                      className="resize-y text-sm"
+                      placeholder="Statement text…"
                     />
+                    <div className="w-full sm:w-36">
+                      <Label className="text-xs text-muted-foreground">Correct answer</Label>
+                      <Select
+                        value={item.correct}
+                        onValueChange={(v) =>
+                          setEditMcqItems((prev) =>
+                            prev.map((t, j) =>
+                              j === i ? { ...t, correct: v as "true" | "false" } : t,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="true">True</SelectItem>
+                          <SelectItem value="false">False</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Explanation ({item.correct === "true" ? "why TRUE" : "why FALSE"})
+                      </Label>
+                      <ExplanationField
+                        value={item.explanation ?? ""}
+                        onChange={(html) =>
+                          setEditMcqItems((prev) =>
+                            prev.map((t, j) => (j === i ? { ...t, explanation: html } : t)),
+                          )
+                        }
+                        minHeight="110px"
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
             ) : null}
+
             {editTarget?.questionMode === "sba" ? (
               <div className="space-y-3 border-t pt-3">
-                <Label className="text-sm font-medium">Explanation</Label>
-                <ExplanationField
-                  value={editSbaExplanation}
-                  onChange={setEditSbaExplanation}
-                  minHeight="150px"
-                  placeholder="Why correct? Wrong options? Features / differences (Heading, List, Table)…"
-                />
+                <Label className="text-sm font-medium">Options</Label>
+                <div className="space-y-2">
+                  {editSbaOptions.map((opt, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <span className="mt-2.5 w-5 shrink-0 text-xs font-medium text-muted-foreground">
+                        {String.fromCharCode(97 + i)}.
+                      </span>
+                      <Textarea
+                        value={opt}
+                        onChange={(e) =>
+                          setEditSbaOptions((prev) => {
+                            const next = [...prev];
+                            next[i] = e.target.value;
+                            return next;
+                          })
+                        }
+                        rows={2}
+                        className="min-h-0 flex-1 resize-y text-sm"
+                        placeholder={`Option ${String.fromCharCode(97 + i)}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Correct option</Label>
+                  <RadioGroup
+                    value={String(editSbaCorrect)}
+                    onValueChange={(v) => setEditSbaCorrect(Number(v))}
+                    className="grid grid-cols-5 gap-1.5"
+                  >
+                    {editSbaOptions.map((_, i) => (
+                      <label
+                        key={i}
+                        className="flex min-h-9 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 text-sm"
+                      >
+                        <RadioGroupItem value={String(i)} />
+                        <span>{String.fromCharCode(97 + i)}</span>
+                      </label>
+                    ))}
+                  </RadioGroup>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium">Explanation</Label>
+                  <ExplanationField
+                    value={editSbaExplanation}
+                    onChange={setEditSbaExplanation}
+                    minHeight="140px"
+                    placeholder="Why correct? Wrong options? Features / differences (Heading, List, Table)…"
+                  />
+                </div>
               </div>
             ) : null}
+
             <div className="space-y-2 border-t pt-3">
               <Label>Boards (optional)</Label>
               <BoardCheckboxGroup
@@ -753,12 +917,12 @@ export default function AllQuestions() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t px-6 py-3 sm:justify-end">
             <Button type="button" variant="modalCancel" onClick={() => setEditTarget(null)} disabled={savingEdit}>
               Cancel
             </Button>
-            <Button type="button" onClick={saveEdit} disabled={savingEdit || !editStem.trim()}>
-              {savingEdit ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            <Button type="button" onClick={() => void saveEdit()} disabled={savingEdit || !editStem.trim()}>
+              {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               Save
             </Button>
           </DialogFooter>
